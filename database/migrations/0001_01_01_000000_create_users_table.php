@@ -6,24 +6,29 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('username')->unique();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
+            $table->string('email_verification_otp')->nullable();
+            $table->timestamp('email_verification_expires_at')->nullable();
+            $table->timestamp('email_verification_sent_at')->nullable();
+            $table->unsignedTinyInteger('email_verification_attempts')->default(0);
             $table->string('password');
+            $table->enum('role', ['user', 'affiliate', 'admin', 'staff'])->default('user')->index();
             $table->rememberToken();
             $table->timestamps();
         });
 
+        // OTP / password-reset tokens.
+        // expires_at lets us enforce a TTL without relying on created_at math.
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
-            $table->string('token');
+            $table->string('token');          // bcrypt-hashed OTP or reset token
+            $table->timestamp('expires_at')->nullable();
             $table->timestamp('created_at')->nullable();
         });
 
@@ -37,13 +42,10 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
+        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('users');
     }
 };

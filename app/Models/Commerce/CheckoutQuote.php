@@ -4,12 +4,14 @@ namespace App\Models\Commerce;
 
 use App\Models\Address\Address;
 use App\Models\Cart\Cart;
+use App\Models\Order\Order;
 use App\Models\Payment\SavedCard;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CheckoutQuote extends Model
 {
@@ -74,5 +76,10 @@ class CheckoutQuote extends Model
     public function promotion(): BelongsTo
     {
         return $this->belongsTo(Promotion::class);
+    }
+
+    public function order(): HasOne
+    {
+        return $this->hasOne(Order::class);
     }
 }

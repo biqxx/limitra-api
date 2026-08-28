@@ -47,10 +47,18 @@ return new class extends Migration
             $table->decimal('line_total', 14, 2);
             $table->timestamps();
         });
+
+        Schema::table('orders', function (Blueprint $table) {
+            $table->foreignId('checkout_quote_id')->nullable()->unique()->after('user_id')
+                ->constrained('checkout_quotes')->restrictOnDelete();
+        });
     }
 
     public function down(): void
     {
+        Schema::table('orders', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('checkout_quote_id');
+        });
         Schema::dropIfExists('checkout_quote_items');
         Schema::dropIfExists('checkout_quotes');
     }

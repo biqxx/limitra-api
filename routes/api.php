@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function () {
 
     // Cart browsing supports either JWT ownership or an opaque guest token.
     require __DIR__.'/api/cart.php';
+    require __DIR__.'/api/commerce.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
     Route::middleware(['auth:api', 'active.session'])->group(function () {

@@ -7,6 +7,7 @@ use App\Models\Cart\Cart;
 use App\Models\Cart\CartItem;
 use App\Models\Product\Product;
 use App\Services\Analytics\AnalyticsTrackingService;
+use App\Services\Cart\CartIdentityService;
 use App\Services\Cart\CartService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -153,14 +154,14 @@ class CartController extends BaseController
             new OA\Response(response: 200, description: 'Active cart', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
         ]
     )]
-    public function getActive(): JsonResponse
+    public function getActive(Request $request, CartIdentityService $identity): JsonResponse
     {
-        $cart = Cart::activeForUser(auth('api')->id());
+        $cart = $identity->active($request);
 
-        return $this->success(
+        return $identity->attachToken($this->success(
             new CartResource($cart->load(CartService::RELATIONS)),
             'Active cart retrieved.'
-        );
+        ));
     }
 
     #[OA\Post(
@@ -184,7 +185,7 @@ class CartController extends BaseController
             new OA\Response(response: 422, description: 'Insufficient stock', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function addItem(Request $request, CartService $cartService): JsonResponse
+    public function addItem(Request $request, CartService $cartService, CartIdentityService $identity): JsonResponse
     {
         $data = $request->validate([
             'product_id' => ['required', 'exists:products,id'],
@@ -194,7 +195,7 @@ class CartController extends BaseController
         ]);
 
         $product = Product::findOrFail($data['product_id']);
-        $cart = Cart::activeForUser(auth('api')->id());
+        $cart = $identity->active($request);
         $cart = $cartService->add(
             $cart,
             $product,
@@ -211,10 +212,10 @@ class CartController extends BaseController
             'add', $sessionId, $userId, $cart->id, $product->id, $data['quantity'], (float) $product->price, $request
         ));
 
-        return $this->success(
+        return $identity->attachToken($this->success(
             new CartResource($cart),
             'Cart updated.'
-        );
+        ));
     }
 
     #[OA\Delete(
@@ -231,9 +232,9 @@ class CartController extends BaseController
             new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function removeItem(Request $request, Cart $cart, CartItem $cartItem, CartService $cartService): JsonResponse
+    public function removeItem(Request $request, Cart $cart, CartItem $cartItem, CartService $cartService, CartIdentityService $identity): JsonResponse
     {
-        $this->authorize('update', $cart);
+        $identity->authorize($request, $cart);
 
         if ($cartItem->cart_id !== $cart->id) {
             return $this->error('Item does not belong to this cart.', 403);
@@ -264,9 +265,9 @@ class CartController extends BaseController
             new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function clear(Cart $cart): JsonResponse
+    public function clear(Request $request, Cart $cart, CartIdentityService $identity): JsonResponse
     {
-        $this->authorize('update', $cart);
+        $identity->authorize($request, $cart);
 
         $cart->items()->delete();
 
@@ -274,5 +275,20 @@ class CartController extends BaseController
             new CartResource($cart->load(CartService::RELATIONS)),
             'Cart cleared.'
         );
+    }
+
+    public function merge(Request $request, CartService $cartService, CartIdentityService $identity): JsonResponse
+    {
+        $data = $request->validate(['anonymous_cart_token' => ['nullable', 'string', 'size:64']]);
+        $token = $data['anonymous_cart_token'] ?? $identity->token($request);
+        $guestCart = $token ? Cart::activeForGuestToken($token) : null;
+
+        if (! $guestCart) {
+            return $this->error('Guest cart not found or expired.', 404);
+        }
+
+        $cart = $cartService->merge($guestCart, Cart::activeForUser(auth('api')->id()));
+
+        return $this->success(new CartResource($cart), 'Guest cart merged.');
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Resources\CartResource;
 use App\Models\Cart\Cart;
 use App\Models\Cart\CartItem;
 use App\Models\Product\Product;
+use App\Services\Cart\CartIdentityService;
 use App\Services\Cart\CartService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -118,9 +119,9 @@ class CartItemController extends BaseController
             new OA\Response(response: 422, description: 'Insufficient stock', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function update(Request $request, CartItem $cartItem, CartService $cartService): JsonResponse
+    public function update(Request $request, CartItem $cartItem, CartService $cartService, CartIdentityService $identity): JsonResponse
     {
-        $this->authorize('update', $cartItem->cart);
+        $identity->authorize($request, $cartItem->cart);
 
         $data = $request->validate([
             'quantity' => ['required', 'integer', 'min:1'],
@@ -152,10 +153,10 @@ class CartItemController extends BaseController
             new OA\Response(response: 200, description: 'Item removed', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
         ]
     )]
-    public function destroy(CartItem $cartItem, CartService $cartService): JsonResponse
+    public function destroy(Request $request, CartItem $cartItem, CartService $cartService, CartIdentityService $identity): JsonResponse
     {
         $cart = $cartItem->cart;
-        $this->authorize('update', $cart);
+        $identity->authorize($request, $cart);
         $cartItem->delete();
 
         return $this->success(new CartResource($cartService->fresh($cart)), 'Item removed from cart.');

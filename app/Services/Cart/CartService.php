@@ -45,6 +45,42 @@ class CartService
         });
     }
 
+    public function merge(Cart $guestCart, Cart $userCart): Cart
+    {
+        return DB::transaction(function () use ($guestCart, $userCart): Cart {
+            $guestCart->load(['items.product', 'items.variant']);
+
+            foreach ($guestCart->items as $guestItem) {
+                try {
+                    [, , , $stock] = $this->selection(
+                        $guestItem->product,
+                        $guestItem->variant_id,
+                        $guestItem->selected_options ?? []
+                    );
+                    $lineKey = $this->lineKey($guestItem->product_id, $guestItem->variant_id, $guestItem->selected_options ?? []);
+                    $existingQuantity = (int) $userCart->items()->where('line_key', $lineKey)->value('quantity');
+                    $quantity = min($guestItem->quantity, max(0, $stock - $existingQuantity));
+
+                    if ($quantity > 0) {
+                        $this->add($userCart, $guestItem->product, $guestItem->variant_id, $guestItem->selected_options ?? [], $quantity);
+                    }
+                } catch (ValidationException) {
+                    // Unavailable guest lines are intentionally not copied.
+                }
+            }
+
+            $guestCart->items()->delete();
+            $guestCart->update([
+                'status' => 'checked_out',
+                'merged_at' => now(),
+                'guest_token_hash' => null,
+                'guest_expires_at' => null,
+            ]);
+
+            return $this->fresh($userCart);
+        });
+    }
+
     public function update(
         CartItem $item,
         int $quantity,

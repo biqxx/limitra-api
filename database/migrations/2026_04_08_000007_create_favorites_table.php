@@ -19,10 +19,21 @@ return new class extends Migration
 
             $table->unique(['user_id', 'line_key']);
         });
+
+        Schema::create('wishlist_shares', function (Blueprint $table) {
+            $table->bigIncrements('id');
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->char('token_hash', 64)->unique();
+            $table->timestamp('expires_at');
+            $table->timestamps();
+
+            $table->index(['user_id', 'expires_at']);
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('wishlist_shares');
         Schema::dropIfExists('favorites');
     }
 };

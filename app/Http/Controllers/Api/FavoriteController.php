@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\FavoriteResource;
 use App\Models\Cart\Favorite;
+use App\Models\Cart\WishlistShare;
 use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Cart\CartService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
 
 class FavoriteController extends BaseController
@@ -153,5 +155,40 @@ class FavoriteController extends BaseController
         $favorite->delete();
 
         return $this->success(message: 'Removed from favorites.');
+    }
+
+    public function share(Request $request): JsonResponse
+    {
+        $data = $request->validate(['expires_in_days' => ['nullable', 'integer', 'between:1,30']]);
+        $token = Str::random(64);
+        $expiresAt = now()->addDays($data['expires_in_days'] ?? 7);
+
+        WishlistShare::create([
+            'user_id' => auth('api')->id(),
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => $expiresAt,
+        ]);
+
+        return $this->success([
+            'token' => $token,
+            'share_url' => rtrim(config('app.frontend_url', config('app.url')), '/').'/shared-wishlist/'.$token,
+            'expires_at' => $expiresAt,
+        ], 'Wishlist share created.', 201);
+    }
+
+    public function shared(string $token): JsonResponse
+    {
+        $share = WishlistShare::where('token_hash', hash('sha256', $token))
+            ->where('expires_at', '>', now())
+            ->firstOrFail();
+        $favorites = Favorite::with(['product.category', 'product.productImages', 'variant'])
+            ->where('user_id', $share->user_id)
+            ->orderByDesc('id')
+            ->get();
+
+        return $this->success([
+            'items' => FavoriteResource::collection($favorites),
+            'expires_at' => $share->expires_at,
+        ]);
     }
 }

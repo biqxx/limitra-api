@@ -11,10 +11,12 @@ class FavoriteResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'user_id' => $this->user_id,
             'variant_id' => $this->variant_id,
             'variant' => $this->whenLoaded('variant'),
             'selected_options' => $this->selected_options ?? [],
+            'available' => $this->product?->status === 'active'
+                && (! $this->variant_id || $this->variant?->status === 'active')
+                && ($this->variant?->stock ?? $this->product?->stock ?? 0) > 0,
             'product' => new ProductResource($this->whenLoaded('product')),
             'created_at' => $this->created_at,
         ];

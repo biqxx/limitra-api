@@ -10,7 +10,10 @@ return new class extends Migration
     {
         Schema::create('carts', function (Blueprint $table) {
             $table->bigIncrements('id');
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained()->cascadeOnDelete();
+            $table->char('guest_token_hash', 64)->nullable()->unique();
+            $table->timestamp('guest_expires_at')->nullable();
+            $table->timestamp('merged_at')->nullable();
             $table->enum('status', ['active', 'checked_out'])->default('active');
             $table->char('currency', 3)->default('NGN');
             $table->timestamps();
@@ -18,6 +21,7 @@ return new class extends Migration
             // Only one active cart per user is enforced in application logic;
             // multiple rows are allowed to preserve checkout history.
             $table->index(['user_id', 'status']);
+            $table->index(['guest_expires_at', 'status']);
         });
     }
 

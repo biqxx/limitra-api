@@ -9,8 +9,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Cart extends Model
 {
+    protected $hidden = ['guest_token_hash'];
+
     protected $fillable = [
         'user_id',
+        'guest_token_hash',
+        'guest_expires_at',
+        'merged_at',
         'status',
         'currency',
     ];
@@ -19,6 +24,8 @@ class Cart extends Model
     {
         return [
             'status' => 'string',
+            'guest_expires_at' => 'datetime',
+            'merged_at' => 'datetime',
         ];
     }
 
@@ -39,6 +46,15 @@ class Cart extends Model
         return self::firstOrCreate(
             ['user_id' => $userId, 'status' => 'active']
         );
+    }
+
+    public static function activeForGuestToken(string $token): ?self
+    {
+        return self::where('guest_token_hash', hash('sha256', $token))
+            ->where('status', 'active')
+            ->whereNull('merged_at')
+            ->where('guest_expires_at', '>', now())
+            ->first();
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\CommerceRuleController;
+use App\Http\Controllers\Api\CheckoutController;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\PromotionController;
 use Illuminate\Support\Facades\Route;
@@ -25,4 +26,8 @@ Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('admin')
     Route::get('promotions', [CommerceRuleController::class, 'promotions']);
     Route::post('promotions', [CommerceRuleController::class, 'storePromotion']);
     Route::patch('promotions/{promotion}', [CommerceRuleController::class, 'updatePromotion']);
+});
+
+Route::middleware(['auth:api', 'active.session'])->group(function () {
+    Route::post('checkout/quote', [CheckoutController::class, 'quote'])->name('checkout.quote');
 });

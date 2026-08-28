@@ -28,7 +28,7 @@ class OrderController extends BaseController
     )]
     public function index(Request $request): JsonResponse
     {
-        $orders = Order::with(['items.product', 'shippingAddress'])
+        $orders = Order::with(['items.product', 'shippingAddress', 'latestPayment'])
             ->where('user_id', auth('api')->id())
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->orderByDesc('id')
@@ -90,7 +90,7 @@ class OrderController extends BaseController
         }
 
         return $this->success(
-            new OrderResource($order->load(['items.product', 'items.variant', 'shippingAddress'])),
+            new OrderResource($order->load(['items.product', 'items.variant', 'shippingAddress', 'latestPayment'])),
             $result['replayed'] ? 'Order already created.' : 'Order created successfully.',
             $result['replayed'] ? 200 : 201
         );
@@ -115,7 +115,7 @@ class OrderController extends BaseController
             return $this->error('Forbidden.', 403);
         }
 
-        return $this->success(new OrderResource($order->load(['items.product', 'shippingAddress'])));
+        return $this->success(new OrderResource($order->load(['items.product', 'shippingAddress', 'latestPayment'])));
     }
 
     #[OA\Put(

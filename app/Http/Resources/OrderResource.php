@@ -31,7 +31,7 @@ class OrderResource extends JsonResource
             'estimated_delivery_at' => $this->estimated_delivery_at,
             'shipping_address' => $this->shipping_address,
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
-            'payment' => null,
+            'payment' => new PaymentResource($this->whenLoaded('latestPayment')),
             'tracking' => null,
             'cancelled_at' => $this->cancelled_at,
             'cancellation_reason' => $this->cancellation_reason,

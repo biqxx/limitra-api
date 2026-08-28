@@ -10,6 +10,7 @@ use App\Models\Cart\Favorite;
 use App\Models\Order\Order;
 use App\Models\Payment\Account;
 use App\Models\Payment\SavedCard;
+use App\Models\User\AuthSession;
 use App\Models\User\Profile;
 use App\Models\User\UserPreference;
 use Database\Factories\UserFactory;
@@ -31,10 +32,15 @@ class User extends Authenticatable implements JWTSubject
     protected $fillable = [
         'username',
         'email',
+        'pending_email',
+        'email_change_otp',
+        'email_change_expires_at',
+        'email_change_attempts',
         'password',
         'role',
         'referred_by',
         'email_verification_otp',
+        'email_change_otp',
         'email_verification_expires_at',
         'email_verification_sent_at',
         'email_verification_attempts',
@@ -53,6 +59,7 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'email_verification_expires_at' => 'datetime',
             'email_verification_sent_at' => 'datetime',
+            'email_change_expires_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -140,6 +147,11 @@ class User extends Authenticatable implements JWTSubject
     public function savedCards(): HasMany
     {
         return $this->hasMany(SavedCard::class);
+    }
+
+    public function authSessions(): HasMany
+    {
+        return $this->hasMany(AuthSession::class);
     }
 
     public function account(): HasOne

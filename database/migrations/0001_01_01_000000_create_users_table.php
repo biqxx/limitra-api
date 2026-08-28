@@ -12,6 +12,10 @@ return new class extends Migration
             $table->id();
             $table->string('username')->unique();
             $table->string('email')->unique();
+            $table->string('pending_email')->nullable()->unique();
+            $table->string('email_change_otp')->nullable();
+            $table->timestamp('email_change_expires_at')->nullable();
+            $table->unsignedTinyInteger('email_change_attempts')->default(0);
             $table->timestamp('email_verified_at')->nullable();
             $table->string('email_verification_otp')->nullable();
             $table->timestamp('email_verification_expires_at')->nullable();
@@ -40,10 +44,25 @@ return new class extends Migration
             $table->longText('payload');
             $table->integer('last_activity')->index();
         });
+
+        Schema::create('auth_sessions', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->string('device_name', 120);
+            $table->string('ip_address', 45)->nullable();
+            $table->text('user_agent')->nullable();
+            $table->timestamp('last_used_at');
+            $table->timestamp('expires_at');
+            $table->timestamp('revoked_at')->nullable();
+            $table->timestamps();
+
+            $table->index(['user_id', 'revoked_at']);
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('auth_sessions');
         Schema::dropIfExists('sessions');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('users');

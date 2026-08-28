@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CustomerAccountController;
 use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,7 +18,7 @@ Route::post('forgot-password', [AuthController::class, 'forgotPassword'])
 Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('auth.reset-password');
 
 // ── Protected auth routes ───────────────────────────────────────────────────
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api', 'active.session'])->group(function () {
     Route::post('logout', [AuthController::class, 'logout'])->name('auth.logout');
     Route::post('refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
     Route::get('me', [AuthController::class, 'me'])->name('auth.me');
@@ -25,4 +26,12 @@ Route::middleware('auth:api')->group(function () {
     // Profile management (own profile only)
     Route::get('profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('profile/avatar', [ProfileController::class, 'uploadAvatar'])->name('profile.avatar.store');
+    Route::delete('profile/avatar', [ProfileController::class, 'deleteAvatar'])->name('profile.avatar.destroy');
+    Route::post('profile/email/verify', [ProfileController::class, 'verifyEmailChange'])->name('profile.email.verify');
+
+    Route::get('account/dashboard', [CustomerAccountController::class, 'dashboard'])->name('account.dashboard');
+    Route::post('account/password/change', [CustomerAccountController::class, 'changePassword'])->name('account.password.change');
+    Route::get('account/sessions', [CustomerAccountController::class, 'sessions'])->name('account.sessions.index');
+    Route::delete('account/sessions/{session}', [CustomerAccountController::class, 'revokeSession'])->name('account.sessions.destroy');
 });

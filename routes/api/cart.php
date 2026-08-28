@@ -28,7 +28,7 @@ Route::delete('cart/{cart}/clear', [CartController::class, 'clear'])->name('cart
 // ── Standard CRUD ───────────────────────────────────────────────────────────
 Route::get('shared-wishlists/{token}', [FavoriteController::class, 'shared'])->name('favorites.shared');
 
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api', 'active.session'])->group(function () {
     Route::post('cart/merge', [CartController::class, 'merge'])->name('cart.merge');
     Route::apiResource('cart', CartController::class);
     Route::apiResource('cart-items', CartItemController::class)->except(['update', 'destroy']);

@@ -11,12 +11,14 @@ use App\Http\Requests\Auth\VerifyEmailRequest;
 use App\Http\Resources\UserResource;
 use App\Models\Affiliate\Affiliate;
 use App\Models\User;
+use App\Models\User\AuthSession;
 use App\Models\User\Profile;
 use App\Notifications\LoginNotification;
 use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
 use App\Services\AffiliateService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -167,7 +169,8 @@ class AuthController extends BaseController
             'email_verification_attempts' => 0,
         ]);
 
-        $jwtToken = auth('api')->login($user);
+        $session = $this->createAuthSession($user, $request, 'Verified device');
+        $jwtToken = auth('api')->claims(['sid' => $session->id])->login($user);
 
         return $this->success(
             $this->tokenPayload($jwtToken, $user),
@@ -250,6 +253,9 @@ class AuthController extends BaseController
             $request->userAgent() ?? 'unknown'
         ));
 
+        $session = $this->createAuthSession($user, $request, $request->validated('device_name') ?: 'Unknown device');
+        $jwtToken = auth('api')->claims(['sid' => $session->id])->login($user);
+
         return $this->success(
             $this->tokenPayload($jwtToken, $user->load('profile')),
             'Logged in successfully.'
@@ -272,6 +278,9 @@ class AuthController extends BaseController
     )]
     public function logout(): JsonResponse
     {
+        if ($sessionId = auth('api')->payload()->get('sid')) {
+            AuthSession::whereKey($sessionId)->where('user_id', auth('api')->id())->update(['revoked_at' => now()]);
+        }
         auth('api')->logout();
 
         return $this->success(null, 'Logged out successfully.');
@@ -437,6 +446,17 @@ class AuthController extends BaseController
             'expires_in' => auth('api')->factory()->getTTL() * 60, // seconds
             'user' => new UserResource($user),
         ];
+    }
+
+    private function createAuthSession(User $user, Request $request, string $deviceName): AuthSession
+    {
+        return $user->authSessions()->create([
+            'device_name' => $deviceName,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'last_used_at' => now(),
+            'expires_at' => now()->addMinutes(auth('api')->factory()->getTTL()),
+        ]);
     }
 
     private function uniqueUsername(string $name): string

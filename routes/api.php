@@ -25,7 +25,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/cart.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
-    Route::middleware('auth:api')->group(function () {
+    Route::middleware(['auth:api', 'active.session'])->group(function () {
         require __DIR__.'/api/address.php';
         require __DIR__.'/api/order.php';
         require __DIR__.'/api/payment.php';

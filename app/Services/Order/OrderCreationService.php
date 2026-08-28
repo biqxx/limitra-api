@@ -120,6 +120,12 @@ class OrderCreationService
                     'shipping_address_id' => $address->id,
                     'shipping_address' => $quote->address_snapshot,
                 ]);
+                $order->statusEvents()->create([
+                    'from_status' => null,
+                    'to_status' => $order->status,
+                    'note' => 'Order created.',
+                    'source' => 'system',
+                ]);
 
                 foreach ($quote->items as $quoteItem) {
                     $order->items()->create([

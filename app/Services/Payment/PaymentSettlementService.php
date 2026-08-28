@@ -12,8 +12,8 @@ class PaymentSettlementService
     public function apply(Payment $payment, array $transaction): Payment
     {
         return DB::transaction(function () use ($payment, $transaction) {
-            $payment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
             $order = $payment->order()->lockForUpdate()->firstOrFail();
+            $payment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
 
             $this->assertTransactionMatches($payment, $transaction);
             $providerStatus = strtolower((string) ($transaction['status'] ?? 'pending'));
@@ -43,10 +43,19 @@ class PaymentSettlementService
             ]);
 
             if ($status === 'succeeded' && $order->payment_status !== 'paid') {
+                $fromStatus = $order->status;
                 $order->update([
                     'payment_status' => 'paid',
                     'status' => $order->status === 'pending_payment' ? 'confirmed' : $order->status,
                 ]);
+                if ($fromStatus !== $order->status) {
+                    $order->statusEvents()->create([
+                        'from_status' => $fromStatus,
+                        'to_status' => $order->status,
+                        'note' => 'Payment confirmed.',
+                        'source' => 'payment',
+                    ]);
+                }
             } elseif (in_array($status, ['failed', 'abandoned'], true) && $order->payment_status !== 'paid') {
                 $order->update(['payment_status' => 'failed']);
             }

@@ -45,10 +45,10 @@ class PaymentInitializationService
                     return $this->replay($existing, $requestHash)['payment'];
                 }
 
+                $order = Order::whereKey($orderId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
                 $lockedParent = $parent
                     ? Payment::whereKey($parent->id)->where('user_id', $userId)->lockForUpdate()->firstOrFail()
                     : null;
-                $order = Order::whereKey($orderId)->where('user_id', $userId)->lockForUpdate()->firstOrFail();
                 $this->assertOrderCanBePaid($order, $data['method'], $lockedParent);
 
                 if (! $parent && $order->payments()->whereIn('status', ['initializing', 'pending'])->exists()) {

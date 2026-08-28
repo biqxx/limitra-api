@@ -86,6 +86,16 @@ class Order extends Model
         return $this->hasOne(Payment::class)->latestOfMany();
     }
 
+    public function shipment(): HasOne
+    {
+        return $this->hasOne(Shipment::class);
+    }
+
+    public function statusEvents(): HasMany
+    {
+        return $this->hasMany(OrderStatusEvent::class)->orderByDesc('id');
+    }
+
     public function shippingAddress(): BelongsTo
     {
         return $this->belongsTo(Address::class, 'shipping_address_id');

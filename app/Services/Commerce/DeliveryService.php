@@ -11,6 +11,12 @@ class DeliveryService
     {
         $cart->loadMissing(['items.product', 'items.variant']);
         $subtotal = $cart->items->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->price) * $item->quantity);
+
+        return $this->optionsForSubtotal($subtotal, $cart->currency, $country, $state, $city);
+    }
+
+    public function optionsForSubtotal(float $subtotal, string $currency, string $country, string $state, ?string $city): array
+    {
         $zone = DeliveryZone::with(['methods' => fn ($query) => $query->where('delivery_methods.active', true)])
             ->where('country', strtoupper($country))->where('active', true)->orderByDesc('priority')->get()
             ->first(fn (DeliveryZone $candidate) => $this->matches($candidate, $state, $city));
@@ -21,7 +27,7 @@ class DeliveryService
 
         return $zone->methods->filter(fn ($method) => $method->pivot->active
             && ($method->pivot->minimum_order === null || $subtotal >= (float) $method->pivot->minimum_order))
-            ->map(function ($method) use ($subtotal, $zone, $cart) {
+            ->map(function ($method) use ($subtotal, $zone, $currency) {
                 $fee = (float) $method->pivot->fee;
                 if ($method->pivot->free_shipping_threshold !== null
                     && $subtotal >= (float) $method->pivot->free_shipping_threshold) {
@@ -34,7 +40,7 @@ class DeliveryService
                     'type' => $method->type,
                     'zone' => ['id' => $zone->id, 'name' => $zone->name],
                     'fee' => number_format($fee, 2, '.', ''),
-                    'currency' => $cart->currency,
+                    'currency' => $currency,
                     'estimated_days' => [
                         'min' => $method->pivot->estimated_days_min,
                         'max' => $method->pivot->estimated_days_max,

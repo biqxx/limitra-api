@@ -2,7 +2,7 @@
 
 namespace App\Models\Product;
 
-use App\Models\Cart\Cart;
+use App\Models\Cart\CartItem;
 use App\Models\Cart\Favorite;
 use App\Models\Image;
 use App\Models\Order\OrderItem;
@@ -78,7 +78,7 @@ class Product extends Model
 
     public function cartItems(): HasMany
     {
-        return $this->hasMany(Cart::class);
+        return $this->hasMany(CartItem::class);
     }
 
     public function orderItems(): HasMany

@@ -11,6 +11,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('admin')->group(function () {
         require __DIR__.'/api/admin.php';
         require __DIR__.'/api/order_admin.php';
+        require __DIR__.'/api/settings.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────

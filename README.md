@@ -7,6 +7,25 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Docker
+
+The Compose stack runs the API, a Redis-backed queue worker, PostgreSQL, and Redis.
+
+```bash
+cp .env.example .env
+php artisan key:generate
+php artisan jwt:secret
+docker compose up --build -d
+```
+
+The API is available at `http://localhost:8000`. The application container waits for healthy PostgreSQL and Redis services, runs pending migrations, and then starts PHP-FPM behind Nginx. PostgreSQL and Redis are available only to services on the Compose network. Override the `APP_PORT`, `DOCKER_DB_*`, or `DOCKER_REDIS_PASSWORD` values in `.env` when needed.
+
+```bash
+docker compose ps
+docker compose logs -f app worker
+docker compose down
+```
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

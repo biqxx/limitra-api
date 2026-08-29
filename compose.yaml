@@ -1,0 +1,128 @@
+x-app-environment: &app-environment
+  APP_NAME: Limitra
+  APP_ENV: ${APP_ENV:-local}
+  APP_KEY: ${APP_KEY:-}
+  APP_DEBUG: ${APP_DEBUG:-false}
+  APP_URL: ${APP_URL:-http://localhost:8000}
+  JWT_SECRET: ${JWT_SECRET:-}
+  LOG_CHANNEL: stderr
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${DOCKER_DB_DATABASE:-limitra}
+  DB_USERNAME: ${DOCKER_DB_USERNAME:-limitra}
+  DB_PASSWORD: ${DOCKER_DB_PASSWORD:-limitra_db_password}
+  CACHE_STORE: redis
+  CACHE_PREFIX: limitra_cache_
+  SESSION_DRIVER: redis
+  SESSION_CONNECTION: default
+  QUEUE_CONNECTION: redis
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PASSWORD: ${DOCKER_REDIS_PASSWORD:-limitra_redis_password}
+  REDIS_PORT: 6379
+  REDIS_DB: 0
+  REDIS_CACHE_DB: 1
+  REDIS_PREFIX: limitra_
+  PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
+  PAYSTACK_BASE_URL: ${PAYSTACK_BASE_URL:-https://api.paystack.co}
+
+x-app-dependencies: &app-dependencies
+  postgres:
+    condition: service_healthy
+    restart: true
+  redis:
+    condition: service_healthy
+    restart: true
+
+services:
+  app:
+    build:
+      context: .
+      target: app
+    restart: unless-stopped
+    environment:
+      <<: *app-environment
+      RUN_MIGRATIONS: "true"
+    depends_on: *app-dependencies
+    volumes:
+      - app_storage:/var/www/html/storage
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/limitra-ready && php-fpm -t"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "${APP_PORT:-8000}:80"
+    volumes:
+      - app_storage:/var/www/html/storage:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=/dev/null", "http://127.0.0.1/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  worker:
+    build:
+      context: .
+      target: app
+    restart: unless-stopped
+    user: www-data
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90"]
+    environment:
+      <<: *app-environment
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      app:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - app_storage:/var/www/html/storage
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DOCKER_DB_DATABASE:-limitra}
+      POSTGRES_USER: ${DOCKER_DB_USERNAME:-limitra}
+      POSTGRES_PASSWORD: ${DOCKER_DB_PASSWORD:-limitra_db_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${DOCKER_REDIS_PASSWORD:-limitra_redis_password}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  app_storage:
+  postgres_data:
+  redis_data:

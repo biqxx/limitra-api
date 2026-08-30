@@ -27,6 +27,7 @@ class InboundMessageJob implements ShouldQueue
     public function __construct(public readonly int $messageId)
     {
         $this->processingToken = (string) Str::uuid();
+        $this->onQueue('ai');
     }
 
     public function handle(SocialChannelManager $channels, AgentService $agent): void

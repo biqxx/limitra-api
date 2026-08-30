@@ -7,7 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class VerifyEmailNotification extends Notification implements ShouldQueue
+class PasswordResetOtpNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -26,11 +26,11 @@ class VerifyEmailNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Your Email Verification Code')
+            ->subject('Your Password Reset OTP')
             ->greeting('Hello!')
-            ->line('Use the verification code below to confirm your email address:')
+            ->line('You requested a password reset. Use the OTP below:')
             ->line('## '.$this->otp)
-            ->line('This code expires in 10 minutes.')
-            ->line('If you did not create an account, no further action is required.');
+            ->line('This OTP is valid for **15 minutes**.')
+            ->line('If you did not request a password reset, ignore this email.');
     }
 }

@@ -18,7 +18,10 @@ class ProcessPaymentWebhook implements ShouldQueue
 
     public array $backoff = [10, 30, 120, 300];
 
-    public function __construct(public readonly int $webhookId) {}
+    public function __construct(public readonly int $webhookId)
+    {
+        $this->onQueue('payments');
+    }
 
     public function handle(PaymentSettlementService $settlement, RefundSettlementService $refunds): void
     {

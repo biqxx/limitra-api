@@ -72,4 +72,9 @@ class Payment extends Model
     {
         return $this->hasMany(self::class, 'parent_payment_id');
     }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
 }

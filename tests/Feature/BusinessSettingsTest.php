@@ -27,9 +27,10 @@ class BusinessSettingsTest extends TestCase
 
         $this->actingAs($admin, 'api')->getJson('/api/v1/admin/settings?group=returns')
             ->assertOk()
-            ->assertJsonCount(2, 'data')
+            ->assertJsonCount(3, 'data')
             ->assertJsonPath('data.0.group', 'returns')
-            ->assertJsonPath('data.1.group', 'returns');
+            ->assertJsonPath('data.1.group', 'returns')
+            ->assertJsonPath('data.2.group', 'returns');
     }
 
     public function test_only_admin_can_manage_business_settings(): void

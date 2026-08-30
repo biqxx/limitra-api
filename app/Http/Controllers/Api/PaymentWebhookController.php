@@ -31,7 +31,7 @@ class PaymentWebhookController extends BaseController
         ], [
             'provider' => 'paystack',
             'event' => $payload['event'],
-            'reference' => $payload['data']['reference'] ?? null,
+            'reference' => $payload['data']['reference'] ?? $payload['data']['transaction_reference'] ?? null,
             'payload' => $payload,
         ]);
 

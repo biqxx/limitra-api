@@ -8,6 +8,7 @@ use App\Models\Cart\Cart;
 use App\Models\Cart\CartItem;
 use App\Models\Cart\Favorite;
 use App\Models\Order\Order;
+use App\Models\Order\ReturnRequest;
 use App\Models\Payment\Account;
 use App\Models\Payment\SavedCard;
 use App\Models\Product\Review;
@@ -153,6 +154,11 @@ class User extends Authenticatable implements JWTSubject
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function returnRequests(): HasMany
+    {
+        return $this->hasMany(ReturnRequest::class);
     }
 
     public function authSessions(): HasMany

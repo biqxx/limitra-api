@@ -5,6 +5,7 @@ namespace App\Models\Order;
 use App\Models\Address\Address;
 use App\Models\Commerce\CheckoutQuote;
 use App\Models\Payment\Payment;
+use App\Models\Payment\Refund;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -81,6 +82,11 @@ class Order extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     public function latestPayment(): HasOne
     {
         return $this->hasOne(Payment::class)->latestOfMany();
@@ -94,6 +100,11 @@ class Order extends Model
     public function statusEvents(): HasMany
     {
         return $this->hasMany(OrderStatusEvent::class)->orderByDesc('id');
+    }
+
+    public function returnRequests(): HasMany
+    {
+        return $this->hasMany(ReturnRequest::class);
     }
 
     public function shippingAddress(): BelongsTo

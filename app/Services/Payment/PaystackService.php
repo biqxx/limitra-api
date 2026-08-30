@@ -18,6 +18,11 @@ class PaystackService
         return $this->post('/transaction/charge_authorization', $payload, 'charge this saved payment method');
     }
 
+    public function createRefund(array $payload): array
+    {
+        return $this->post('/refund', $payload, 'initiate this refund');
+    }
+
     public function verifyTransaction(string $reference): array
     {
         try {

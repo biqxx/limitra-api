@@ -5,11 +5,11 @@ use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\TrackAnalytics;
 use App\Providers\AIServiceProvider;
 use App\Providers\SocialServiceProvider;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withProviders([
@@ -23,6 +23,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : route('login'));
+
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'track.analytics' => TrackAnalytics::class,
@@ -33,8 +35,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('api', TrackAnalytics::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request, Throwable $e): bool => $request->is('api/*') || $request->expectsJson()
+        );
+
         // Return JSON for unauthenticated API requests instead of redirecting.
-        $exceptions->render(function (UnauthorizedHttpException $e, Request $request) {
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
                     'success' => false,

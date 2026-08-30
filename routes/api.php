@@ -14,6 +14,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/review_admin.php';
         require __DIR__.'/api/return_admin.php';
         require __DIR__.'/api/settings.php';
+        require __DIR__.'/api/queue.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────

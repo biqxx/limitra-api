@@ -17,6 +17,8 @@ x-app-environment: &app-environment
   SESSION_DRIVER: redis
   SESSION_CONNECTION: default
   QUEUE_CONNECTION: redis
+  REDIS_QUEUE_RETRY_AFTER: 120
+  REDIS_QUEUE_BLOCK_FOR: 5
   REDIS_CLIENT: phpredis
   REDIS_HOST: redis
   REDIS_PASSWORD: ${DOCKER_REDIS_PASSWORD:-limitra_redis_password}
@@ -24,6 +26,11 @@ x-app-environment: &app-environment
   REDIS_DB: 0
   REDIS_CACHE_DB: 1
   REDIS_PREFIX: limitra_
+  HORIZON_NAME: ${HORIZON_NAME:-Limitra}
+  HORIZON_PATH: ${HORIZON_PATH:-horizon}
+  HORIZON_MAX_PROCESSES: ${HORIZON_MAX_PROCESSES:-3}
+  HORIZON_DASHBOARD_USER: ${HORIZON_DASHBOARD_USER:-}
+  HORIZON_DASHBOARD_PASSWORD: ${HORIZON_DASHBOARD_PASSWORD:-}
   PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
   PAYSTACK_BASE_URL: ${PAYSTACK_BASE_URL:-https://api.paystack.co}
 
@@ -80,7 +87,31 @@ services:
       target: app
     restart: unless-stopped
     user: www-data
-    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90"]
+    command: ["php", "artisan", "horizon"]
+    environment:
+      <<: *app-environment
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      app:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - app_storage:/var/www/html/storage
+    stop_grace_period: 2m
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  scheduler:
+    build:
+      context: .
+      target: app
+    restart: unless-stopped
+    user: www-data
+    command: ["php", "artisan", "schedule:work"]
     environment:
       <<: *app-environment
       RUN_MIGRATIONS: "false"

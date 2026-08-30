@@ -9,7 +9,9 @@ RUN composer install \
     --no-progress \
     --prefer-dist \
     --no-scripts \
-    --no-autoloader
+    --no-autoloader \
+    --ignore-platform-req=ext-pcntl \
+    --ignore-platform-req=ext-posix
 
 COPY . .
 RUN composer dump-autoload \

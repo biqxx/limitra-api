@@ -87,8 +87,15 @@ class MetaChannel implements SocialChannel
             return null;
         }
 
+        $providerMessageId = (string) ($msgData['id'] ?? '');
+
+        if ($providerMessageId === '') {
+            return null;
+        }
+
         return new InboundMessage(
             platform: 'whatsapp',
+            providerMessageId: $providerMessageId,
             platformSenderId: $msgData['from'],
             platformRecipientId: $value['metadata']['phone_number_id'] ?? '',
             message: $msgData['text']['body'] ?? '',
@@ -105,8 +112,15 @@ class MetaChannel implements SocialChannel
             return null;
         }
 
+        $providerMessageId = (string) ($messaging['message']['mid'] ?? '');
+
+        if ($providerMessageId === '') {
+            return null;
+        }
+
         return new InboundMessage(
             platform: 'instagram',
+            providerMessageId: $providerMessageId,
             platformSenderId: $messaging['sender']['id'],
             platformRecipientId: $messaging['recipient']['id'],
             message: $messaging['message']['text'],
@@ -123,8 +137,15 @@ class MetaChannel implements SocialChannel
             return null;
         }
 
+        $providerMessageId = (string) ($messaging['message']['mid'] ?? '');
+
+        if ($providerMessageId === '') {
+            return null;
+        }
+
         return new InboundMessage(
             platform: 'facebook',
+            providerMessageId: $providerMessageId,
             platformSenderId: $messaging['sender']['id'],
             platformRecipientId: $messaging['recipient']['id'],
             message: $messaging['message']['text'],

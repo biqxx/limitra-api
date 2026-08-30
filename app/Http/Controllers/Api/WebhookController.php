@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Jobs\InboundMessageJob;
 use App\Social\Channels\MetaChannel;
 use App\Social\Data\InboundMessage;
+use App\Social\InboundMessageReceiver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class WebhookController extends BaseController
 {
-    public function __construct(private readonly MetaChannel $meta) {}
+    public function __construct(
+        private readonly MetaChannel $meta,
+        private readonly InboundMessageReceiver $receiver,
+    ) {}
 
     /**
      * GET /webhook/meta — Meta webhook verification challenge.
@@ -39,7 +42,7 @@ class WebhookController extends BaseController
         $dto = $this->meta->parseInboundPayload($payload);
 
         if ($dto instanceof InboundMessage) {
-            InboundMessageJob::dispatch($dto);
+            $this->receiver->accept($dto);
         }
 
         // Meta requires a 200 response within 20 seconds regardless of processing outcome.

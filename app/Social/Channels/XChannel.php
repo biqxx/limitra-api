@@ -80,10 +80,17 @@ class XChannel implements SocialChannel
                 continue;
             }
 
+            $providerMessageId = (string) ($event['id'] ?? $event['id_str'] ?? '');
+
+            if ($providerMessageId === '') {
+                continue;
+            }
+
             $senderProfile = $users[$senderId] ?? [];
 
             return new InboundMessage(
                 platform: 'x',
+                providerMessageId: $providerMessageId,
                 platformSenderId: $senderId,
                 platformRecipientId: $botId ?? ($mc['target']['recipient_id'] ?? ''),
                 message: $text,

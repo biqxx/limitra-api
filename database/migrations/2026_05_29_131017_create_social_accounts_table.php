@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('social_accounts', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('platform');               // whatsapp | instagram | facebook
+            $table->string('platform');               // whatsapp | instagram | facebook | x
             $table->string('platform_sender_id');
             $table->string('username')->nullable();   // display name from Meta profile
             $table->json('metadata')->nullable();

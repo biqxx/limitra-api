@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Jobs\InboundMessageJob;
 use App\Social\Channels\XChannel;
+use App\Social\InboundMessageReceiver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class XWebhookController extends BaseController
 {
-    public function __construct(private readonly XChannel $x) {}
+    public function __construct(
+        private readonly XChannel $x,
+        private readonly InboundMessageReceiver $receiver,
+    ) {}
 
     /**
      * GET /webhook/x — X CRC challenge response.
@@ -39,7 +42,7 @@ class XWebhookController extends BaseController
         $dto = $this->x->parseInboundPayload($payload);
 
         if ($dto !== null) {
-            InboundMessageJob::dispatch($dto);
+            $this->receiver->accept($dto);
         }
 
         // X requires a 200 within a few seconds.

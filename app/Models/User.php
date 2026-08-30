@@ -10,6 +10,7 @@ use App\Models\Cart\Favorite;
 use App\Models\Order\Order;
 use App\Models\Payment\Account;
 use App\Models\Payment\SavedCard;
+use App\Models\Product\Review;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
 use App\Models\User\UserPreference;
@@ -147,6 +148,11 @@ class User extends Authenticatable implements JWTSubject
     public function savedCards(): HasMany
     {
         return $this->hasMany(SavedCard::class);
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
     }
 
     public function authSessions(): HasMany

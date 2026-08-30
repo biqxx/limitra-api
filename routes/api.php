@@ -11,6 +11,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('admin')->group(function () {
         require __DIR__.'/api/admin.php';
         require __DIR__.'/api/order_admin.php';
+        require __DIR__.'/api/review_admin.php';
         require __DIR__.'/api/settings.php';
     });
 
@@ -22,6 +23,7 @@ Route::prefix('v1')->group(function () {
 
     // ── Product catalogue (public read, auth required for writes) ─────────────
     require __DIR__.'/api/product.php';
+    require __DIR__.'/api/review.php';
 
     // Cart browsing supports either JWT ownership or an opaque guest token.
     require __DIR__.'/api/cart.php';

@@ -108,6 +108,11 @@ class Product extends Model
         return $this->hasMany(ProductSpecification::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
     public function resolveRouteBindingQuery($query, $value, $field = null)
     {
         return $query->where($field ?? (is_numeric($value) ? $this->getKeyName() : 'slug'), $value);

@@ -3,7 +3,8 @@
 use App\Http\Middleware\EnsureActiveSession;
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\TrackAnalytics;
-use App\Providers\AiServiceProvider;
+use App\Providers\AIServiceProvider;
+use App\Providers\SocialServiceProvider;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,7 +13,8 @@ use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withProviders([
-        AiServiceProvider::class,
+        AIServiceProvider::class,
+        SocialServiceProvider::class,
     ])
     ->withRouting(
         web: __DIR__.'/../routes/web.php',

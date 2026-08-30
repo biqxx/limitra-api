@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Cart\Cart;
 
 class GeneratePaymentLinkTool implements Tool
@@ -27,9 +28,16 @@ class GeneratePaymentLinkTool implements Tool
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
-        $cart = Cart::with('items.product')->find((int) $arguments['cart_id']);
+        if ($context->userId === null) {
+            return ['error' => 'Authentication is required to check out.'];
+        }
+
+        $cart = Cart::with('items.product')
+            ->where('user_id', $context->userId)
+            ->where('status', 'active')
+            ->find((int) $arguments['cart_id']);
 
         if (! $cart || $cart->items->isEmpty()) {
             return ['error' => 'Cart not found or is empty'];

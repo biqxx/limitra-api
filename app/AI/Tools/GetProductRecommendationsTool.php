@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Analytics\CartEvent;
 use App\Models\Cart\CartItem;
 use App\Models\Cart\Favorite;
@@ -28,20 +29,16 @@ class GetProductRecommendationsTool implements Tool
                         'type' => 'string',
                         'description' => 'The product keyword the user mentioned (e.g. "phone", "laptop", "shoes").',
                     ],
-                    'user_id' => [
-                        'type' => 'integer',
-                        'description' => 'The current user\'s ID for personalised ranking. Pass the user_id from the session context.',
-                    ],
                 ],
                 'required' => ['query'],
             ],
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
         $query = $arguments['query'];
-        $userId = isset($arguments['user_id']) ? (int) $arguments['user_id'] : null;
+        $userId = $context->userId;
 
         // ── 1. Candidate products matching the query ──────────────────────────
         $candidateIds = Product::where('name', 'like', "%{$query}%")

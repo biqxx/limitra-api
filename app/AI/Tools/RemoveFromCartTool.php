@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Cart\Cart;
 use App\Models\Cart\CartItem;
 use App\Models\Product\Product;
@@ -23,16 +24,19 @@ class RemoveFromCartTool implements Tool
                 'type' => 'object',
                 'properties' => [
                     'product_id' => ['type' => 'integer', 'description' => 'The product ID to remove'],
-                    'user_id' => ['type' => 'integer', 'description' => "The customer's user ID"],
                 ],
-                'required' => ['product_id', 'user_id'],
+                'required' => ['product_id'],
             ],
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
-        $cart = Cart::where('user_id', (int) $arguments['user_id'])
+        if ($context->userId === null) {
+            return ['error' => 'Authentication is required to modify a cart.'];
+        }
+
+        $cart = Cart::where('user_id', $context->userId)
             ->where('status', 'active')
             ->first();
 

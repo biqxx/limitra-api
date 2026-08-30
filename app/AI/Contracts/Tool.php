@@ -2,6 +2,8 @@
 
 namespace App\AI\Contracts;
 
+use App\AI\Data\ToolContext;
+
 interface Tool
 {
     public function getName(): string;
@@ -10,5 +12,5 @@ interface Tool
     public function getDefinition(): array;
 
     /** Executes the tool and returns a result the AI can read. */
-    public function execute(array $arguments): mixed;
+    public function execute(array $arguments, ToolContext $context): mixed;
 }

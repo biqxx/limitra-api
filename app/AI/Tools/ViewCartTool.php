@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Cart\Cart;
 
 class ViewCartTool implements Tool
@@ -19,17 +20,19 @@ class ViewCartTool implements Tool
             'description' => "Retrieve the customer's active cart contents including product names, quantities, prices, and order total.",
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [
-                    'user_id' => ['type' => 'integer', 'description' => "The customer's user ID"],
-                ],
-                'required' => ['user_id'],
+                'properties' => [],
+                'required' => [],
             ],
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
-        $cart = Cart::where('user_id', (int) $arguments['user_id'])
+        if ($context->userId === null) {
+            return ['error' => 'Authentication is required to view a cart.'];
+        }
+
+        $cart = Cart::where('user_id', $context->userId)
             ->where('status', 'active')
             ->with(['items.product'])
             ->first();

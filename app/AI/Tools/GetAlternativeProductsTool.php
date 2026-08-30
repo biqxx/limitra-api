@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Product\Product;
 
 class GetAlternativeProductsTool implements Tool
@@ -27,7 +28,7 @@ class GetAlternativeProductsTool implements Tool
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
         $product = Product::find((int) $arguments['product_id']);
 

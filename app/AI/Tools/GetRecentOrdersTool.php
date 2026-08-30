@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Order\Order;
 
 class GetRecentOrdersTool implements Tool
@@ -20,27 +21,30 @@ class GetRecentOrdersTool implements Tool
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'user_id' => ['type' => 'integer', 'description' => 'The user ID'],
                     'limit' => ['type' => 'integer', 'description' => 'Number of orders to return (default 5, max 10)'],
                 ],
-                'required' => ['user_id'],
+                'required' => [],
             ],
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
-        $limit = min((int) ($arguments['limit'] ?? 5), 10);
+        if ($context->userId === null) {
+            return ['error' => 'Authentication is required to view orders.'];
+        }
 
-        $orders = Order::where('user_id', (int) $arguments['user_id'])
+        $limit = max(1, min((int) ($arguments['limit'] ?? 5), 10));
+
+        $orders = Order::where('user_id', $context->userId)
             ->orderByDesc('id')
             ->limit($limit)
-            ->get(['id', 'status', 'total', 'created_at']);
+            ->get(['id', 'status', 'grand_total', 'created_at']);
 
         return $orders->map(fn ($o) => [
             'id' => $o->id,
             'status' => $o->status,
-            'total' => $o->total,
+            'total' => $o->grand_total,
             'created_at' => $o->created_at->toDateTimeString(),
         ])->toArray();
     }

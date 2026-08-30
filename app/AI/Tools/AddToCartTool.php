@@ -3,12 +3,16 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Cart\Cart;
-use App\Models\Cart\CartItem;
 use App\Models\Product\Product;
+use App\Services\Cart\CartService;
+use Illuminate\Validation\ValidationException;
 
 class AddToCartTool implements Tool
 {
+    public function __construct(private readonly CartService $carts) {}
+
     public function getName(): string
     {
         return 'add_to_cart';
@@ -23,16 +27,21 @@ class AddToCartTool implements Tool
                 'type' => 'object',
                 'properties' => [
                     'product_id' => ['type' => 'integer', 'description' => 'The product ID to add'],
+                    'variant_id' => ['type' => 'integer', 'description' => 'The selected product variant ID'],
+                    'selected_options' => ['type' => 'object', 'description' => 'Selected product options'],
                     'quantity' => ['type' => 'integer', 'description' => 'Quantity to add (default 1)'],
-                    'user_id' => ['type' => 'integer', 'description' => 'The customer\'s user ID'],
                 ],
-                'required' => ['product_id', 'user_id'],
+                'required' => ['product_id'],
             ],
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
+        if ($context->userId === null) {
+            return ['error' => 'Authentication is required to modify a cart.'];
+        }
+
         $product = Product::find((int) $arguments['product_id']);
 
         if (! $product) {
@@ -41,24 +50,18 @@ class AddToCartTool implements Tool
 
         $quantity = max(1, (int) ($arguments['quantity'] ?? 1));
 
-        if ($product->stock < $quantity) {
-            return ['error' => "Only {$product->stock} units available"];
-        }
+        $cart = Cart::activeForUser($context->userId);
 
-        $cart = Cart::firstOrCreate(['user_id' => (int) $arguments['user_id']]);
-
-        $item = CartItem::where('cart_id', $cart->id)
-            ->where('product_id', $product->id)
-            ->first();
-
-        if ($item) {
-            $item->increment('quantity', $quantity);
-        } else {
-            CartItem::create([
-                'cart_id' => $cart->id,
-                'product_id' => $product->id,
-                'quantity' => $quantity,
-            ]);
+        try {
+            $cart = $this->carts->add(
+                $cart,
+                $product,
+                isset($arguments['variant_id']) ? (int) $arguments['variant_id'] : null,
+                (array) ($arguments['selected_options'] ?? []),
+                $quantity,
+            );
+        } catch (ValidationException $exception) {
+            return ['error' => collect($exception->errors())->flatten()->first()];
         }
 
         return [

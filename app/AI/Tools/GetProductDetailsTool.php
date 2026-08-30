@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Product\Product;
 
 class GetProductDetailsTool implements Tool
@@ -27,7 +28,7 @@ class GetProductDetailsTool implements Tool
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
         $product = Product::with('category', 'subcategory')
             ->find((int) $arguments['product_id']);

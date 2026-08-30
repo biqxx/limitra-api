@@ -3,6 +3,7 @@
 namespace App\AI\Tools;
 
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\Order\Order;
 
 class CheckOrderStatusTool implements Tool
@@ -27,9 +28,15 @@ class CheckOrderStatusTool implements Tool
         ];
     }
 
-    public function execute(array $arguments): mixed
+    public function execute(array $arguments, ToolContext $context): mixed
     {
-        $order = Order::with('items')->find((int) $arguments['order_id']);
+        if ($context->userId === null) {
+            return ['error' => 'Authentication is required to view an order.'];
+        }
+
+        $order = Order::with('items')
+            ->where('user_id', $context->userId)
+            ->find((int) $arguments['order_id']);
 
         if (! $order) {
             return ['error' => 'Order not found'];
@@ -38,7 +45,7 @@ class CheckOrderStatusTool implements Tool
         return [
             'id' => $order->id,
             'status' => $order->status,
-            'total' => $order->total,
+            'total' => $order->grand_total,
             'item_count' => $order->items->count(),
             'created_at' => $order->created_at->toDateTimeString(),
         ];

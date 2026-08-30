@@ -37,7 +37,7 @@ class AIServiceProvider extends ServiceProvider
                     new GetAlternativeProductsTool,
                     new CheckOrderStatusTool,
                     new GetRecentOrdersTool,
-                    new AddToCartTool,
+                    $app->make(AddToCartTool::class),
                     new ViewCartTool,
                     new RemoveFromCartTool,
                     new GeneratePaymentLinkTool,

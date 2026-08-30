@@ -4,6 +4,7 @@ namespace App\AI;
 
 use App\AI\Contracts\AgentDriver;
 use App\AI\Contracts\Tool;
+use App\AI\Data\ToolContext;
 use App\Models\AI\Conversation;
 use App\Models\AI\ConversationMessage;
 
@@ -31,6 +32,7 @@ class AgentService
         $toolDefinitions = $this->resolveToolDefinitions();
         $messages = $this->buildMessages($conversation);
         $systemContext = $this->buildSystemContext($conversation);
+        $toolContext = ToolContext::fromConversation($conversation);
 
         // Tool-calling loop: keep calling the driver until it stops requesting tools.
         do {
@@ -48,7 +50,7 @@ class AgentService
                 $toolResults = [];
 
                 foreach ($response->toolCalls as $call) {
-                    $result = $this->executeTool($call['name'], $call['arguments']);
+                    $result = $this->executeTool($call['name'], $call['arguments'], $toolContext);
 
                     $toolResults[] = [
                         'tool_call_id' => $call['id'],
@@ -139,11 +141,11 @@ class AgentService
         return $messages;
     }
 
-    private function executeTool(string $name, array $arguments): mixed
+    private function executeTool(string $name, array $arguments, ToolContext $context): mixed
     {
         foreach ($this->tools as $tool) {
             if ($tool->getName() === $name) {
-                return $tool->execute($arguments);
+                return $tool->execute($arguments, $context);
             }
         }
 

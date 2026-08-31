@@ -3,6 +3,9 @@
 use App\Jobs\AggregateDailyStats;
 use App\Jobs\AggregateHourlyStats;
 use App\Jobs\AggregateMonthlyStats;
+use App\Jobs\PruneExpiredAuthSessions;
+use App\Jobs\PruneExpiredCheckoutQuotes;
+use App\Jobs\PruneRawAnalytics;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -31,3 +34,21 @@ Schedule::job(new AggregateMonthlyStats)
     ->withoutOverlapping()
     ->onOneServer()
     ->name('analytics:monthly');
+
+Schedule::job(new PruneExpiredAuthSessions)
+    ->dailyAt('01:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:auth-sessions');
+
+Schedule::job(new PruneExpiredCheckoutQuotes)
+    ->dailyAt('01:10')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:checkout-quotes');
+
+Schedule::job(new PruneRawAnalytics)
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:raw-analytics');

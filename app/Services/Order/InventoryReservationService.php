@@ -16,6 +16,8 @@ class InventoryReservationService
 
     public const LATE_PAYMENT_CANCELLATION_CODE = 'late_payment_inventory_unavailable';
 
+    public const LATE_PAYMENT_REFUNDED_CANCELLATION_CODE = 'late_payment_refunded';
+
     public function releaseExpired(): int
     {
         $orderIds = InventoryReservation::query()

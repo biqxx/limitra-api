@@ -16,6 +16,7 @@ class RefundResource extends JsonResource
             'reference' => $this->reference,
             'provider' => $this->provider,
             'method' => $this->method,
+            'source' => $this->source,
             'status' => $this->status,
             'currency' => $this->currency,
             'amount' => $this->amount,

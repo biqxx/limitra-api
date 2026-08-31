@@ -19,6 +19,7 @@ class OrderController extends BaseController
         'statusEvents',
         'user',
         'reservations',
+        'refunds',
     ];
 
     public function index(Request $request): JsonResponse
@@ -36,7 +37,7 @@ class OrderController extends BaseController
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
         $search = isset($data['q']) ? '%'.$data['q'].'%' : null;
-        $orders = Order::with(['items', 'latestPayment', 'shipment', 'user', 'reservations'])
+        $orders = Order::with(['items', 'latestPayment', 'shipment', 'user', 'reservations', 'refunds'])
             ->when($data['from_date'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
             ->when($data['to_date'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '<=', $date))
             ->when($data['user_id'] ?? null, fn ($query, $userId) => $query->where('user_id', $userId))

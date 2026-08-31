@@ -10,7 +10,10 @@ use Illuminate\Support\Facades\DB;
 
 class PaymentSettlementService
 {
-    public function __construct(private readonly InventoryReservationService $reservations) {}
+    public function __construct(
+        private readonly InventoryReservationService $reservations,
+        private readonly LatePaymentRefundService $latePaymentRefunds,
+    ) {}
 
     public function apply(Payment $payment, array $transaction): Payment
     {
@@ -81,6 +84,11 @@ class PaymentSettlementService
                 }
             } elseif (in_array($status, ['failed', 'abandoned'], true) && $order->payment_status !== 'paid') {
                 $order->update(['payment_status' => 'failed']);
+            }
+
+            if ($status === 'succeeded'
+                && $order->cancellation_code === InventoryReservationService::LATE_PAYMENT_CANCELLATION_CODE) {
+                $this->latePaymentRefunds->ensure($payment);
             }
 
             return $payment->fresh();

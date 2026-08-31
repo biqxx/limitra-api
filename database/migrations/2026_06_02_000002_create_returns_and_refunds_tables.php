@@ -74,7 +74,7 @@ return new class extends Migration
 
         Schema::create('refunds', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('return_request_id')->constrained()->restrictOnDelete();
+            $table->foreignId('return_request_id')->nullable()->constrained()->restrictOnDelete();
             $table->foreignId('order_id')->constrained()->restrictOnDelete();
             $table->foreignId('payment_id')->constrained()->restrictOnDelete();
             $table->foreignId('user_id')->constrained()->restrictOnDelete();

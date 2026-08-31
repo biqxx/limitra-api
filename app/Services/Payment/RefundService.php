@@ -85,6 +85,7 @@ class RefundService
                     'reference' => 'LMT-REF-'.Str::upper(Str::random(20)),
                     'provider' => $payment->provider,
                     'method' => $data['method'],
+                    'source' => 'return',
                     'status' => 'initiating',
                     'currency' => $returnRequest->currency,
                     'amount' => $this->fromMinorUnits($amountMinor),

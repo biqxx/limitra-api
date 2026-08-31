@@ -13,6 +13,7 @@ class Refund extends Model
     protected $fillable = [
         'return_request_id', 'order_id', 'payment_id', 'user_id', 'processed_by',
         'reference', 'provider', 'method', 'status', 'currency', 'amount', 'amount_minor',
+        'source', 'automation_key',
         'provider_refund_id', 'provider_reference', 'reason', 'failure_message',
         'provider_metadata', 'processed_at',
     ];

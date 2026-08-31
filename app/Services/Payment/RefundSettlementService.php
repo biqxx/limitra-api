@@ -4,6 +4,7 @@ namespace App\Services\Payment;
 
 use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Refund;
+use App\Services\Order\InventoryReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -13,9 +14,15 @@ class RefundSettlementService
     {
         return DB::transaction(function () use ($refund, $providerData) {
             $refund = Refund::whereKey($refund->id)->lockForUpdate()->firstOrFail();
-            $returnRequest = $refund->returnRequest()->lockForUpdate()->firstOrFail();
+            $returnRequest = $refund->return_request_id
+                ? $refund->returnRequest()->lockForUpdate()->firstOrFail()
+                : null;
             $order = $refund->order()->lockForUpdate()->firstOrFail();
             $this->assertMatches($refund, $providerData);
+
+            if ($refund->status === 'processed') {
+                return $refund;
+            }
 
             $providerStatus = strtolower((string) ($providerData['status'] ?? 'pending'));
             $status = match ($providerStatus) {
@@ -54,8 +61,10 @@ class RefundSettlementService
                         : 'partially_refunded',
                 ]);
 
-                $returnRefundedMinor = (int) $returnRequest->refunds()->where('status', 'processed')->sum('amount_minor');
-                if ($returnRequest->status === 'received'
+                $returnRefundedMinor = $returnRequest
+                    ? (int) $returnRequest->refunds()->where('status', 'processed')->sum('amount_minor')
+                    : 0;
+                if ($returnRequest?->status === 'received'
                     && $returnRefundedMinor >= $this->toMinorUnits($returnRequest->approved_total)) {
                     $returnRequest->update(['status' => 'completed', 'completed_at' => now()]);
                     $returnRequest->events()->create([
@@ -65,6 +74,19 @@ class RefundSettlementService
                         'note' => 'Approved refund processed.',
                         'metadata' => ['refund_id' => $refund->id],
                         'created_at' => now(),
+                    ]);
+                }
+
+                if ($refund->source === 'late_payment') {
+                    $order->update([
+                        'cancellation_code' => InventoryReservationService::LATE_PAYMENT_REFUNDED_CANCELLATION_CODE,
+                        'cancellation_reason' => 'Payment succeeded after inventory expired and was automatically refunded.',
+                    ]);
+                    $order->statusEvents()->create([
+                        'from_status' => $order->status,
+                        'to_status' => $order->status,
+                        'source' => 'payment',
+                        'note' => 'Late payment was automatically refunded.',
                     ]);
                 }
             }

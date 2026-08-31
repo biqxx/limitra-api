@@ -36,6 +36,7 @@ class OrderResource extends JsonResource
             'shipping_address' => $this->shipping_address,
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
             'payment' => new PaymentResource($this->whenLoaded('latestPayment')),
+            'refunds' => RefundResource::collection($this->whenLoaded('refunds')),
             'tracking' => new ShipmentResource($this->whenLoaded('shipment')),
             'status_history' => $this->whenLoaded('statusEvents', fn () => $this->statusEvents->map(fn ($event) => [
                 'from' => $event->from_status,

@@ -2,16 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessAutomaticRefund;
 use App\Models\Order\Order;
 use App\Models\Payment\Payment;
+use App\Models\Payment\Refund;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\User;
 use App\Services\Order\InventoryReservationService;
 use App\Services\Payment\PaymentSettlementService;
+use App\Services\Payment\RefundSettlementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -127,6 +131,7 @@ class InventoryReservationExpiryTest extends TestCase
         $payment = $this->payment($order);
         app(InventoryReservationService::class)->releaseExpired();
         $product->update(['stock' => 0]);
+        Queue::fake();
 
         app(PaymentSettlementService::class)->apply($payment, $this->successfulTransaction($payment));
 
@@ -145,6 +150,50 @@ class InventoryReservationExpiryTest extends TestCase
             'to_status' => 'cancelled',
             'source' => 'payment',
         ]);
+        $this->assertDatabaseHas('refunds', [
+            'order_id' => $order->id,
+            'payment_id' => $payment->id,
+            'return_request_id' => null,
+            'source' => 'late_payment',
+            'status' => 'initiating',
+            'amount_minor' => 200000,
+        ]);
+        Queue::assertPushed(ProcessAutomaticRefund::class, 1);
+
+        app(PaymentSettlementService::class)->apply($payment, $this->successfulTransaction($payment));
+        $this->assertDatabaseCount('refunds', 1);
+
+        $refund = Refund::query()->firstOrFail();
+        Http::fake([
+            'https://api.paystack.co/refund' => Http::response(['status' => true, 'data' => [
+                'id' => 900001,
+                'transaction' => ['reference' => $payment->reference],
+                'amount' => 200000,
+                'currency' => 'NGN',
+                'status' => 'processed',
+            ]]),
+        ]);
+
+        app()->call([new ProcessAutomaticRefund($refund->id), 'handle']);
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.paystack.co/refund'
+            && $request['transaction'] === $payment->reference
+            && $request['amount'] === 200000);
+        $this->assertSame('processed', $refund->fresh()->status);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'cancelled',
+            'payment_status' => 'refunded',
+            'cancellation_code' => InventoryReservationService::LATE_PAYMENT_REFUNDED_CANCELLATION_CODE,
+        ]);
+
+        app(RefundSettlementService::class)->apply($refund, [
+            'status' => 'pending',
+            'transaction_reference' => $payment->reference,
+            'amount' => 200000,
+            'currency' => 'NGN',
+        ]);
+        $this->assertSame('processed', $refund->fresh()->status);
     }
 
     private function reservedOrder(

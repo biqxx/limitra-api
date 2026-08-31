@@ -6,6 +6,7 @@ use App\Jobs\AggregateMonthlyStats;
 use App\Jobs\PruneExpiredAuthSessions;
 use App\Jobs\PruneExpiredCheckoutQuotes;
 use App\Jobs\PruneRawAnalytics;
+use App\Jobs\ReleaseExpiredInventoryReservations;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -52,3 +53,9 @@ Schedule::job(new PruneRawAnalytics)
     ->withoutOverlapping()
     ->onOneServer()
     ->name('maintenance:raw-analytics');
+
+Schedule::job(new ReleaseExpiredInventoryReservations)
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:inventory-reservations');

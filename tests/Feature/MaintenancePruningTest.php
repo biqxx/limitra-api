@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\PruneExpiredAuthSessions;
 use App\Jobs\PruneExpiredCheckoutQuotes;
 use App\Jobs\PruneRawAnalytics;
+use App\Jobs\ReleaseExpiredInventoryReservations;
 use App\Models\Address\Address;
 use App\Models\Cart\Cart;
 use App\Models\Commerce\CheckoutQuote;
@@ -143,6 +144,7 @@ class MaintenancePruningTest extends TestCase
             new PruneExpiredAuthSessions,
             new PruneExpiredCheckoutQuotes,
             new PruneRawAnalytics,
+            new ReleaseExpiredInventoryReservations,
         ];
 
         foreach ($jobs as $job) {

@@ -60,6 +60,7 @@ class OrderLifecycleService
                 'fulfilment_status' => 'cancelled',
                 'cancelled_at' => now(),
                 'cancellation_reason' => $reason,
+                'cancellation_code' => 'customer_requested',
             ]);
             $order->statusEvents()->create([
                 'from_status' => $fromStatus,

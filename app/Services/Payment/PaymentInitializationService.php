@@ -144,6 +144,15 @@ class PaymentInitializationService
         if (in_array($order->status, ['cancelled', 'delivered'], true)) {
             throw ValidationException::withMessages(['order_id' => ['This order can no longer be paid.']]);
         }
+        if ($order->reservations()
+            ->where('status', 'reserved')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'order_id' => ['The inventory reservation for this order has expired.'],
+            ]);
+        }
         if ($order->payment_method === 'cash_on_delivery') {
             throw ValidationException::withMessages(['method' => ['Cash-on-delivery orders do not use online payment initialization.']]);
         }

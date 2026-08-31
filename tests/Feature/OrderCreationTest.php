@@ -11,9 +11,11 @@ use App\Models\Commerce\DeliveryZone;
 use App\Models\Order\Order;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
+use App\Models\Settings\BusinessSetting;
 use App\Models\User;
 use App\Services\Cart\CartService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class OrderCreationTest extends TestCase
@@ -24,11 +26,18 @@ class OrderCreationTest extends TestCase
     {
         parent::setUp();
         config(['jwt.secret' => 'test-secret-with-at-least-thirty-two-characters']);
+        Cache::flush();
         $this->withoutMiddleware(TrackAnalytics::class);
     }
 
     public function test_order_is_created_from_quote_with_snapshots_and_reserved_stock(): void
     {
+        BusinessSetting::query()
+            ->where('key', 'orders.inventory_reservation_minutes')
+            ->firstOrFail()
+            ->update(['value' => 45]);
+        Cache::forget('business_settings.values.v1');
+
         [$user, $cart, $product, $address] = $this->checkoutContext(quantity: 2);
         $quoteId = $this->quote($user, $cart, $address, 'card');
 
@@ -51,6 +60,9 @@ class OrderCreationTest extends TestCase
         $order = Order::findOrFail($response->json('data.id'));
         $this->assertStringStartsWith('LMT-', $order->number);
         $this->assertSame('buyer@example.com', $order->contact_email);
+        $reservation = $order->reservations()->firstOrFail();
+        $this->assertTrue($reservation->expires_at->between(now()->addMinutes(44), now()->addMinutes(46)));
+        $this->assertNotNull($response->json('data.reservation_expires_at'));
         $this->assertDatabaseHas('inventory_reservations', [
             'order_id' => $order->id,
             'product_id' => $product->id,
@@ -91,6 +103,7 @@ class OrderCreationTest extends TestCase
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
         $this->assertDatabaseCount('orders', 1);
         $this->assertDatabaseCount('inventory_reservations', 1);
+        $this->assertNull(Order::findOrFail($first->json('data.id'))->reservations()->firstOrFail()->expires_at);
         $this->assertSame(4, $product->fresh()->stock);
 
         $this->actingAs($user, 'api')->postJson('/api/v1/orders', $payload + ['notes' => 'Different request'], $headers)

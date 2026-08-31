@@ -4,11 +4,14 @@ namespace App\Services\Payment;
 
 use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Payment;
+use App\Services\Order\InventoryReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class PaymentSettlementService
 {
+    public function __construct(private readonly InventoryReservationService $reservations) {}
+
     public function apply(Payment $payment, array $transaction): Payment
     {
         return DB::transaction(function () use ($payment, $transaction) {
@@ -44,15 +47,35 @@ class PaymentSettlementService
 
             if ($status === 'succeeded' && $order->payment_status !== 'paid') {
                 $fromStatus = $order->status;
-                $order->update([
+                $restored = $order->cancellation_code === InventoryReservationService::EXPIRY_CANCELLATION_CODE
+                    ? $this->reservations->restoreForLatePayment($order)
+                    : false;
+                $attributes = [
                     'payment_status' => 'paid',
                     'status' => $order->status === 'pending_payment' ? 'confirmed' : $order->status,
-                ]);
-                if ($fromStatus !== $order->status) {
+                ];
+
+                if ($restored) {
+                    $attributes['status'] = 'confirmed';
+                    $attributes['fulfilment_status'] = 'unfulfilled';
+                    $attributes['cancelled_at'] = null;
+                    $attributes['cancellation_code'] = null;
+                    $attributes['cancellation_reason'] = null;
+                } elseif ($order->cancellation_code === InventoryReservationService::EXPIRY_CANCELLATION_CODE) {
+                    $attributes['cancellation_code'] = InventoryReservationService::LATE_PAYMENT_CANCELLATION_CODE;
+                    $attributes['cancellation_reason'] = 'Payment succeeded after the reservation expired, but inventory is unavailable. Refund required.';
+                }
+
+                $order->update($attributes);
+                $this->reservations->removeExpiry($order);
+
+                if ($fromStatus !== $order->status || $order->cancellation_code === InventoryReservationService::LATE_PAYMENT_CANCELLATION_CODE) {
                     $order->statusEvents()->create([
                         'from_status' => $fromStatus,
                         'to_status' => $order->status,
-                        'note' => 'Payment confirmed.',
+                        'note' => $order->cancellation_code === InventoryReservationService::LATE_PAYMENT_CANCELLATION_CODE
+                            ? 'Late payment confirmed, but inventory could not be reserved. Refund required.'
+                            : ($restored ? 'Late payment confirmed and inventory reserved again.' : 'Payment confirmed.'),
                         'source' => 'payment',
                     ]);
                 }

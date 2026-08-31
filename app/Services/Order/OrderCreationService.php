@@ -13,6 +13,7 @@ use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Commerce\DeliveryService;
 use App\Services\Commerce\PromotionService;
+use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +27,7 @@ class OrderCreationService
     public function __construct(
         private readonly DeliveryService $delivery,
         private readonly PromotionService $promotions,
+        private readonly BusinessSettingsService $settings,
     ) {}
 
     /**
@@ -98,6 +100,9 @@ class OrderCreationService
                 $this->assertTotalsAndRules($quote, $cart, $address, $userId);
 
                 $isCash = $quote->payment_method === 'cash_on_delivery';
+                $reservationExpiresAt = $isCash
+                    ? null
+                    : now()->addMinutes((int) $this->settings->value('orders.inventory_reservation_minutes'));
                 $order = Order::create([
                     'user_id' => $userId,
                     'checkout_quote_id' => $quote->id,
@@ -150,6 +155,7 @@ class OrderCreationService
                         'variant_id' => $quoteItem->variant_id,
                         'quantity' => $quoteItem->quantity,
                         'status' => 'reserved',
+                        'expires_at' => $reservationExpiresAt,
                     ]);
                 }
 

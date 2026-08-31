@@ -18,6 +18,7 @@ class OrderController extends BaseController
         'shipment.events',
         'statusEvents',
         'user',
+        'reservations',
     ];
 
     public function index(Request $request): JsonResponse
@@ -28,18 +29,20 @@ class OrderController extends BaseController
             'user_id' => ['sometimes', 'integer', 'exists:users,id'],
             'status' => ['sometimes', 'in:pending_payment,confirmed,processing,shipped,in_transit,delivered,cancelled'],
             'payment_status' => ['sometimes', 'in:unpaid,pending,paid,failed,refunded,partially_refunded'],
+            'cancellation_code' => ['sometimes', 'string', 'max:60'],
             'q' => ['sometimes', 'string', 'max:100'],
             'sort_by' => ['sometimes', 'in:created_at,status,grand_total'],
             'sort' => ['sometimes', 'in:asc,desc'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
         $search = isset($data['q']) ? '%'.$data['q'].'%' : null;
-        $orders = Order::with(['items', 'latestPayment', 'shipment', 'user'])
+        $orders = Order::with(['items', 'latestPayment', 'shipment', 'user', 'reservations'])
             ->when($data['from_date'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))
             ->when($data['to_date'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '<=', $date))
             ->when($data['user_id'] ?? null, fn ($query, $userId) => $query->where('user_id', $userId))
             ->when($data['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($data['payment_status'] ?? null, fn ($query, $status) => $query->where('payment_status', $status))
+            ->when($data['cancellation_code'] ?? null, fn ($query, $code) => $query->where('cancellation_code', $code))
             ->when($search, fn ($query) => $query->where(function ($query) use ($search) {
                 $query->where('number', 'like', $search)
                     ->orWhere('contact_email', 'like', $search)

@@ -25,6 +25,10 @@ class OrderResource extends JsonResource
             'payment_status' => $this->payment_status,
             'fulfilment_status' => $this->fulfilment_status,
             'payment_method' => $this->payment_method,
+            'reservation_expires_at' => $this->whenLoaded(
+                'reservations',
+                fn () => $this->reservations->where('status', 'reserved')->min('expires_at'),
+            ),
             'contact_email' => $this->contact_email,
             'notes' => $this->notes,
             'delivery_method' => $this->delivery_method,
@@ -42,6 +46,7 @@ class OrderResource extends JsonResource
             ])),
             'cancelled_at' => $this->cancelled_at,
             'cancellation_reason' => $this->cancellation_reason,
+            'cancellation_code' => $this->cancellation_code,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'deleted_at' => $this->deleted_at,

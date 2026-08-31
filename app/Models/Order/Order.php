@@ -40,6 +40,7 @@ class Order extends Model
         'shipping_address',
         'cancelled_at',
         'cancellation_reason',
+        'cancellation_code',
     ];
 
     protected function casts(): array

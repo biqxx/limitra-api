@@ -15,6 +15,7 @@ class InventoryReservation extends Model
         'variant_id',
         'quantity',
         'status',
+        'expires_at',
         'committed_at',
         'released_at',
     ];
@@ -23,6 +24,7 @@ class InventoryReservation extends Model
     {
         return [
             'quantity' => 'integer',
+            'expires_at' => 'datetime',
             'committed_at' => 'datetime',
             'released_at' => 'datetime',
         ];

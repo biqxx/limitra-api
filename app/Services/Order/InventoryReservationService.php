@@ -7,6 +7,8 @@ use App\Models\Order\InventoryReservation;
 use App\Models\Order\Order;
 use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
+use App\Models\User;
+use App\Notifications\InventoryReservationExpiredNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -78,6 +80,7 @@ class InventoryReservationService
                 'cancelled_at' => now(),
                 'cancellation_code' => self::EXPIRY_CANCELLATION_CODE,
                 'cancellation_reason' => 'Payment was not completed before the inventory reservation expired.',
+                'reservation_expired_notification_queued_at' => now(),
             ]);
             $order->statusEvents()->create([
                 'from_status' => 'pending_payment',
@@ -85,6 +88,14 @@ class InventoryReservationService
                 'note' => 'Inventory reservation expired before payment was completed.',
                 'source' => 'system',
             ]);
+
+            $userId = $order->user_id;
+            $orderNumber = $order->number;
+            DB::afterCommit(function () use ($userId, $orderId, $orderNumber): void {
+                User::query()->find($userId)?->notify(
+                    new InventoryReservationExpiredNotification($orderId, $orderNumber),
+                );
+            });
 
             return true;
         }, 3);

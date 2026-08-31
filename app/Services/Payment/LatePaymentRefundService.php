@@ -5,10 +5,13 @@ namespace App\Services\Payment;
 use App\Jobs\ProcessAutomaticRefund;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
+use App\Services\Notification\RefundNotificationService;
 use Illuminate\Support\Str;
 
 class LatePaymentRefundService
 {
+    public function __construct(private readonly RefundNotificationService $notifications) {}
+
     public function ensure(Payment $payment): Refund
     {
         $refund = Refund::query()->firstOrCreate(
@@ -30,6 +33,10 @@ class LatePaymentRefundService
                 'reason' => 'Automatic refund because inventory was unavailable after a late payment.',
             ],
         );
+
+        if ($refund->wasRecentlyCreated) {
+            $this->notifications->queueInitiated($refund);
+        }
 
         if ($refund->status === 'initiating') {
             ProcessAutomaticRefund::dispatch($refund->id)->afterCommit();

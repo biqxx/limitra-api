@@ -4,12 +4,15 @@ namespace App\Services\Payment;
 
 use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Refund;
+use App\Services\Notification\RefundNotificationService;
 use App\Services\Order\InventoryReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class RefundSettlementService
 {
+    public function __construct(private readonly RefundNotificationService $notifications) {}
+
     public function apply(Refund $refund, array $providerData): Refund
     {
         return DB::transaction(function () use ($refund, $providerData) {
@@ -88,7 +91,11 @@ class RefundSettlementService
                         'source' => 'payment',
                         'note' => 'Late payment was automatically refunded.',
                     ]);
+
+                    $this->notifications->queueProcessed($refund);
                 }
+            } elseif ($refund->source === 'late_payment' && in_array($status, ['failed', 'needs_attention'], true)) {
+                $this->notifications->queueAttention($refund);
             }
 
             return $refund->fresh();

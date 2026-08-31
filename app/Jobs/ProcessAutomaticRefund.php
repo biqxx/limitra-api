@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Refund;
+use App\Services\Notification\RefundNotificationService;
 use App\Services\Payment\PaystackService;
 use App\Services\Payment\RefundSettlementService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -71,6 +72,11 @@ class ProcessAutomaticRefund implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
+        $refund = Refund::query()->find($this->refundId);
+        if ($refund) {
+            app(RefundNotificationService::class)->queueAttention($refund);
+        }
+
         report($exception);
     }
 }

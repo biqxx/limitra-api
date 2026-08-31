@@ -41,6 +41,7 @@ class Order extends Model
         'cancelled_at',
         'cancellation_reason',
         'cancellation_code',
+        'reservation_expired_notification_queued_at',
     ];
 
     protected function casts(): array
@@ -55,6 +56,7 @@ class Order extends Model
             'shipping_address' => 'array',
             'estimated_delivery_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'reservation_expired_notification_queued_at' => 'datetime',
         ];
     }
 

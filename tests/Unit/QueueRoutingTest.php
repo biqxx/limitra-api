@@ -8,6 +8,11 @@ use App\Jobs\AggregateMonthlyStats;
 use App\Jobs\InboundMessageJob;
 use App\Jobs\ProcessAutomaticRefund;
 use App\Jobs\ProcessPaymentWebhook;
+use App\Notifications\AutomaticRefundAttentionNotification;
+use App\Notifications\AutomaticRefundInitiatedNotification;
+use App\Notifications\AutomaticRefundProcessedNotification;
+use App\Notifications\AutomaticRefundStaffAlert;
+use App\Notifications\InventoryReservationExpiredNotification;
 use App\Notifications\LoginNotification;
 use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
@@ -41,6 +46,11 @@ class QueueRoutingTest extends TestCase
             new VerifyEmailNotification('123456'),
             new PasswordResetOtpNotification('123456'),
             new LoginNotification('127.0.0.1', 'Test Browser'),
+            new InventoryReservationExpiredNotification(1, 'LMT-TEST'),
+            new AutomaticRefundInitiatedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),
+            new AutomaticRefundProcessedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),
+            new AutomaticRefundAttentionNotification(1, 'LMT-TEST', 'LMT-REF-TEST'),
+            new AutomaticRefundStaffAlert(1, 'LMT-TEST', 'LMT-REF-TEST', 'buyer@example.test', 'Provider rejected the refund.'),
         ];
 
         foreach ($notifications as $notification) {

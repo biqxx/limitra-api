@@ -16,6 +16,8 @@ class Refund extends Model
         'source', 'automation_key',
         'provider_refund_id', 'provider_reference', 'reason', 'failure_message',
         'provider_metadata', 'processed_at',
+        'initiated_notification_queued_at', 'processed_notification_queued_at',
+        'attention_notification_queued_at',
     ];
 
     protected function casts(): array
@@ -25,6 +27,9 @@ class Refund extends Model
             'amount_minor' => 'integer',
             'provider_metadata' => 'array',
             'processed_at' => 'datetime',
+            'initiated_notification_queued_at' => 'datetime',
+            'processed_notification_queued_at' => 'datetime',
+            'attention_notification_queued_at' => 'datetime',
         ];
     }
 

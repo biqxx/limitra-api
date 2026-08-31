@@ -9,12 +9,19 @@ use App\Models\Payment\Refund;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\User;
+use App\Notifications\AutomaticRefundAttentionNotification;
+use App\Notifications\AutomaticRefundInitiatedNotification;
+use App\Notifications\AutomaticRefundProcessedNotification;
+use App\Notifications\AutomaticRefundStaffAlert;
+use App\Notifications\InventoryReservationExpiredNotification;
+use App\Services\Notification\RefundNotificationService;
 use App\Services\Order\InventoryReservationService;
 use App\Services\Payment\PaymentSettlementService;
 use App\Services\Payment\RefundSettlementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -37,6 +44,7 @@ class InventoryReservationExpiryTest extends TestCase
     public function test_expired_online_order_releases_stock_and_is_cancelled(): void
     {
         [$order, $product] = $this->reservedOrder(now()->subMinute());
+        Notification::fake();
 
         $released = app(InventoryReservationService::class)->releaseExpired();
 
@@ -59,6 +67,8 @@ class InventoryReservationExpiryTest extends TestCase
             'to_status' => 'cancelled',
             'source' => 'system',
         ]);
+        $this->assertNotNull($order->fresh()->reservation_expired_notification_queued_at);
+        Notification::assertSentTo($order->user, InventoryReservationExpiredNotification::class, 1);
     }
 
     public function test_unexpired_paid_and_cash_on_delivery_reservations_are_preserved(): void
@@ -132,6 +142,7 @@ class InventoryReservationExpiryTest extends TestCase
         app(InventoryReservationService::class)->releaseExpired();
         $product->update(['stock' => 0]);
         Queue::fake();
+        Notification::fake();
 
         app(PaymentSettlementService::class)->apply($payment, $this->successfulTransaction($payment));
 
@@ -159,6 +170,7 @@ class InventoryReservationExpiryTest extends TestCase
             'amount_minor' => 200000,
         ]);
         Queue::assertPushed(ProcessAutomaticRefund::class, 1);
+        Notification::assertSentTo($order->user, AutomaticRefundInitiatedNotification::class, 1);
 
         app(PaymentSettlementService::class)->apply($payment, $this->successfulTransaction($payment));
         $this->assertDatabaseCount('refunds', 1);
@@ -186,6 +198,7 @@ class InventoryReservationExpiryTest extends TestCase
             'payment_status' => 'refunded',
             'cancellation_code' => InventoryReservationService::LATE_PAYMENT_REFUNDED_CANCELLATION_CODE,
         ]);
+        Notification::assertSentTo($order->user, AutomaticRefundProcessedNotification::class, 1);
 
         app(RefundSettlementService::class)->apply($refund, [
             'status' => 'pending',
@@ -194,6 +207,32 @@ class InventoryReservationExpiryTest extends TestCase
             'currency' => 'NGN',
         ]);
         $this->assertSame('processed', $refund->fresh()->status);
+    }
+
+    public function test_refund_attention_alerts_customer_and_staff_once(): void
+    {
+        [$order, $product] = $this->reservedOrder(now()->subMinute());
+        $payment = $this->payment($order);
+        app(InventoryReservationService::class)->releaseExpired();
+        $product->update(['stock' => 0]);
+        Queue::fake();
+        Notification::fake();
+        app(PaymentSettlementService::class)->apply($payment, $this->successfulTransaction($payment));
+        $refund = Refund::query()->firstOrFail();
+        $admin = $this->staff('admin');
+        $staff = $this->staff('staff');
+
+        $refund->update([
+            'status' => 'needs_attention',
+            'failure_message' => 'Provider requires a manual refund.',
+        ]);
+        app(RefundNotificationService::class)->queueAttention($refund);
+        app(RefundNotificationService::class)->queueAttention($refund);
+
+        Notification::assertSentTo($order->user, AutomaticRefundAttentionNotification::class, 1);
+        Notification::assertSentTo($admin, AutomaticRefundStaffAlert::class, 1);
+        Notification::assertSentTo($staff, AutomaticRefundStaffAlert::class, 1);
+        $this->assertNotNull($refund->fresh()->attention_notification_queued_at);
     }
 
     private function reservedOrder(
@@ -260,6 +299,16 @@ class InventoryReservationExpiryTest extends TestCase
             'amount' => 2000,
             'amount_minor' => 200000,
             'customer_email' => $order->contact_email,
+        ]);
+    }
+
+    private function staff(string $role): User
+    {
+        return User::query()->create([
+            'username' => $role.'-'.Str::lower(Str::random(8)),
+            'email' => Str::uuid().'@example.test',
+            'password' => 'password',
+            'role' => $role,
         ]);
     }
 

@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\User\AuthSession;
+use App\Services\Auth\AuthSessionManager;
 use Closure;
 use Illuminate\Http\Request;
 use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureActiveSession
 {
+    public function __construct(private readonly AuthSessionManager $sessions) {}
+
     public function handle(Request $request, Closure $next): Response
     {
         try {
@@ -18,13 +20,11 @@ class EnsureActiveSession
             return $next($request);
         }
         if ($sessionId) {
-            $session = AuthSession::whereKey($sessionId)
-                ->where('user_id', auth('api')->id())
-                ->whereNull('revoked_at')
-                ->where('expires_at', '>', now())
-                ->first();
-            abort_unless($session, 401, 'Session has expired or been revoked.');
-            $session->update(['last_used_at' => now()]);
+            abort_unless(
+                $this->sessions->isActive($sessionId, (int) auth('api')->id()),
+                401,
+                'Session has expired or been revoked.'
+            );
         }
 
         return $next($request);

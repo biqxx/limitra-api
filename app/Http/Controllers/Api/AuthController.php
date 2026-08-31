@@ -17,6 +17,7 @@ use App\Notifications\LoginNotification;
 use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
 use App\Services\AffiliateService;
+use App\Services\Auth\AuthSessionManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,8 @@ use OpenApi\Attributes as OA;
 
 class AuthController extends BaseController
 {
+    public function __construct(private readonly AuthSessionManager $authSessions) {}
+
     // ═══════════════════════════════════════════════════════════════════════
     //  Public endpoints (no auth required)
     // ═══════════════════════════════════════════════════════════════════════
@@ -279,7 +282,7 @@ class AuthController extends BaseController
     public function logout(): JsonResponse
     {
         if ($sessionId = auth('api')->payload()->get('sid')) {
-            AuthSession::whereKey($sessionId)->where('user_id', auth('api')->id())->update(['revoked_at' => now()]);
+            $this->authSessions->revokeById($sessionId, (int) auth('api')->id());
         }
         auth('api')->logout();
 
@@ -302,7 +305,17 @@ class AuthController extends BaseController
     )]
     public function refresh(): JsonResponse
     {
+        $sessionId = auth('api')->payload()->get('sid');
+        $userId = (int) auth('api')->id();
         $newToken = auth('api')->refresh();
+
+        if ($sessionId) {
+            $this->authSessions->extend(
+                $sessionId,
+                $userId,
+                (int) auth('api')->factory()->getTTL(),
+            );
+        }
 
         return $this->success(
             $this->tokenPayload($newToken, auth('api')->user()),
@@ -425,9 +438,9 @@ class AuthController extends BaseController
             return $this->error('Invalid OTP.', 422);
         }
 
-        User::where('email', $data['email'])->update([
-            'password' => Hash::make($data['password']),
-        ]);
+        $user = User::where('email', $data['email'])->firstOrFail();
+        $user->update(['password' => Hash::make($data['password'])]);
+        $this->authSessions->revokeAll($user);
 
         DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
 
@@ -450,13 +463,17 @@ class AuthController extends BaseController
 
     private function createAuthSession(User $user, Request $request, string $deviceName): AuthSession
     {
-        return $user->authSessions()->create([
+        $session = $user->authSessions()->create([
             'device_name' => $deviceName,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'last_used_at' => now(),
             'expires_at' => now()->addMinutes(auth('api')->factory()->getTTL()),
         ]);
+
+        $this->authSessions->remember($session);
+
+        return $session;
     }
 
     private function uniqueUsername(string $name): string

@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\OrderResource;
 use App\Models\User\AuthSession;
+use App\Services\Auth\AuthSessionManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Password;
 
 class CustomerAccountController extends BaseController
 {
+    public function __construct(private readonly AuthSessionManager $authSessions) {}
+
     public function dashboard(): JsonResponse
     {
         $user = auth('api')->user();
@@ -39,10 +42,7 @@ class CustomerAccountController extends BaseController
         $user = auth('api')->user();
         $user->update(['password' => $data['password']]);
         $currentSessionId = auth('api')->payload()->get('sid');
-        $user->authSessions()
-            ->when($currentSessionId, fn ($query) => $query->whereKeyNot($currentSessionId))
-            ->whereNull('revoked_at')
-            ->update(['revoked_at' => now()]);
+        $this->authSessions->revokeOthers($user, $currentSessionId);
 
         return response()->json(null, 204);
     }
@@ -72,7 +72,7 @@ class CustomerAccountController extends BaseController
     {
         $request->validate(['current_password' => ['required', 'current_password:api']]);
         abort_unless($session->user_id === auth('api')->id(), 403);
-        $session->update(['revoked_at' => now()]);
+        $this->authSessions->revoke($session);
 
         return $this->success(null, 'Session revoked.');
     }

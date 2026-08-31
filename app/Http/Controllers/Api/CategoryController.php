@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\CategoryResource;
 use App\Models\Product\Category;
+use App\Services\Catalog\CatalogCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -12,6 +13,8 @@ use OpenApi\Attributes as OA;
 
 class CategoryController extends BaseController
 {
+    public function __construct(private readonly CatalogCache $catalogCache) {}
+
     /** Public. GET /categories */
     #[OA\Get(
         path: '/categories',
@@ -21,20 +24,24 @@ class CategoryController extends BaseController
             new OA\Response(response: 200, description: 'Category list with subcategories and product counts', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
         ]
     )]
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $categories = Category::with([
-            'image',
-            'subcategories' => fn ($q) => $q->where('active', true)->with('image')->withCount(['subcategoryProducts as products_count'])->orderBy('sort_order')->orderBy('name'),
-        ])
-            ->withCount('products')
-            ->whereNull('parent_id')
-            ->where('active', true)
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get();
+        $data = $this->catalogCache->rememberCategories('index', [], function () use ($request): array {
+            $categories = Category::with([
+                'image',
+                'subcategories' => fn ($q) => $q->where('active', true)->with('image')->withCount(['subcategoryProducts as products_count'])->orderBy('sort_order')->orderBy('name'),
+            ])
+                ->withCount('products')
+                ->whereNull('parent_id')
+                ->where('active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get();
 
-        return $this->success(CategoryResource::collection($categories));
+            return CategoryResource::collection($categories)->resolve($request);
+        });
+
+        return $this->success($data);
     }
 
     /** Public. GET /categories/{category}/subcategories */
@@ -50,19 +57,26 @@ class CategoryController extends BaseController
             new OA\Response(response: 404, description: 'Not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function subcategories(Category $category): JsonResponse
+    public function subcategories(Request $request, string $category): JsonResponse
     {
-        abort_unless($category->active, 404);
+        $data = $this->catalogCache->rememberCategories('subcategories', ['category' => $category], function () use ($request, $category): array {
+            $model = Category::query()
+                ->whereKey($category)
+                ->where('active', true)
+                ->firstOrFail();
 
-        $subcategories = $category->subcategories()
-            ->where('active', true)
-            ->with('image')
-            ->withCount(['subcategoryProducts as products_count'])
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get();
+            $subcategories = $model->subcategories()
+                ->where('active', true)
+                ->with('image')
+                ->withCount(['subcategoryProducts as products_count'])
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get();
 
-        return $this->success(CategoryResource::collection($subcategories));
+            return CategoryResource::collection($subcategories)->resolve($request);
+        });
+
+        return $this->success($data);
     }
 
     /** Admin only. POST /categories */
@@ -121,17 +135,23 @@ class CategoryController extends BaseController
             new OA\Response(response: 404, description: 'Not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function show(Category $category): JsonResponse
+    public function show(Request $request, string $category): JsonResponse
     {
-        abort_unless($category->active, 404);
+        $data = $this->catalogCache->rememberCategories('show', ['category' => $category], function () use ($request, $category): array {
+            $model = Category::query()
+                ->whereKey($category)
+                ->where('active', true)
+                ->firstOrFail();
 
-        $category->load([
-            'image',
-            'subcategories' => fn ($q) => $q->where('active', true)->with('image')->withCount(['subcategoryProducts as products_count'])->orderBy('sort_order')->orderBy('name'),
-        ])
-            ->loadCount('products');
+            $model->load([
+                'image',
+                'subcategories' => fn ($q) => $q->where('active', true)->with('image')->withCount(['subcategoryProducts as products_count'])->orderBy('sort_order')->orderBy('name'),
+            ])->loadCount('products');
 
-        return $this->success(new CategoryResource($category));
+            return (new CategoryResource($model))->resolve($request);
+        });
+
+        return $this->success($data);
     }
 
     /** Admin only. PATCH /categories/{category} */

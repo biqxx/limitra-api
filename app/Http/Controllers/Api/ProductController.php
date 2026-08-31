@@ -7,6 +7,8 @@ use App\Jobs\RecordAnalyticsEvent;
 use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Analytics\AnalyticsTrackingService;
+use App\Services\Catalog\CatalogCache;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +18,8 @@ use OpenApi\Attributes as OA;
 
 class ProductController extends BaseController
 {
+    public function __construct(private readonly CatalogCache $catalogCache) {}
+
     #[OA\Get(
         path: '/products',
         tags: ['Products'],
@@ -68,43 +72,47 @@ class ProductController extends BaseController
         $brands = $request->input('brand', []);
         $brands = is_array($brands) ? $brands : array_filter(array_map('trim', explode(',', $brands)));
 
-        $products = Product::with('category.image', 'subcategory.image', 'productImages')
-            ->where('status', 'active')
-            ->when($request->filled('subcategory_id'), fn ($q) => $q->where('subcategory_id', $request->integer('subcategory_id')))
-            ->when($request->filled('subcategory_slug'), fn ($q) => $q->whereHas('subcategory', fn ($subquery) => $subquery->where('slug', $request->input('subcategory_slug'))))
-            ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
-            ->when($request->filled('category_slug'), fn ($q) => $q->whereHas('category', fn ($categoryQuery) => $categoryQuery->where('slug', $request->input('category_slug'))))
-            ->when($search, function ($query) use ($search) {
-                $query->where(function ($searchQuery) use ($search) {
-                    $searchQuery->where('name', 'like', "%{$search}%")
-                        ->orWhere('brand', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%")
-                        ->orWhere('sku', 'like', "%{$search}%");
-                });
-            })
-            ->when($brands, fn ($q) => $q->whereIn('brand', $brands))
-            ->when($minPrice !== null, fn ($q) => $q->where('price', '>=', $minPrice))
-            ->when($maxPrice !== null, fn ($q) => $q->where('price', '<=', $maxPrice))
-            ->when($request->filled('min_rating'), fn ($q) => $q->where('average_rating', '>=', $request->input('min_rating')))
-            ->when($request->boolean('in_stock'), fn ($q) => $q->where('stock', '>', 0))
-            ->when($request->boolean('on_sale'), fn ($q) => $q->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'price'))
-            ->when($request->boolean('featured'), fn ($q) => $q->where('is_featured', true))
-            ->when($request->boolean('bestseller'), fn ($q) => $q->where('is_bestseller', true))
-            ->orderBy($sortBy, $sortDir)
-            ->paginate($request->integer('per_page', 20))
-            ->withQueryString();
+        $data = $this->catalogCache->rememberProducts('index', $request->query(), function () use ($request, $sortBy, $sortDir, $search, $minPrice, $maxPrice, $brands): array {
+            $products = Product::with('category.image', 'subcategory.image', 'productImages')
+                ->where('status', 'active')
+                ->when($request->filled('subcategory_id'), fn ($q) => $q->where('subcategory_id', $request->integer('subcategory_id')))
+                ->when($request->filled('subcategory_slug'), fn ($q) => $q->whereHas('subcategory', fn ($subquery) => $subquery->where('slug', $request->input('subcategory_slug'))))
+                ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
+                ->when($request->filled('category_slug'), fn ($q) => $q->whereHas('category', fn ($categoryQuery) => $categoryQuery->where('slug', $request->input('category_slug'))))
+                ->when($search, function ($query) use ($search) {
+                    $query->where(function ($searchQuery) use ($search) {
+                        $searchQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('brand', 'like', "%{$search}%")
+                            ->orWhere('description', 'like', "%{$search}%")
+                            ->orWhere('sku', 'like', "%{$search}%");
+                    });
+                })
+                ->when($brands, fn ($q) => $q->whereIn('brand', $brands))
+                ->when($minPrice !== null, fn ($q) => $q->where('price', '>=', $minPrice))
+                ->when($maxPrice !== null, fn ($q) => $q->where('price', '<=', $maxPrice))
+                ->when($request->filled('min_rating'), fn ($q) => $q->where('average_rating', '>=', $request->input('min_rating')))
+                ->when($request->boolean('in_stock'), fn ($q) => $q->where('stock', '>', 0))
+                ->when($request->boolean('on_sale'), fn ($q) => $q->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'price'))
+                ->when($request->boolean('featured'), fn ($q) => $q->where('is_featured', true))
+                ->when($request->boolean('bestseller'), fn ($q) => $q->where('is_bestseller', true))
+                ->orderBy($sortBy, $sortDir)
+                ->paginate($request->integer('per_page', 20))
+                ->withQueryString();
 
-        return $this->success([
-            'items' => ProductResource::collection($products->getCollection()),
-            'pagination' => [
-                'current_page' => $products->currentPage(),
-                'per_page' => $products->perPage(),
-                'total' => $products->total(),
-                'last_page' => $products->lastPage(),
-                'from' => $products->firstItem(),
-                'to' => $products->lastItem(),
-            ],
-        ]);
+            return [
+                'items' => ProductResource::collection($products->getCollection())->resolve($request),
+                'pagination' => [
+                    'current_page' => $products->currentPage(),
+                    'per_page' => $products->perPage(),
+                    'total' => $products->total(),
+                    'last_page' => $products->lastPage(),
+                    'from' => $products->firstItem(),
+                    'to' => $products->lastItem(),
+                ],
+            ];
+        });
+
+        return $this->success($data);
     }
 
     #[OA\Post(
@@ -209,21 +217,33 @@ class ProductController extends BaseController
             new OA\Response(response: 404, description: 'Not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function show(Request $request, Product $product): JsonResponse
+    public function show(Request $request, string $product): JsonResponse
     {
+        $user = auth('api')->user();
+        $relations = ['category.image', 'subcategory.image', 'creator', 'productImages', 'variants', 'specifications'];
+
+        $data = $user?->isAdmin()
+            ? (new ProductResource($this->productQuery($product)->with($relations)->firstOrFail()))->resolve($request)
+            : $this->catalogCache->rememberProducts('show', ['product' => $product], function () use ($request, $product, $relations): array {
+                $model = $this->productQuery($product)
+                    ->where('status', 'active')
+                    ->with($relations)
+                    ->firstOrFail();
+
+                return (new ProductResource($model))->resolve($request);
+            });
+
         $sessionId = $request->attributes->get('analytics_session_id')
             ?? AnalyticsTrackingService::resolveSessionId($request);
 
         dispatch(RecordAnalyticsEvent::productView(
             $request,
             $sessionId,
-            auth('api')->id(),
-            $product->id,
+            $user?->id,
+            $data['id'],
         ));
 
-        abort_unless($product->status === 'active' || auth('api')->user()?->isAdmin(), 404);
-
-        return $this->success(new ProductResource($product->load('category.image', 'subcategory.image', 'creator', 'productImages', 'variants', 'specifications')));
+        return $this->success($data);
     }
 
     #[OA\Patch(
@@ -397,5 +417,13 @@ class ProductController extends BaseController
         }
 
         return $slug;
+    }
+
+    private function productQuery(string $identifier): Builder
+    {
+        return Product::query()->where(
+            is_numeric($identifier) ? 'id' : 'slug',
+            $identifier,
+        );
     }
 }

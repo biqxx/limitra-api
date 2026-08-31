@@ -17,7 +17,7 @@ class ReviewAggregateService
         $count = (clone $reviews)->count();
         $average = $count > 0 ? (float) $reviews->avg('rating') : 0;
 
-        $product->updateQuietly([
+        $product->update([
             'review_count' => $count,
             'average_rating' => round($average, 2),
         ]);

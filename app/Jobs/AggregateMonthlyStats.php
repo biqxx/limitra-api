@@ -4,9 +4,11 @@ namespace App\Jobs;
 
 use App\Models\Analytics\DailyAggregate;
 use App\Models\Analytics\MonthlyAggregate;
+use App\Services\Analytics\AnalyticsCache;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 class AggregateMonthlyStats implements ShouldQueue
 {
@@ -23,25 +25,38 @@ class AggregateMonthlyStats implements ShouldQueue
 
     public array $backoff = [10, 60, 300];
 
-    public function handle(): void
+    public function middleware(): array
     {
-        $date = Carbon::parse($this->year && $this->month
-            ? "{$this->year}-{$this->month}-01"
-            : now()->subMonth()->startOfMonth()
-        );
+        $date = $this->targetMonth();
 
-        $this->aggregateMonth($date->year, $date->month);
+        return [
+            (new WithoutOverlapping("analytics:aggregate:monthly:{$date->format('Y-m')}"))
+                ->releaseAfter(120)
+                ->expireAfter(3600),
+        ];
     }
 
-    private function aggregateMonth(int $year, int $month): void
+    public function handle(AnalyticsCache $cache): void
+    {
+        $date = $this->targetMonth();
+
+        if ($this->aggregateMonth($date->year, $date->month)) {
+            $cache->invalidate();
+        }
+    }
+
+    private function aggregateMonth(int $year, int $month): bool
     {
         $from = Carbon::createFromDate($year, $month, 1)->startOfDay();
         $to = $from->copy()->endOfMonth();
 
-        $rows = DailyAggregate::whereBetween('date', [$from->toDateString(), $to->toDateString()])->get();
+        $rows = DailyAggregate::query()
+            ->whereDate('date', '>=', $from->toDateString())
+            ->whereDate('date', '<=', $to->toDateString())
+            ->get();
 
         if ($rows->isEmpty()) {
-            return;
+            return false;
         }
 
         $orders = (int) $rows->sum('orders_placed');
@@ -78,6 +93,16 @@ class AggregateMonthlyStats implements ShouldQueue
                 'cart_abandonment_rate' => $cartAbandonment,
                 'conversion_rate' => $conversionRate,
             ]
+        );
+
+        return true;
+    }
+
+    private function targetMonth(): Carbon
+    {
+        return Carbon::parse($this->year && $this->month
+            ? "{$this->year}-{$this->month}-01"
+            : now()->subMonth()->startOfMonth()
         );
     }
 

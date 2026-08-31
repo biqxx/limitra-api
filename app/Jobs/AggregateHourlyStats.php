@@ -8,9 +8,11 @@ use App\Models\Analytics\OrderEvent;
 use App\Models\Analytics\PageView;
 use App\Models\Analytics\ProductView;
 use App\Models\User;
+use App\Services\Analytics\AnalyticsCache;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 class AggregateHourlyStats implements ShouldQueue
 {
@@ -25,12 +27,23 @@ class AggregateHourlyStats implements ShouldQueue
         $this->onQueue('analytics');
     }
 
-    public function handle(): void
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping('analytics:aggregate:hourly'))
+                ->releaseAfter(60)
+                ->expireAfter(900),
+        ];
+    }
+
+    public function handle(AnalyticsCache $cache): void
     {
         // Always re-aggregate the last 2 hours to capture any late-arriving events.
         foreach ([now()->subHour()->startOfHour(), now()->startOfHour()] as $hourAt) {
             $this->aggregateHour($hourAt);
         }
+
+        $cache->invalidate();
     }
 
     private function aggregateHour(Carbon $hourAt): void

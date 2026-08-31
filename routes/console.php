@@ -1,8 +1,33 @@
 <?php
 
+use App\Jobs\AggregateDailyStats;
+use App\Jobs\AggregateHourlyStats;
+use App\Jobs\AggregateMonthlyStats;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Aggregate raw events into hourly buckets — runs every hour.
+Schedule::job(new AggregateHourlyStats)
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('analytics:hourly');
+
+// Aggregate the previous day into a daily summary — runs at 00:05 each day.
+Schedule::job(new AggregateDailyStats)
+    ->dailyAt('00:05')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('analytics:daily');
+
+// Roll daily summaries into a monthly summary — runs at 00:15 on the 1st of each month.
+Schedule::job(new AggregateMonthlyStats)
+    ->monthlyOn(1, '00:15')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('analytics:monthly');

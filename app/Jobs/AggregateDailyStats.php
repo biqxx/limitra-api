@@ -9,9 +9,11 @@ use App\Models\Analytics\PageView;
 use App\Models\Analytics\ProductView;
 use App\Models\Order\Order;
 use App\Models\User;
+use App\Services\Analytics\AnalyticsCache;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 class AggregateDailyStats implements ShouldQueue
 {
@@ -26,11 +28,23 @@ class AggregateDailyStats implements ShouldQueue
 
     public array $backoff = [5, 30, 60];
 
-    public function handle(): void
+    public function middleware(): array
+    {
+        $date = Carbon::parse($this->date ?? now()->subDay()->toDateString())->toDateString();
+
+        return [
+            (new WithoutOverlapping("analytics:aggregate:daily:{$date}"))
+                ->releaseAfter(60)
+                ->expireAfter(1800),
+        ];
+    }
+
+    public function handle(AnalyticsCache $cache): void
     {
         // Yesterday by default; injected date allows manual backfill.
         $date = Carbon::parse($this->date ?? now()->subDay()->toDateString());
         $this->aggregateDay($date);
+        $cache->invalidate();
     }
 
     private function aggregateDay(Carbon $date): void
@@ -59,25 +73,27 @@ class AggregateDailyStats implements ShouldQueue
         $cartAbandonment = $chkStart > 0 ? round((($chkStart - $chkDone) / $chkStart) * 100, 2) : 0;
         $conversionRate = $visits > 0 ? round(($orders / $visits) * 100, 2) : 0;
 
-        DailyAggregate::updateOrCreate(
-            ['date' => $date->toDateString()],
-            [
-                'visits' => $visits,
-                'unique_visitors' => $unique,
-                'page_views' => $visits,
-                'product_views' => $pvs,
-                'add_to_carts' => $atc,
-                'checkouts_started' => $chkStart,
-                'checkouts_completed' => $chkDone,
-                'orders_placed' => $orders,
-                'orders_revenue' => $revenue,
-                'new_users' => $newUsers,
-                'returning_users' => $returningUsers,
-                'avg_order_value' => $aov,
-                'cart_abandonment_rate' => $cartAbandonment,
-                'conversion_rate' => $conversionRate,
-            ]
-        );
+        $aggregate = DailyAggregate::query()
+            ->whereDate('date', $date->toDateString())
+            ->firstOrNew();
+
+        $aggregate->fill([
+            'date' => $date->toDateString(),
+            'visits' => $visits,
+            'unique_visitors' => $unique,
+            'page_views' => $visits,
+            'product_views' => $pvs,
+            'add_to_carts' => $atc,
+            'checkouts_started' => $chkStart,
+            'checkouts_completed' => $chkDone,
+            'orders_placed' => $orders,
+            'orders_revenue' => $revenue,
+            'new_users' => $newUsers,
+            'returning_users' => $returningUsers,
+            'avg_order_value' => $aov,
+            'cart_abandonment_rate' => $cartAbandonment,
+            'conversion_rate' => $conversionRate,
+        ])->save();
     }
 
     public function failed(\Throwable $exception): void

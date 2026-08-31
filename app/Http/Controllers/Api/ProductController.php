@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\ProductResource;
+use App\Jobs\RecordAnalyticsEvent;
 use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Analytics\AnalyticsTrackingService;
@@ -213,8 +214,12 @@ class ProductController extends BaseController
         $sessionId = $request->attributes->get('analytics_session_id')
             ?? AnalyticsTrackingService::resolveSessionId($request);
 
-        defer(fn () => app(AnalyticsTrackingService::class)
-            ->recordProductView($sessionId, auth('api')->id(), $product->id, $request));
+        dispatch(RecordAnalyticsEvent::productView(
+            $request,
+            $sessionId,
+            auth('api')->id(),
+            $product->id,
+        ));
 
         abort_unless($product->status === 'active' || auth('api')->user()?->isAdmin(), 404);
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Resources\CartResource;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\ShipmentResource;
+use App\Jobs\RecordAnalyticsEvent;
 use App\Models\Address\Address;
 use App\Models\Order\Order;
 use App\Services\Analytics\AnalyticsTrackingService;
@@ -92,8 +93,13 @@ class OrderController extends BaseController
         $sessionId = $request->attributes->get('analytics_session_id')
             ?? AnalyticsTrackingService::resolveSessionId($request);
         if (! $result['replayed']) {
-            defer(fn () => app(AnalyticsTrackingService::class)->recordOrderEvent(
-                'placed', $sessionId, $order->user_id, $order->id, (float) $order->total_amount, [], $request
+            dispatch(RecordAnalyticsEvent::orderEvent(
+                $request,
+                'placed',
+                $sessionId,
+                $order->user_id,
+                $order->id,
+                (float) $order->total_amount,
             ));
         }
 

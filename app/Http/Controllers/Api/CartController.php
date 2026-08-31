@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\CartResource;
+use App\Jobs\RecordAnalyticsEvent;
 use App\Models\Cart\Cart;
 use App\Models\Cart\CartItem;
 use App\Models\Product\Product;
@@ -208,8 +209,15 @@ class CartController extends BaseController
             ?? AnalyticsTrackingService::resolveSessionId($request);
         $userId = auth('api')->id();
 
-        defer(fn () => app(AnalyticsTrackingService::class)->recordCartEvent(
-            'add', $sessionId, $userId, $cart->id, $product->id, $data['quantity'], (float) $product->price, $request
+        dispatch(RecordAnalyticsEvent::cartEvent(
+            $request,
+            'add',
+            $sessionId,
+            $userId,
+            $cart->id,
+            $product->id,
+            $data['quantity'],
+            (float) $product->price,
         ));
 
         return $identity->attachToken($this->success(
@@ -245,8 +253,13 @@ class CartController extends BaseController
         $sessionId = $request->attributes->get('analytics_session_id')
             ?? AnalyticsTrackingService::resolveSessionId($request);
 
-        defer(fn () => app(AnalyticsTrackingService::class)->recordCartEvent(
-            'remove', $sessionId, auth('api')->id(), $cart->id, $cartItem->product_id, null, null, $request
+        dispatch(RecordAnalyticsEvent::cartEvent(
+            $request,
+            'remove',
+            $sessionId,
+            auth('api')->id(),
+            $cart->id,
+            $cartItem->product_id,
         ));
 
         return $this->success(new CartResource($cartService->fresh($cart)), 'Item removed from cart.');

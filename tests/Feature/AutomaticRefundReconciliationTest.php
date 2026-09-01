@@ -142,6 +142,11 @@ class AutomaticRefundReconciliationTest extends TestCase
         $this->assertSame('needs_attention', $refund->status);
         $this->assertSame(1, $refund->reconciliation_attempts);
         $this->assertNull($refund->next_reconciliation_at);
+        $this->assertDatabaseHas('refund_events', [
+            'refund_id' => $refund->id,
+            'action' => 'reconciliation_exhausted',
+            'actor_id' => null,
+        ]);
         Notification::assertSentTo($refund->user, AutomaticRefundAttentionNotification::class, 1);
         Notification::assertSentTo($admin, AutomaticRefundStaffAlert::class, 1);
         Notification::assertSentTo($staff, AutomaticRefundStaffAlert::class, 1);

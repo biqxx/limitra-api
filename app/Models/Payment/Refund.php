@@ -7,6 +7,7 @@ use App\Models\Order\ReturnRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Refund extends Model
 {
@@ -60,5 +61,10 @@ class Refund extends Model
     public function processor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'processed_by');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(RefundEvent::class)->latest('id');
     }
 }

@@ -191,6 +191,7 @@ class RefundReconciliationService
             }
 
             $checkedAt = now();
+            $from = $refund->status;
             $requiresAttention = $refund->created_at
                 ->copy()
                 ->addHours($this->maxAgeHours())
@@ -207,6 +208,18 @@ class RefundReconciliationService
                     ? null
                     : $checkedAt->copy()->addMinutes($this->intervalMinutes()),
             ]);
+
+            if ($requiresAttention) {
+                $refund->events()->create([
+                    'from_status' => $from,
+                    'to_status' => 'needs_attention',
+                    'action' => 'reconciliation_exhausted',
+                    'actor_id' => null,
+                    'note' => 'Automatic reconciliation could not confirm the refund with Paystack in time.',
+                    'metadata' => ['attempts' => $refund->reconciliation_attempts],
+                    'created_at' => $checkedAt,
+                ]);
+            }
 
             return $requiresAttention;
         }, 3);

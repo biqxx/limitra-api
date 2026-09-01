@@ -23,6 +23,23 @@ class PaystackService
         return $this->post('/refund', $payload, 'initiate this refund');
     }
 
+    public function fetchRefund(string $identifier): array
+    {
+        return $this->get('/refund/'.rawurlencode($identifier), [], 'fetch this refund');
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listRefunds(string $transactionReference): array
+    {
+        $data = $this->get('/refund', [
+            'transaction' => $transactionReference,
+            'perPage' => 50,
+            'page' => 1,
+        ], 'list refunds for this transaction');
+
+        return array_is_list($data) ? $data : [];
+    }
+
     public function verifyTransaction(string $reference): array
     {
         try {
@@ -59,6 +76,32 @@ class PaystackService
             hash_hmac('sha512', $payload, config('services.paystack.secret_key')),
             $signature,
         );
+    }
+
+    private function get(string $endpoint, array $query, string $action): array
+    {
+        try {
+            $response = Http::baseUrl(config('services.paystack.base_url'))
+                ->withToken(config('services.paystack.secret_key'))
+                ->acceptJson()
+                ->timeout(15)
+                ->get($endpoint, $query);
+        } catch (ConnectionException $exception) {
+            throw new PaymentGatewayException(
+                "Paystack could not {$action}.",
+                outcomeUnknown: true,
+                previous: $exception,
+            );
+        }
+
+        if (! $response->successful() || ! $response->json('status') || ! is_array($response->json('data'))) {
+            throw new PaymentGatewayException(
+                "Paystack could not {$action}.",
+                outcomeUnknown: $response->serverError(),
+            );
+        }
+
+        return $response->json('data');
     }
 
     private function post(string $endpoint, array $payload, string $action): array

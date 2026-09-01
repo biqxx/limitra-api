@@ -6,12 +6,16 @@ use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Refund;
 use App\Services\Notification\RefundNotificationService;
 use App\Services\Order\InventoryReservationService;
+use App\Services\Settings\BusinessSettingsService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class RefundSettlementService
 {
-    public function __construct(private readonly RefundNotificationService $notifications) {}
+    public function __construct(
+        private readonly RefundNotificationService $notifications,
+        private readonly BusinessSettingsService $settings,
+    ) {}
 
     public function apply(Refund $refund, array $providerData): Refund
     {
@@ -37,12 +41,19 @@ class RefundSettlementService
             };
             $transaction = $providerData['transaction'] ?? null;
             $providerReference = $providerData['refund_reference'] ?? $providerData['reference'] ?? null;
+            $nextReconciliationAt = null;
+            if ($refund->source === 'late_payment' && in_array($status, ['pending', 'processing'], true)) {
+                $setting = $refund->reconciliation_attempts === 0
+                    ? 'payments.refund_reconciliation_delay_minutes'
+                    : 'payments.refund_reconciliation_interval_minutes';
+                $nextReconciliationAt = now()->addMinutes((int) $this->settings->value($setting));
+            }
 
             $refund->update([
                 'status' => $status,
                 'provider_refund_id' => isset($providerData['id']) ? (string) $providerData['id'] : $refund->provider_refund_id,
                 'provider_reference' => $providerReference ?: $refund->provider_reference,
-                'failure_message' => $status === 'failed'
+                'failure_message' => in_array($status, ['failed', 'needs_attention'], true)
                     ? ($providerData['reason'] ?? $providerData['message'] ?? 'The refund could not be processed.')
                     : null,
                 'provider_metadata' => array_filter([
@@ -54,6 +65,7 @@ class RefundSettlementService
                 'processed_at' => $status === 'processed'
                     ? (isset($providerData['refunded_at']) ? Carbon::parse($providerData['refunded_at']) : now())
                     : null,
+                'next_reconciliation_at' => $nextReconciliationAt,
             ]);
 
             if ($status === 'processed') {

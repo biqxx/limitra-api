@@ -5,9 +5,11 @@ namespace Tests\Unit;
 use App\Jobs\AggregateDailyStats;
 use App\Jobs\AggregateHourlyStats;
 use App\Jobs\AggregateMonthlyStats;
+use App\Jobs\DispatchPendingRefundReconciliations;
 use App\Jobs\InboundMessageJob;
 use App\Jobs\ProcessAutomaticRefund;
 use App\Jobs\ProcessPaymentWebhook;
+use App\Jobs\ReconcileAutomaticRefund;
 use App\Notifications\AutomaticRefundAttentionNotification;
 use App\Notifications\AutomaticRefundInitiatedNotification;
 use App\Notifications\AutomaticRefundProcessedNotification;
@@ -16,6 +18,7 @@ use App\Notifications\InventoryReservationExpiredNotification;
 use App\Notifications\LoginNotification;
 use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Tests\TestCase;
 
@@ -25,6 +28,8 @@ class QueueRoutingTest extends TestCase
     {
         $this->assertSame('payments', (new ProcessPaymentWebhook(1))->queue);
         $this->assertSame('payments', (new ProcessAutomaticRefund(1))->queue);
+        $this->assertSame('payments', (new ReconcileAutomaticRefund(1))->queue);
+        $this->assertSame('maintenance', (new DispatchPendingRefundReconciliations)->queue);
         $this->assertSame('ai', (new InboundMessageJob(1))->queue);
         $this->assertSame('analytics', (new AggregateHourlyStats)->queue);
         $this->assertSame('analytics', (new AggregateDailyStats)->queue);
@@ -33,11 +38,14 @@ class QueueRoutingTest extends TestCase
 
     public function test_automatic_refunds_use_an_execution_lock(): void
     {
-        $middleware = (new ProcessAutomaticRefund(1))->middleware()[0];
+        foreach ([new ProcessAutomaticRefund(1), new ReconcileAutomaticRefund(1)] as $job) {
+            $middleware = $job->middleware()[0];
 
-        $this->assertInstanceOf(WithoutOverlapping::class, $middleware);
-        $this->assertGreaterThan(0, $middleware->releaseAfter);
-        $this->assertGreaterThan(0, $middleware->expiresAfter);
+            $this->assertInstanceOf(WithoutOverlapping::class, $middleware);
+            $this->assertGreaterThan(0, $middleware->releaseAfter);
+            $this->assertGreaterThan(0, $middleware->expiresAfter);
+            $this->assertTrue($middleware->shareKey);
+        }
     }
 
     public function test_queued_mail_uses_the_notifications_queue(): void
@@ -73,5 +81,14 @@ class QueueRoutingTest extends TestCase
             $this->assertSame([$queue], config("horizon.defaults.{$supervisor}.queue"));
             $this->assertArrayHasKey($supervisor, config('horizon.environments.testing'));
         }
+    }
+
+    public function test_pending_refund_reconciliation_runs_every_five_minutes(): void
+    {
+        $event = collect(app(Schedule::class)->events())
+            ->first(fn ($event): bool => $event->description === 'maintenance:pending-refund-reconciliation');
+
+        $this->assertNotNull($event);
+        $this->assertSame('*/5 * * * *', $event->expression);
     }
 }

@@ -3,6 +3,7 @@
 use App\Jobs\AggregateDailyStats;
 use App\Jobs\AggregateHourlyStats;
 use App\Jobs\AggregateMonthlyStats;
+use App\Jobs\DispatchPendingRefundReconciliations;
 use App\Jobs\PruneExpiredAuthSessions;
 use App\Jobs\PruneExpiredCheckoutQuotes;
 use App\Jobs\PruneRawAnalytics;
@@ -59,3 +60,9 @@ Schedule::job(new ReleaseExpiredInventoryReservations)
     ->withoutOverlapping()
     ->onOneServer()
     ->name('maintenance:inventory-reservations');
+
+Schedule::job(new DispatchPendingRefundReconciliations)
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:pending-refund-reconciliation');

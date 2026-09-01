@@ -7,6 +7,7 @@ use App\Models\Payment\Refund;
 use App\Services\Notification\RefundNotificationService;
 use App\Services\Payment\PaystackService;
 use App\Services\Payment\RefundSettlementService;
+use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -29,12 +30,16 @@ class ProcessAutomaticRefund implements ShouldQueue
         return [
             (new WithoutOverlapping('automatic-refund:'.$this->refundId))
                 ->releaseAfter(60)
-                ->expireAfter(600),
+                ->expireAfter(600)
+                ->shared(),
         ];
     }
 
-    public function handle(PaystackService $paystack, RefundSettlementService $settlement): void
-    {
+    public function handle(
+        PaystackService $paystack,
+        RefundSettlementService $settlement,
+        BusinessSettingsService $settings,
+    ): void {
         $refund = Refund::query()->whereKey($this->refundId)->where('source', 'late_payment')->firstOrFail();
 
         if (! in_array($refund->status, ['initiating', 'failed'], true)) {
@@ -58,6 +63,9 @@ class ProcessAutomaticRefund implements ShouldQueue
             $refund->update([
                 'status' => $exception->outcomeUnknown ? 'pending' : 'failed',
                 'failure_message' => $exception->getMessage(),
+                'next_reconciliation_at' => $exception->outcomeUnknown
+                    ? now()->addMinutes((int) $settings->value('payments.refund_reconciliation_delay_minutes'))
+                    : null,
             ]);
 
             if ($exception->outcomeUnknown) {

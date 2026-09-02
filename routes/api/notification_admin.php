@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\NotificationSettingController;
 use App\Http\Controllers\Api\NotificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -13,4 +14,14 @@ Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])
             ->whereUuid('notification')
             ->name('read');
         Route::post('read-all', [NotificationController::class, 'readAll'])->name('read-all');
+    });
+
+Route::middleware(['auth:api', 'active.session', 'role:admin'])
+    ->prefix('notification-settings')
+    ->name('admin.notification-settings.')
+    ->group(function (): void {
+        Route::get('/', [NotificationSettingController::class, 'index'])->name('index');
+        Route::patch('{event}', [NotificationSettingController::class, 'update'])
+            ->where('event', '[a-z0-9._-]+')
+            ->name('update');
     });

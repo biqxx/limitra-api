@@ -2,12 +2,15 @@
 
 namespace App\Providers;
 
+use App\Listeners\InvalidateNotificationUnreadCount;
 use App\Models\Image;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\Product\ProductSpecification;
 use App\Models\Product\ProductVariant;
 use App\Observers\CatalogCacheObserver;
+use Illuminate\Notifications\Events\NotificationSent;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,6 +28,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Event::listen(NotificationSent::class, InvalidateNotificationUnreadCount::class);
+
         Product::observe(CatalogCacheObserver::class);
         ProductVariant::observe(CatalogCacheObserver::class);
         ProductSpecification::observe(CatalogCacheObserver::class);

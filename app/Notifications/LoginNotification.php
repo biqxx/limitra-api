@@ -18,12 +18,43 @@ class LoginNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['database', 'mail'];
     }
 
     public function viaQueues(): array
     {
-        return ['mail' => 'notifications'];
+        return [
+            'database' => 'notifications',
+            'mail' => 'notifications',
+        ];
+    }
+
+    public function viaConnections(): array
+    {
+        return [
+            'database' => 'sync',
+            'mail' => (string) config('queue.default'),
+        ];
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        return [
+            'event' => 'account.login',
+            'title' => 'New login detected',
+            'message' => 'A new login to your account was detected from '.$this->userAgent.'.',
+            'severity' => 'warning',
+            'action' => [
+                'type' => 'open_account_sessions',
+                'label' => 'Review sessions',
+                'url' => rtrim((string) config('app.frontend_url'), '/').'/account/sessions',
+            ],
+            'metadata' => [
+                'ip_address' => $this->ipAddress,
+                'device' => $this->userAgent,
+                'occurred_at' => now()->toIso8601String(),
+            ],
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

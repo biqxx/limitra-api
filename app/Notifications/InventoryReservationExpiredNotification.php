@@ -22,12 +22,42 @@ class InventoryReservationExpiredNotification extends Notification implements Sh
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['database', 'mail'];
     }
 
     public function viaQueues(): array
     {
-        return ['mail' => 'notifications'];
+        return [
+            'database' => 'notifications',
+            'mail' => 'notifications',
+        ];
+    }
+
+    public function viaConnections(): array
+    {
+        return [
+            'database' => 'sync',
+            'mail' => (string) config('queue.default'),
+        ];
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        return [
+            'event' => 'order.inventory_reservation_expired',
+            'title' => 'Order reservation expired',
+            'message' => 'Order '.$this->orderNumber.' was cancelled because payment was not completed before its inventory reservation expired.',
+            'severity' => 'warning',
+            'action' => [
+                'type' => 'open_order',
+                'label' => 'View order',
+                'url' => $this->orderUrl(),
+            ],
+            'metadata' => [
+                'order_id' => $this->orderId,
+                'order_number' => $this->orderNumber,
+            ],
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

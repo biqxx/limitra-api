@@ -23,12 +23,43 @@ class AutomaticRefundAttentionNotification extends Notification implements Shoul
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['database', 'mail'];
     }
 
     public function viaQueues(): array
     {
-        return ['mail' => 'notifications'];
+        return [
+            'database' => 'notifications',
+            'mail' => 'notifications',
+        ];
+    }
+
+    public function viaConnections(): array
+    {
+        return [
+            'database' => 'sync',
+            'mail' => (string) config('queue.default'),
+        ];
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        return [
+            'event' => 'refund.needs_attention',
+            'title' => 'Refund needs attention',
+            'message' => 'Your refund for order '.$this->orderNumber.' needs manual review. Our support team has been alerted.',
+            'severity' => 'warning',
+            'action' => [
+                'type' => 'open_order',
+                'label' => 'View order',
+                'url' => $this->orderUrl(),
+            ],
+            'metadata' => [
+                'order_id' => $this->orderId,
+                'order_number' => $this->orderNumber,
+                'refund_reference' => $this->refundReference,
+            ],
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

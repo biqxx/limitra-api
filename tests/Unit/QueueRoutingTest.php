@@ -66,6 +66,24 @@ class QueueRoutingTest extends TestCase
         }
     }
 
+    public function test_persistent_notifications_store_immediately_and_queue_mail_on_redis(): void
+    {
+        $notifications = [
+            new LoginNotification('127.0.0.1', 'Test Browser'),
+            new InventoryReservationExpiredNotification(1, 'LMT-TEST'),
+            new AutomaticRefundInitiatedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),
+            new AutomaticRefundProcessedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),
+            new AutomaticRefundAttentionNotification(1, 'LMT-TEST', 'LMT-REF-TEST'),
+            new AutomaticRefundStaffAlert(1, 'LMT-TEST', 'LMT-REF-TEST', 'buyer@example.test', 'Provider rejected the refund.'),
+        ];
+
+        foreach ($notifications as $notification) {
+            $this->assertSame('sync', $notification->viaConnections()['database']);
+            $this->assertSame(config('queue.default'), $notification->viaConnections()['mail']);
+            $this->assertSame('notifications', $notification->viaQueues()['database']);
+        }
+    }
+
     public function test_horizon_has_an_independent_supervisor_for_each_queue(): void
     {
         $queues = [

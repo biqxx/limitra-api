@@ -25,12 +25,45 @@ class AutomaticRefundStaffAlert extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['database', 'mail'];
     }
 
     public function viaQueues(): array
     {
-        return ['mail' => 'notifications'];
+        return [
+            'database' => 'notifications',
+            'mail' => 'notifications',
+        ];
+    }
+
+    public function viaConnections(): array
+    {
+        return [
+            'database' => 'sync',
+            'mail' => (string) config('queue.default'),
+        ];
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        return [
+            'event' => 'refund.staff_attention_required',
+            'title' => 'Automatic refund needs attention',
+            'message' => 'Automatic refund '.$this->refundReference.' for order '.$this->orderNumber.' needs manual review.',
+            'severity' => 'error',
+            'action' => [
+                'type' => 'open_admin_order',
+                'label' => 'Review order',
+                'url' => $this->adminOrderUrl(),
+            ],
+            'metadata' => [
+                'order_id' => $this->orderId,
+                'order_number' => $this->orderNumber,
+                'refund_reference' => $this->refundReference,
+                'customer_email' => $this->customerEmail,
+                'failure_message' => $this->failureMessage,
+            ],
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

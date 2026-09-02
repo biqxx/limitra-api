@@ -16,6 +16,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/refund_admin.php';
         require __DIR__.'/api/settings.php';
         require __DIR__.'/api/queue.php';
+        require __DIR__.'/api/notification_admin.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────
@@ -31,6 +32,7 @@ Route::prefix('v1')->group(function () {
     // Cart browsing supports either JWT ownership or an opaque guest token.
     require __DIR__.'/api/cart.php';
     require __DIR__.'/api/commerce.php';
+    require __DIR__.'/api/notification.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
     Route::middleware(['auth:api', 'active.session'])->group(function () {

@@ -6,6 +6,7 @@ use App\Models\Order\Order;
 use App\Models\Referral\CustomerReferral;
 use App\Models\User;
 use App\Notifications\ReferralRewardEarnedNotification;
+use App\Notifications\ReferralRewardReversedNotification;
 use App\Services\Payment\WalletLedgerService;
 use App\Services\Settings\BusinessSettingsService;
 use Closure;
@@ -78,6 +79,61 @@ class ReferralRewardService
                 $recipient?->notify(new ReferralRewardEarnedNotification(
                     $transaction->amount_minor,
                     $transaction->currency,
+                ));
+            });
+
+            return $referral->fresh();
+        }, 3);
+    }
+
+    public function reverseForFullyRefundedOrder(Order $order): ?CustomerReferral
+    {
+        return DB::transaction(function () use ($order): ?CustomerReferral {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if ($order->payment_status !== 'refunded') {
+                return null;
+            }
+
+            $referral = CustomerReferral::query()
+                ->where('qualifying_order_id', $order->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $referral || $referral->status === 'reversed') {
+                return $referral;
+            }
+            if ($referral->status !== 'rewarded' || ! $referral->reward_transaction_id) {
+                return null;
+            }
+
+            $original = $referral->rewardTransaction()->firstOrFail();
+            $reversal = $this->walletLedger->reverseCredit(
+                $original,
+                "referral_reward_reversal:{$referral->id}",
+                'Reversal of referral reward after the qualifying order was fully refunded.',
+                'customer_referral',
+                $referral->id,
+                [
+                    'qualifying_order_id' => $order->id,
+                    'reason' => 'qualifying_order_fully_refunded',
+                ],
+            );
+
+            $referral->forceFill([
+                'status' => 'reversed',
+                'reversal_transaction_id' => $reversal->id,
+                'policy_snapshot' => [
+                    ...($referral->policy_snapshot ?? []),
+                    'reversal_reason' => 'qualifying_order_fully_refunded',
+                ],
+                'reversed_at' => now(),
+            ])->save();
+
+            $this->afterCommit(function () use ($referral, $reversal): void {
+                $recipient = User::query()->find($referral->referrer_id);
+                $recipient?->notify(new ReferralRewardReversedNotification(
+                    $reversal->amount_minor,
+                    $reversal->currency,
                 ));
             });
 

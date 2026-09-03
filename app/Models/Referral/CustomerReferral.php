@@ -13,7 +13,8 @@ class CustomerReferral extends Model
     protected $fillable = [
         'referrer_id', 'referred_user_id', 'customer_referral_attribution_id', 'status',
         'qualifying_order_id', 'reward_transaction_id', 'reward_amount_minor',
-        'reward_currency', 'policy_snapshot', 'qualified_at', 'rewarded_at', 'rejected_at',
+        'reversal_transaction_id', 'reward_currency', 'policy_snapshot', 'qualified_at',
+        'rewarded_at', 'reversed_at', 'rejected_at',
     ];
 
     protected $attributes = ['status' => 'pending'];
@@ -25,6 +26,7 @@ class CustomerReferral extends Model
             'policy_snapshot' => 'array',
             'qualified_at' => 'datetime',
             'rewarded_at' => 'datetime',
+            'reversed_at' => 'datetime',
             'rejected_at' => 'datetime',
         ];
     }
@@ -52,5 +54,10 @@ class CustomerReferral extends Model
     public function rewardTransaction(): BelongsTo
     {
         return $this->belongsTo(WalletTransaction::class, 'reward_transaction_id');
+    }
+
+    public function reversalTransaction(): BelongsTo
+    {
+        return $this->belongsTo(WalletTransaction::class, 'reversal_transaction_id');
     }
 }

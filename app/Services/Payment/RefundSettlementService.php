@@ -6,6 +6,7 @@ use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Refund;
 use App\Services\Notification\RefundNotificationService;
 use App\Services\Order\InventoryReservationService;
+use App\Services\Referral\ReferralRewardService;
 use App\Services\Settings\BusinessSettingsService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,7 @@ class RefundSettlementService
     public function __construct(
         private readonly RefundNotificationService $notifications,
         private readonly BusinessSettingsService $settings,
+        private readonly ReferralRewardService $referralRewards,
     ) {}
 
     public function apply(Refund $refund, array $providerData): Refund
@@ -75,6 +77,9 @@ class RefundSettlementService
                         ? 'refunded'
                         : 'partially_refunded',
                 ]);
+                if ($order->payment_status === 'refunded') {
+                    $this->referralRewards->reverseForFullyRefundedOrder($order);
+                }
 
                 $returnRefundedMinor = $returnRequest
                     ? (int) $returnRequest->refunds()->where('status', 'processed')->sum('amount_minor')

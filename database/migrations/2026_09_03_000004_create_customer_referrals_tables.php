@@ -45,11 +45,13 @@ return new class extends Migration
             $table->string('status', 20)->default('pending');
             $table->foreignId('qualifying_order_id')->nullable()->unique()->constrained('orders')->restrictOnDelete();
             $table->foreignId('reward_transaction_id')->nullable()->unique()->constrained('wallet_transactions')->restrictOnDelete();
+            $table->foreignId('reversal_transaction_id')->nullable()->unique()->constrained('wallet_transactions')->restrictOnDelete();
             $table->unsignedBigInteger('reward_amount_minor')->nullable();
             $table->char('reward_currency', 3)->nullable();
             $table->json('policy_snapshot')->nullable();
             $table->timestamp('qualified_at')->nullable();
             $table->timestamp('rewarded_at')->nullable();
+            $table->timestamp('reversed_at')->nullable();
             $table->timestamp('rejected_at')->nullable();
             $table->timestamps();
 

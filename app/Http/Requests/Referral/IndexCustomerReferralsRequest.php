@@ -15,7 +15,7 @@ class IndexCustomerReferralsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['sometimes', Rule::in(['pending', 'qualified', 'rewarded', 'rejected'])],
+            'status' => ['sometimes', Rule::in(['pending', 'qualified', 'rewarded', 'reversed', 'rejected'])],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }

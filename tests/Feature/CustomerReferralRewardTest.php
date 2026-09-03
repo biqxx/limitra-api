@@ -6,11 +6,16 @@ use App\Http\Middleware\TrackAnalytics;
 use App\Models\Order\Order;
 use App\Models\Order\OrderItem;
 use App\Models\Order\Shipment;
+use App\Models\Payment\Payment;
+use App\Models\Payment\Refund;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\Referral\CustomerReferral;
 use App\Models\User;
 use App\Notifications\ReferralRewardEarnedNotification;
+use App\Notifications\ReferralRewardReversedNotification;
+use App\Services\Payment\RefundSettlementService;
+use App\Services\Payment\WalletLedgerService;
 use App\Services\Referral\ReferralRewardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -115,6 +120,54 @@ class CustomerReferralRewardTest extends TestCase
         Notification::assertNothingSent();
     }
 
+    public function test_full_refund_reverses_reward_once_even_when_balance_becomes_negative(): void
+    {
+        [$referrer, $customer, $order, $referral] = $this->scenario('card', 'paid');
+        $this->deliver($order);
+        $rewardTransaction = $referral->fresh()->rewardTransaction;
+        app(WalletLedgerService::class)->debit(
+            $referrer,
+            600000,
+            'lim_cash',
+            'purchase',
+            "test_referral_spend:{$referral->id}",
+            'Test purchase with referral reward.',
+        );
+        $payment = $this->payment($order, $customer);
+        $firstRefund = $this->refund($payment, 5000000);
+        $secondRefund = $this->refund($payment, 5250000);
+        $settlement = app(RefundSettlementService::class);
+
+        $settlement->apply($firstRefund, $this->providerRefund($firstRefund));
+
+        $this->assertSame('partially_refunded', $order->fresh()->payment_status);
+        $this->assertSame('rewarded', $referral->fresh()->status);
+        $this->assertDatabaseMissing('wallet_transactions', [
+            'reverses_transaction_id' => $rewardTransaction->id,
+        ]);
+
+        $settlement->apply($secondRefund, $this->providerRefund($secondRefund));
+        $settlement->apply($secondRefund->fresh(), $this->providerRefund($secondRefund));
+
+        $referral = $referral->fresh();
+        $this->assertSame('refunded', $order->fresh()->payment_status);
+        $this->assertSame('reversed', $referral->status);
+        $this->assertNotNull($referral->reversed_at);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'id' => $referral->reversal_transaction_id,
+            'type' => 'reversal',
+            'direction' => 'debit',
+            'amount_minor' => 700000,
+            'balance_after_minor' => -600000,
+            'unique_key' => "referral_reward_reversal:{$referral->id}",
+            'reverses_transaction_id' => $rewardTransaction->id,
+        ]);
+        $this->assertSame(-600000, $referrer->account()->value('lim_cash_balance_minor'));
+        $this->assertSame(1, $rewardTransaction->reversal()->count());
+        $this->assertDatabaseCount('wallet_transactions', 3);
+        Notification::assertSentTo($referrer, ReferralRewardReversedNotification::class, 1);
+    }
+
     /** @return array{User, User, Order, CustomerReferral} */
     private function scenario(string $paymentMethod, string $paymentStatus): array
     {
@@ -198,6 +251,56 @@ class CustomerReferralRewardTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.status', 'delivered');
+    }
+
+    private function payment(Order $order, User $customer): Payment
+    {
+        return Payment::query()->create([
+            'order_id' => $order->id,
+            'user_id' => $customer->id,
+            'provider' => 'paystack',
+            'method' => 'card',
+            'reference' => fake()->unique()->bothify('PAY-REF-########'),
+            'status' => 'succeeded',
+            'currency' => 'NGN',
+            'amount' => 102500,
+            'amount_minor' => 10250000,
+            'customer_email' => $customer->email,
+            'paid_at' => now()->subDays(2),
+            'verified_at' => now()->subDays(2),
+        ]);
+    }
+
+    private function refund(Payment $payment, int $amountMinor): Refund
+    {
+        return Refund::query()->create([
+            'order_id' => $payment->order_id,
+            'payment_id' => $payment->id,
+            'user_id' => $payment->user_id,
+            'reference' => fake()->unique()->bothify('LMT-REFUND-########'),
+            'provider' => 'paystack',
+            'method' => 'original_payment',
+            'status' => 'pending',
+            'currency' => 'NGN',
+            'amount' => number_format($amountMinor / 100, 2, '.', ''),
+            'amount_minor' => $amountMinor,
+            'source' => 'return',
+            'reason' => 'Approved return refund.',
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    private function providerRefund(Refund $refund): array
+    {
+        return [
+            'id' => 'provider-'.$refund->id,
+            'refund_reference' => 'provider-refund-'.$refund->id,
+            'transaction_reference' => $refund->payment->reference,
+            'amount' => $refund->amount_minor,
+            'currency' => $refund->currency,
+            'status' => 'processed',
+            'refunded_at' => now()->toIso8601String(),
+        ];
     }
 
     private function user(string $name, string $role = 'user'): User

@@ -61,6 +61,7 @@ class CustomerReferralController extends BaseController
                 'pending' => (int) ($counts['pending'] ?? 0),
                 'qualified' => (int) ($counts['qualified'] ?? 0),
                 'rewarded' => (int) ($counts['rewarded'] ?? 0),
+                'reversed' => (int) ($counts['reversed'] ?? 0),
                 'rejected' => (int) ($counts['rejected'] ?? 0),
             ],
             'total_earned' => $wallets->money((int) CustomerReferral::query()

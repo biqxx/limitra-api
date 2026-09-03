@@ -35,6 +35,7 @@ class WalletTransaction extends Model
             'amount_minor' => 'integer',
             'balance_after_minor' => 'integer',
             'source_id' => 'integer',
+            'reverses_transaction_id' => 'integer',
             'metadata' => 'array',
         ];
     }

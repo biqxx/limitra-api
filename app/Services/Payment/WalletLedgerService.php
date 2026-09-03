@@ -81,6 +81,36 @@ class WalletLedgerService
         );
     }
 
+    /** @param array<string, mixed> $metadata */
+    public function reverseCredit(
+        WalletTransaction $original,
+        string $uniqueKey,
+        string $description,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        array $metadata = [],
+    ): WalletTransaction {
+        $original = WalletTransaction::query()->with('account.user')->findOrFail($original->id);
+        if ($original->direction !== 'credit' || $original->status !== 'posted') {
+            throw new InvalidArgumentException('Only a posted wallet credit can be reversed.');
+        }
+
+        return $this->post(
+            $original->account->user,
+            'debit',
+            $original->amount_minor,
+            $original->balance_type,
+            'reversal',
+            $uniqueKey,
+            $description,
+            $sourceType,
+            $sourceId,
+            $metadata,
+            $original->id,
+            true,
+        );
+    }
+
     public function accountFor(User $user): Account
     {
         return Account::query()->firstOrCreate(
@@ -101,6 +131,8 @@ class WalletLedgerService
         ?string $sourceType,
         ?int $sourceId,
         array $metadata,
+        ?int $reversesTransactionId = null,
+        bool $allowNegativeBalance = false,
     ): WalletTransaction {
         $this->validateEntry($amountMinor, $balanceType, $type, $uniqueKey, $description);
         $accountId = $this->accountFor($user)->id;
@@ -116,13 +148,53 @@ class WalletLedgerService
             $sourceType,
             $sourceId,
             $metadata,
+            $reversesTransactionId,
+            $allowNegativeBalance,
         ): WalletTransaction {
             $account = Account::query()->lockForUpdate()->findOrFail($accountId);
             $existing = WalletTransaction::query()->where('unique_key', $uniqueKey)->first();
             if ($existing) {
-                $this->assertReplayMatches($existing, $account, $direction, $amountMinor, $balanceType, $type);
+                $this->assertReplayMatches(
+                    $existing,
+                    $account,
+                    $direction,
+                    $amountMinor,
+                    $balanceType,
+                    $type,
+                    $reversesTransactionId,
+                );
 
                 return $existing;
+            }
+
+            if ($reversesTransactionId) {
+                $original = WalletTransaction::query()->whereKey($reversesTransactionId)->firstOrFail();
+                if (
+                    $original->account_id !== $account->id
+                    || $original->direction !== 'credit'
+                    || $original->status !== 'posted'
+                    || $original->amount_minor !== $amountMinor
+                    || $original->balance_type !== $balanceType
+                ) {
+                    throw new LogicException('The wallet reversal does not match the original credit.');
+                }
+
+                $existingReversal = WalletTransaction::query()
+                    ->where('reverses_transaction_id', $reversesTransactionId)
+                    ->first();
+                if ($existingReversal) {
+                    $this->assertReplayMatches(
+                        $existingReversal,
+                        $account,
+                        $direction,
+                        $amountMinor,
+                        $balanceType,
+                        $type,
+                        $reversesTransactionId,
+                    );
+
+                    return $existingReversal;
+                }
             }
 
             $currentBalance = (int) (WalletTransaction::query()
@@ -132,7 +204,7 @@ class WalletLedgerService
                 ->latest('id')
                 ->value('balance_after_minor') ?? 0);
 
-            if ($direction === 'debit' && $currentBalance < $amountMinor) {
+            if ($direction === 'debit' && ! $allowNegativeBalance && $currentBalance < $amountMinor) {
                 throw ValidationException::withMessages([
                     'amount' => ['Insufficient wallet balance.'],
                 ]);
@@ -156,6 +228,7 @@ class WalletLedgerService
                 'description' => $description,
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
+                'reverses_transaction_id' => $reversesTransactionId,
                 'metadata' => $metadata === [] ? null : $metadata,
             ]);
 
@@ -198,6 +271,7 @@ class WalletLedgerService
         int $amountMinor,
         string $balanceType,
         string $type,
+        ?int $reversesTransactionId,
     ): void {
         if (
             $existing->account_id !== $account->id
@@ -205,6 +279,7 @@ class WalletLedgerService
             || $existing->amount_minor !== $amountMinor
             || $existing->balance_type !== $balanceType
             || $existing->type !== $type
+            || $existing->reverses_transaction_id !== $reversesTransactionId
         ) {
             throw new LogicException('Wallet transaction unique key was reused with different details.');
         }

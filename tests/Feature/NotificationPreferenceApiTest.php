@@ -30,7 +30,7 @@ class NotificationPreferenceApiTest extends TestCase
         $response = $this->actingAs($customer, 'api')
             ->getJson('/api/v1/notification-preferences')
             ->assertOk()
-            ->assertJsonCount(9, 'data.events')
+            ->assertJsonCount(10, 'data.events')
             ->assertJsonFragment([
                 'event' => 'refund.initiated',
                 'label' => 'Refund started',
@@ -142,7 +142,7 @@ class NotificationPreferenceApiTest extends TestCase
         $this->actingAs($admin, 'api')
             ->getJson('/api/v1/admin/notification-settings')
             ->assertOk()
-            ->assertJsonCount(9, 'data.events');
+            ->assertJsonCount(10, 'data.events');
 
         $this->actingAs($admin, 'api')
             ->patchJson('/api/v1/admin/notification-settings/refund.initiated', [

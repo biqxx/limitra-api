@@ -24,6 +24,7 @@ class CustomerReferralResource extends JsonResource
             'reward_currency' => $this->reward_currency,
             'qualified_at' => $this->qualified_at,
             'rewarded_at' => $this->rewarded_at,
+            'reversed_at' => $this->reversed_at,
             'created_at' => $this->created_at,
         ];
     }

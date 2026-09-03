@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('balance_type', 20);
             $table->string('direction', 10);
             $table->unsignedBigInteger('amount_minor');
-            $table->unsignedBigInteger('balance_after_minor');
+            $table->bigInteger('balance_after_minor');
             $table->char('currency', 3);
             $table->string('status', 20)->default('posted');
             $table->string('unique_key', 160)->unique();

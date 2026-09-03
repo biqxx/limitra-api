@@ -5,8 +5,8 @@
 .env.production
 .phpactor.json
 .phpunit.result.cache
-.claude
-boost.json
+/.agents
+/.codex
 progress_report.txt
 schema.txt
 /.fleet

@@ -17,6 +17,7 @@ use App\Models\Referral\CustomerReferral;
 use App\Models\Referral\CustomerReferralCode;
 use App\Models\Referral\CustomerReferralInvitation;
 use App\Models\Referral\CustomerReferralShareEvent;
+use App\Models\Reward\RewardSpin;
 use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
@@ -215,6 +216,11 @@ class User extends Authenticatable implements JWTSubject
     public function walletTransactions(): HasManyThrough
     {
         return $this->hasManyThrough(WalletTransaction::class, Account::class);
+    }
+
+    public function rewardSpins(): HasMany
+    {
+        return $this->hasMany(RewardSpin::class);
     }
 
     public function images(): MorphMany

@@ -18,6 +18,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/queue.php';
         require __DIR__.'/api/notification_admin.php';
         require __DIR__.'/api/support_admin.php';
+        require __DIR__.'/api/reward_admin.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────
@@ -36,6 +37,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/notification.php';
     require __DIR__.'/api/support.php';
     require __DIR__.'/api/referral.php';
+    require __DIR__.'/api/reward.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
     Route::middleware(['auth:api', 'active.session'])->group(function () {

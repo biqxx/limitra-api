@@ -15,6 +15,8 @@ use App\Models\Payment\WalletTransaction;
 use App\Models\Product\Review;
 use App\Models\Referral\CustomerReferral;
 use App\Models\Referral\CustomerReferralCode;
+use App\Models\Referral\CustomerReferralInvitation;
+use App\Models\Referral\CustomerReferralShareEvent;
 use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
@@ -188,6 +190,16 @@ class User extends Authenticatable implements JWTSubject
     public function customerReferrerRecord(): HasOne
     {
         return $this->hasOne(CustomerReferral::class, 'referred_user_id');
+    }
+
+    public function customerReferralInvitations(): HasMany
+    {
+        return $this->hasMany(CustomerReferralInvitation::class, 'referrer_id');
+    }
+
+    public function customerReferralShareEvents(): HasMany
+    {
+        return $this->hasMany(CustomerReferralShareEvent::class);
     }
 
     public function authSessions(): HasMany

@@ -7,6 +7,7 @@
 .phpunit.result.cache
 /.agents
 /.codex
+/docs/
 progress_report.txt
 schema.txt
 /.fleet

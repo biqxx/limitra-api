@@ -12,6 +12,7 @@ use App\Models\Order\ReturnRequest;
 use App\Models\Payment\Account;
 use App\Models\Payment\SavedCard;
 use App\Models\Product\Review;
+use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
 use App\Models\User\UserPreference;
@@ -159,6 +160,16 @@ class User extends Authenticatable implements JWTSubject
     public function returnRequests(): HasMany
     {
         return $this->hasMany(ReturnRequest::class);
+    }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
+    public function assignedSupportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class, 'assigned_to');
     }
 
     public function authSessions(): HasMany

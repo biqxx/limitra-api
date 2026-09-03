@@ -6,6 +6,7 @@ use App\Models\Address\Address;
 use App\Models\Commerce\CheckoutQuote;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
+use App\Models\Support\SupportTicket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -108,6 +109,11 @@ class Order extends Model
     public function returnRequests(): HasMany
     {
         return $this->hasMany(ReturnRequest::class);
+    }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
     }
 
     public function shippingAddress(): BelongsTo

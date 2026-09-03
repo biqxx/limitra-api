@@ -17,6 +17,7 @@ use App\Notifications\AutomaticRefundStaffAlert;
 use App\Notifications\InventoryReservationExpiredNotification;
 use App\Notifications\LoginNotification;
 use App\Notifications\PasswordResetOtpNotification;
+use App\Notifications\ReferralRewardEarnedNotification;
 use App\Notifications\SupportTicketCustomerNotification;
 use App\Notifications\SupportTicketStaffNotification;
 use App\Notifications\VerifyEmailNotification;
@@ -55,7 +56,9 @@ class QueueRoutingTest extends TestCase
         $notifications = [
             new VerifyEmailNotification('123456'),
             new PasswordResetOtpNotification('123456'),
+            new ReferralRewardEarnedNotification(700000, 'NGN'),
             new LoginNotification('127.0.0.1', 'Test Browser'),
+            new ReferralRewardEarnedNotification(700000, 'NGN'),
             new InventoryReservationExpiredNotification(1, 'LMT-TEST'),
             new AutomaticRefundInitiatedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),
             new AutomaticRefundProcessedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),

@@ -11,6 +11,7 @@ use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Cart\CartService;
 use App\Services\Commerce\DeliveryService;
+use App\Services\Referral\ReferralRewardService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,6 +20,7 @@ class OrderLifecycleService
     public function __construct(
         private readonly DeliveryService $delivery,
         private readonly CartService $carts,
+        private readonly ReferralRewardService $referralRewards,
     ) {}
 
     public function cancel(Order $order, int $userId, string $reason): Order
@@ -182,6 +184,9 @@ class OrderLifecycleService
             }
 
             $this->transitionOrder($order, $status, $data['note'], $actorId);
+            if ($status === 'delivered') {
+                $this->referralRewards->grantForDeliveredOrder($order);
+            }
 
             return $order->fresh();
         }, 3);

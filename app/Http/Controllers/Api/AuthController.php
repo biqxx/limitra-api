@@ -9,7 +9,6 @@ use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\SignupRequest;
 use App\Http\Requests\Auth\VerifyEmailRequest;
 use App\Http\Resources\UserResource;
-use App\Models\Affiliate\Affiliate;
 use App\Models\User;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
@@ -18,6 +17,7 @@ use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
 use App\Services\AffiliateService;
 use App\Services\Auth\AuthSessionManager;
+use App\Services\Referral\CustomerReferralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +27,10 @@ use OpenApi\Attributes as OA;
 
 class AuthController extends BaseController
 {
-    public function __construct(private readonly AuthSessionManager $authSessions) {}
+    public function __construct(
+        private readonly AuthSessionManager $authSessions,
+        private readonly CustomerReferralService $customerReferrals,
+    ) {}
 
     // ═══════════════════════════════════════════════════════════════════════
     //  Public endpoints (no auth required)
@@ -68,16 +71,14 @@ class AuthController extends BaseController
     public function signup(SignupRequest $request): JsonResponse
     {
         $otp = (string) random_int(100_000, 999_999);
-        $affiliate = null;
         $referralCode = $request->validated('referral_code') ?? $request->query('ref');
+        $attribution = $this->customerReferrals->signupAttribution(
+            $referralCode,
+            $request->validated('referral_token'),
+            $request->validated('email'),
+        );
 
-        if ($referralCode) {
-            $affiliate = Affiliate::where('code', $referralCode)
-                ->where('status', 'active')
-                ->first();
-        }
-
-        $user = DB::transaction(function () use ($request, $otp, $affiliate) {
+        $user = DB::transaction(function () use ($request, $otp, $attribution) {
             $nameParts = preg_split('/\s+/', trim($request->validated('name')), 2);
 
             $user = User::create([
@@ -85,7 +86,7 @@ class AuthController extends BaseController
                 'email' => $request->validated('email'),
                 'password' => $request->validated('password'),
                 'role' => 'user',
-                'referred_by' => $affiliate?->id,
+                'referred_by' => $attribution['affiliate_id'] ?? null,
                 'email_verification_otp' => Hash::make($otp),
                 'email_verification_expires_at' => now()->addMinutes(10),
                 'email_verification_sent_at' => now(),
@@ -98,12 +99,13 @@ class AuthController extends BaseController
                 'phone' => $request->validated('phone'),
             ]);
 
+            $this->customerReferrals->convert($user, $attribution);
+
             return $user;
         });
 
-        // Record referral outside the transaction (non-critical).
-        if ($affiliate) {
-            app(AffiliateService::class)->recordReferral($user->id, $affiliate);
+        if (($attribution['affiliate_id'] ?? null) !== null) {
+            app(AffiliateService::class)->recordReferral($user->id, $attribution['affiliate']);
         }
 
         $user->notify(new VerifyEmailNotification($otp));

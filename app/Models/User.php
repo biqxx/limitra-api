@@ -13,6 +13,8 @@ use App\Models\Payment\Account;
 use App\Models\Payment\SavedCard;
 use App\Models\Payment\WalletTransaction;
 use App\Models\Product\Review;
+use App\Models\Referral\CustomerReferral;
+use App\Models\Referral\CustomerReferralCode;
 use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
@@ -171,6 +173,21 @@ class User extends Authenticatable implements JWTSubject
     public function assignedSupportTickets(): HasMany
     {
         return $this->hasMany(SupportTicket::class, 'assigned_to');
+    }
+
+    public function customerReferralCode(): HasOne
+    {
+        return $this->hasOne(CustomerReferralCode::class);
+    }
+
+    public function customerReferrals(): HasMany
+    {
+        return $this->hasMany(CustomerReferral::class, 'referrer_id');
+    }
+
+    public function customerReferrerRecord(): HasOne
+    {
+        return $this->hasOne(CustomerReferral::class, 'referred_user_id');
     }
 
     public function authSessions(): HasMany

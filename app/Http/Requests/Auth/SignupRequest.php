@@ -20,6 +20,7 @@ class SignupRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:20', 'regex:/^\+?[0-9]{7,15}$/'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'referral_code' => ['nullable', 'string', 'max:50'],
+            'referral_token' => ['nullable', 'uuid', 'prohibits:referral_code'],
         ];
     }
 

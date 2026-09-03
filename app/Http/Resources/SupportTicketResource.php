@@ -30,6 +30,7 @@ class SupportTicketResource extends JsonResource
             ] : null),
             'message_count' => $this->whenCounted('messages'),
             'messages' => SupportTicketMessageResource::collection($this->whenLoaded('messages')),
+            'events' => SupportTicketEventResource::collection($this->whenLoaded('events')),
             'first_response_due_at' => $this->first_response_due_at,
             'resolution_due_at' => $this->resolution_due_at,
             'first_responded_at' => $this->first_responded_at,

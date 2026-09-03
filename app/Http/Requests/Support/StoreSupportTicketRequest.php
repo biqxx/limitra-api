@@ -32,6 +32,13 @@ class StoreSupportTicketRequest extends FormRequest
             'order_id' => ['nullable', 'integer'],
             'contact_name' => [Rule::requiredIf($guest), 'nullable', 'string', 'max:160'],
             'contact_email' => [Rule::requiredIf($guest), 'nullable', 'email:rfc', 'max:255'],
+            'attachments' => ['nullable', 'array', 'max:'.$settings->value('support.max_attachments')],
+            'attachments.*' => [
+                'required',
+                'file',
+                'mimes:jpg,jpeg,png,webp,pdf,txt,doc,docx',
+                'max:'.$settings->value('media.document_max_size_kb'),
+            ],
         ];
     }
 }

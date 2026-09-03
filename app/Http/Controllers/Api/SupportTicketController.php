@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\Support\IndexSupportTicketsRequest;
+use App\Http\Requests\Support\StoreSupportTicketMessageRequest;
 use App\Http\Requests\Support\StoreSupportTicketRequest;
 use App\Http\Resources\SupportTicketResource;
 use App\Models\Support\SupportTicket;
 use App\Models\User;
+use App\Services\Support\SupportTicketOperationsService;
 use App\Services\Support\SupportTicketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +21,11 @@ class SupportTicketController extends BaseController
         $user = $request->user('api');
 
         return $this->success(
-            new SupportTicketResource($tickets->create($request->validated(), $user)),
+            new SupportTicketResource($tickets->create(
+                $request->validated(),
+                $user,
+                $request->file('attachments', []),
+            )),
             'Support ticket created.',
             201,
         );
@@ -53,12 +59,56 @@ class SupportTicketController extends BaseController
     public function show(Request $request, SupportTicket $supportTicket): JsonResponse
     {
         $user = $request->user('api');
-        if ($supportTicket->user_id !== $user->id && ! $user->isStaff()) {
-            abort(403, 'Forbidden.');
+        $this->authorizeAccess($supportTicket, $user);
+
+        $relations = ['order', 'assignee', 'messages.sender', 'messages.attachments'];
+        if ($user->isStaff()) {
+            $relations[] = 'events.actor';
         }
 
         return $this->success(new SupportTicketResource(
-            $supportTicket->load(['order', 'assignee', 'messages.sender'])->loadCount('messages'),
+            $supportTicket->load($relations)->loadCount('messages'),
         ));
+    }
+
+    public function message(
+        StoreSupportTicketMessageRequest $request,
+        SupportTicket $supportTicket,
+        SupportTicketOperationsService $operations,
+    ): JsonResponse {
+        $user = $request->user('api');
+        $this->authorizeAccess($supportTicket, $user);
+
+        return $this->success(
+            new SupportTicketResource($operations->addMessage(
+                $supportTicket,
+                $request->validated(),
+                $user,
+                $request->file('attachments', []),
+            )),
+            'Support message added.',
+            201,
+        );
+    }
+
+    public function close(
+        Request $request,
+        SupportTicket $supportTicket,
+        SupportTicketOperationsService $operations,
+    ): JsonResponse {
+        $user = $request->user('api');
+        $this->authorizeAccess($supportTicket, $user);
+
+        return $this->success(
+            new SupportTicketResource($operations->close($supportTicket, $user)),
+            'Support ticket closed.',
+        );
+    }
+
+    private function authorizeAccess(SupportTicket $ticket, User $user): void
+    {
+        if ($ticket->user_id !== $user->id && ! $user->isStaff()) {
+            abort(403, 'Forbidden.');
+        }
     }
 }

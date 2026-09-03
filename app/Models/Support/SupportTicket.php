@@ -60,4 +60,9 @@ class SupportTicket extends Model
     {
         return $this->hasMany(SupportTicketMessage::class)->oldest('id');
     }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(SupportTicketEvent::class)->latest('id');
+    }
 }

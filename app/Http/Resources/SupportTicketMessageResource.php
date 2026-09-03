@@ -17,6 +17,7 @@ class SupportTicketMessageResource extends JsonResource
                 'username' => $this->sender->username,
             ] : null),
             'message' => $this->message,
+            'attachments' => SupportTicketAttachmentResource::collection($this->whenLoaded('attachments')),
             'created_at' => $this->created_at,
         ];
     }

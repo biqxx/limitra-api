@@ -17,6 +17,8 @@ use App\Notifications\AutomaticRefundStaffAlert;
 use App\Notifications\InventoryReservationExpiredNotification;
 use App\Notifications\LoginNotification;
 use App\Notifications\PasswordResetOtpNotification;
+use App\Notifications\SupportTicketCustomerNotification;
+use App\Notifications\SupportTicketStaffNotification;
 use App\Notifications\VerifyEmailNotification;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
@@ -59,6 +61,8 @@ class QueueRoutingTest extends TestCase
             new AutomaticRefundProcessedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),
             new AutomaticRefundAttentionNotification(1, 'LMT-TEST', 'LMT-REF-TEST'),
             new AutomaticRefundStaffAlert(1, 'LMT-TEST', 'LMT-REF-TEST', 'buyer@example.test', 'Provider rejected the refund.'),
+            new SupportTicketCustomerNotification(1, 'SUP-TEST', 'Test ticket', 'open', 'reply', 'Test reply.'),
+            new SupportTicketStaffNotification(1, 'SUP-TEST', 'Test ticket', 'Test Customer', 'created'),
         ];
 
         foreach ($notifications as $notification) {
@@ -75,6 +79,8 @@ class QueueRoutingTest extends TestCase
             new AutomaticRefundProcessedNotification(1, 'LMT-TEST', 'LMT-REF-TEST', '1000.00', 'NGN'),
             new AutomaticRefundAttentionNotification(1, 'LMT-TEST', 'LMT-REF-TEST'),
             new AutomaticRefundStaffAlert(1, 'LMT-TEST', 'LMT-REF-TEST', 'buyer@example.test', 'Provider rejected the refund.'),
+            new SupportTicketCustomerNotification(1, 'SUP-TEST', 'Test ticket', 'open', 'reply', 'Test reply.'),
+            new SupportTicketStaffNotification(1, 'SUP-TEST', 'Test ticket', 'Test Customer', 'created'),
         ];
 
         foreach ($notifications as $notification) {

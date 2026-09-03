@@ -5,18 +5,23 @@ namespace App\Http\Controllers\Api;
 use App\Http\Resources\OrderResource;
 use App\Models\User\AuthSession;
 use App\Services\Auth\AuthSessionManager;
+use App\Services\Payment\WalletBalanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Password;
 
 class CustomerAccountController extends BaseController
 {
-    public function __construct(private readonly AuthSessionManager $authSessions) {}
+    public function __construct(
+        private readonly AuthSessionManager $authSessions,
+        private readonly WalletBalanceService $walletBalances,
+    ) {}
 
     public function dashboard(): JsonResponse
     {
         $user = auth('api')->user();
         $recentOrders = $user->orders()->with(['items.product', 'shippingAddress'])->latest()->limit(5)->get();
+        $wallet = $this->walletBalances->forUser($user);
 
         return $this->success([
             'counts' => [
@@ -26,10 +31,12 @@ class CustomerAccountController extends BaseController
                 'addresses' => $user->addresses()->count(),
             ],
             'recent_orders' => OrderResource::collection($recentOrders),
-            'wallet' => $user->account ? [
-                'balance' => $user->account->balance,
-                'currency' => $user->account->currency,
-            ] : ['balance' => '0.00', 'currency' => 'NGN'],
+            'wallet' => [
+                'balance' => $wallet['balances']['total'],
+                'cash_balance' => $wallet['balances']['cash'],
+                'lim_cash_balance' => $wallet['balances']['lim_cash'],
+                'currency' => $wallet['currency'],
+            ],
         ]);
     }
 

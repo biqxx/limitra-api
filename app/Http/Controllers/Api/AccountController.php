@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Requests\Wallet\ManualWalletAdjustmentRequest;
 use App\Http\Resources\AccountResource;
 use App\Models\Payment\Account;
+use App\Services\Payment\WalletLedgerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -62,8 +64,8 @@ class AccountController extends BaseController
 
         $data = $request->validate([
             'user_id' => ['required', 'exists:users,id', 'unique:accounts,user_id'],
-            'balance' => ['nullable', 'numeric', 'min:0'],
-            'bonus_balance' => ['nullable', 'numeric', 'min:0'],
+            'balance' => ['prohibited'],
+            'bonus_balance' => ['prohibited'],
             'currency' => ['nullable', 'string', 'size:3'],
         ]);
 
@@ -119,7 +121,7 @@ class AccountController extends BaseController
 
         $data = $request->validate([
             'currency' => ['sometimes', 'required', 'string', 'size:3'],
-            'bonus_balance' => ['sometimes', 'required', 'numeric', 'min:0'],
+            'bonus_balance' => ['prohibited'],
         ]);
 
         $account->update($data);
@@ -170,17 +172,26 @@ class AccountController extends BaseController
             new OA\Response(response: 403, description: 'Forbidden', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function deposit(Request $request, Account $account): JsonResponse
-    {
+    public function deposit(
+        ManualWalletAdjustmentRequest $request,
+        Account $account,
+        WalletLedgerService $ledger,
+    ): JsonResponse {
         $this->authorize('deposit', $account);
 
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
-        ]);
+        $data = $request->validated();
+        $ledger->credit(
+            $account->user,
+            $this->minor($data['amount']),
+            $data['balance_type'] ?? 'cash',
+            'adjustment',
+            'manual-credit:'.$account->id.':'.$data['idempotency_key'],
+            $data['reason'],
+            'admin',
+            (int) auth('api')->id(),
+        );
 
-        $account->deposit((float) $data['amount']);
-
-        return $this->success(new AccountResource($account), 'Deposit successful.');
+        return $this->success(new AccountResource($account->refresh()), 'Wallet credit recorded.');
     }
 
     #[OA\Post(
@@ -205,18 +216,30 @@ class AccountController extends BaseController
             new OA\Response(response: 422, description: 'Insufficient balance', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
         ]
     )]
-    public function withdraw(Request $request, Account $account): JsonResponse
-    {
+    public function withdraw(
+        ManualWalletAdjustmentRequest $request,
+        Account $account,
+        WalletLedgerService $ledger,
+    ): JsonResponse {
         $this->authorize('withdraw', $account);
 
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
-        ]);
+        $data = $request->validated();
+        $ledger->debit(
+            $account->user,
+            $this->minor($data['amount']),
+            $data['balance_type'] ?? 'cash',
+            'adjustment',
+            'manual-debit:'.$account->id.':'.$data['idempotency_key'],
+            $data['reason'],
+            'admin',
+            (int) auth('api')->id(),
+        );
 
-        if (! $account->withdraw((float) $data['amount'])) {
-            return $this->error('Insufficient balance.', 422);
-        }
+        return $this->success(new AccountResource($account->refresh()), 'Wallet debit recorded.');
+    }
 
-        return $this->success(new AccountResource($account), 'Withdrawal successful.');
+    private function minor(mixed $amount): int
+    {
+        return (int) round((float) $amount * 100);
     }
 }

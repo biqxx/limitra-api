@@ -11,9 +11,9 @@ return new class extends Migration
         Schema::create('accounts', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
-            $table->decimal('balance', 15, 2)->default(0);
-            $table->decimal('bonus_balance', 15, 2)->default(0);
-            $table->string('currency', 3)->default('NGN');
+            $table->unsignedBigInteger('cash_balance_minor')->default(0);
+            $table->unsignedBigInteger('lim_cash_balance_minor')->default(0);
+            $table->char('currency', 3)->default('NGN');
             $table->timestamps();
         });
     }

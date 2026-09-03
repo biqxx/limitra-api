@@ -40,12 +40,12 @@ class AccountPolicy
 
     public function deposit(User $user, Account $account): bool
     {
-        return $user->id === $account->user_id;
+        return false;
     }
 
     public function withdraw(User $user, Account $account): bool
     {
-        return $user->id === $account->user_id;
+        return false;
     }
 
     public function delete(User $user, Account $account): bool

@@ -42,6 +42,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/order.php';
         require __DIR__.'/api/payment.php';
         require __DIR__.'/api/return.php';
+        require __DIR__.'/api/wallet.php';
     });
 
     // ── Meta webhook (no auth — signed by Meta app secret) ───────────────────

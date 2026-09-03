@@ -11,6 +11,7 @@ use App\Models\Order\Order;
 use App\Models\Order\ReturnRequest;
 use App\Models\Payment\Account;
 use App\Models\Payment\SavedCard;
+use App\Models\Payment\WalletTransaction;
 use App\Models\Product\Review;
 use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
@@ -180,6 +181,11 @@ class User extends Authenticatable implements JWTSubject
     public function account(): HasOne
     {
         return $this->hasOne(Account::class);
+    }
+
+    public function walletTransactions(): HasManyThrough
+    {
+        return $this->hasManyThrough(WalletTransaction::class, Account::class);
     }
 
     public function images(): MorphMany

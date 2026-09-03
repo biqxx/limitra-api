@@ -9,6 +9,7 @@ use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Models\User;
 use App\Notifications\InventoryReservationExpiredNotification;
+use App\Services\Payment\WalletCheckoutService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +20,8 @@ class InventoryReservationService
     public const LATE_PAYMENT_CANCELLATION_CODE = 'late_payment_inventory_unavailable';
 
     public const LATE_PAYMENT_REFUNDED_CANCELLATION_CODE = 'late_payment_refunded';
+
+    public function __construct(private readonly WalletCheckoutService $walletCheckout) {}
 
     public function releaseExpired(): int
     {
@@ -88,6 +91,7 @@ class InventoryReservationService
                 'note' => 'Inventory reservation expired before payment was completed.',
                 'source' => 'system',
             ]);
+            $this->walletCheckout->refundForOrder($order, 'inventory_reservation_expired');
 
             $userId = $order->user_id;
             $orderNumber = $order->number;
@@ -104,6 +108,9 @@ class InventoryReservationService
     public function restoreForLatePayment(Order $order): bool
     {
         if ($order->status !== 'cancelled' || $order->cancellation_code !== self::EXPIRY_CANCELLATION_CODE) {
+            return false;
+        }
+        if ((float) $order->credit_total > 0) {
             return false;
         }
 

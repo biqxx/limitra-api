@@ -19,8 +19,9 @@ class CheckoutQuote extends Model
 
     protected $fillable = [
         'quote_id', 'user_id', 'cart_id', 'address_id', 'delivery_method_id', 'saved_card_id', 'promotion_id',
-        'payment_method', 'currency', 'subtotal', 'discount_total', 'shipping_total', 'wallet_credit', 'grand_total',
-        'address_snapshot', 'shipping_snapshot', 'promotion_snapshot', 'warnings', 'expires_at', 'consumed_at',
+        'payment_method', 'currency', 'subtotal', 'discount_total', 'shipping_total', 'wallet_credit',
+        'wallet_snapshot', 'grand_total', 'address_snapshot', 'shipping_snapshot', 'promotion_snapshot',
+        'warnings', 'expires_at', 'consumed_at',
     ];
 
     protected function casts(): array
@@ -28,7 +29,7 @@ class CheckoutQuote extends Model
         return [
             'subtotal' => 'decimal:2', 'discount_total' => 'decimal:2', 'shipping_total' => 'decimal:2',
             'wallet_credit' => 'decimal:2', 'grand_total' => 'decimal:2', 'address_snapshot' => 'array',
-            'shipping_snapshot' => 'array', 'promotion_snapshot' => 'array', 'warnings' => 'array',
+            'wallet_snapshot' => 'array', 'shipping_snapshot' => 'array', 'promotion_snapshot' => 'array', 'warnings' => 'array',
             'expires_at' => 'datetime', 'consumed_at' => 'datetime',
         ];
     }

@@ -111,6 +111,35 @@ class WalletLedgerService
         );
     }
 
+    /** @param array<string, mixed> $metadata */
+    public function reverseDebit(
+        WalletTransaction $original,
+        string $uniqueKey,
+        string $description,
+        ?string $sourceType = null,
+        ?int $sourceId = null,
+        array $metadata = [],
+    ): WalletTransaction {
+        $original = WalletTransaction::query()->with('account.user')->findOrFail($original->id);
+        if ($original->direction !== 'debit' || $original->status !== 'posted') {
+            throw new InvalidArgumentException('Only a posted wallet debit can be reversed.');
+        }
+
+        return $this->post(
+            $original->account->user,
+            'credit',
+            $original->amount_minor,
+            $original->balance_type,
+            'refund',
+            $uniqueKey,
+            $description,
+            $sourceType,
+            $sourceId,
+            $metadata,
+            $original->id,
+        );
+    }
+
     public function accountFor(User $user): Account
     {
         return Account::query()->firstOrCreate(
@@ -171,7 +200,7 @@ class WalletLedgerService
                 $original = WalletTransaction::query()->whereKey($reversesTransactionId)->firstOrFail();
                 if (
                     $original->account_id !== $account->id
-                    || $original->direction !== 'credit'
+                    || $original->direction === $direction
                     || $original->status !== 'posted'
                     || $original->amount_minor !== $amountMinor
                     || $original->balance_type !== $balanceType

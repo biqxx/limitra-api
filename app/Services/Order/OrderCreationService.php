@@ -13,6 +13,7 @@ use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Commerce\DeliveryService;
 use App\Services\Commerce\PromotionService;
+use App\Services\Payment\WalletCheckoutService;
 use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class OrderCreationService
         private readonly DeliveryService $delivery,
         private readonly PromotionService $promotions,
         private readonly BusinessSettingsService $settings,
+        private readonly WalletCheckoutService $walletCheckout,
     ) {}
 
     /**
@@ -100,7 +102,8 @@ class OrderCreationService
                 $this->assertTotalsAndRules($quote, $cart, $address, $userId);
 
                 $isCash = $quote->payment_method === 'cash_on_delivery';
-                $reservationExpiresAt = $isCash
+                $isWalletPaid = (float) $quote->grand_total === 0.0 && (float) $quote->wallet_credit > 0;
+                $reservationExpiresAt = $isCash || $isWalletPaid
                     ? null
                     : now()->addMinutes((int) $this->settings->value('orders.inventory_reservation_minutes'));
                 $order = Order::create([
@@ -114,8 +117,8 @@ class OrderCreationService
                     'shipping_total' => $quote->shipping_total,
                     'grand_total' => $quote->grand_total,
                     'total_amount' => $quote->grand_total,
-                    'status' => $isCash ? 'confirmed' : 'pending_payment',
-                    'payment_status' => $isCash ? 'unpaid' : 'pending',
+                    'status' => $isCash || $isWalletPaid ? 'confirmed' : 'pending_payment',
+                    'payment_status' => $isWalletPaid ? 'paid' : ($isCash ? 'unpaid' : 'pending'),
                     'fulfilment_status' => 'unfulfilled',
                     'payment_method' => $quote->payment_method,
                     'contact_email' => strtolower($data['contact_email']),
@@ -131,6 +134,7 @@ class OrderCreationService
                     'note' => 'Order created.',
                     'source' => 'system',
                 ]);
+                $this->walletCheckout->debitForOrder($order, $quote);
 
                 foreach ($quote->items as $quoteItem) {
                     $order->items()->create([

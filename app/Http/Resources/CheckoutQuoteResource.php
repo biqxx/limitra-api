@@ -32,9 +32,21 @@ class CheckoutQuoteResource extends JsonResource
             ]] : [],
             'shipping' => $this->shipping_snapshot,
             'wallet_credit' => $this->wallet_credit,
+            'wallet_credit_breakdown' => $this->walletBreakdown(),
             'grand_total' => $this->grand_total,
             'payment_method' => $this->payment_method,
             'warnings' => $this->warnings ?? [],
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function walletBreakdown(): array
+    {
+        $allocation = $this->wallet_snapshot['allocation_minor'] ?? [];
+
+        return [
+            'lim_cash' => number_format(((int) ($allocation['lim_cash'] ?? 0)) / 100, 2, '.', ''),
+            'cash' => number_format(((int) ($allocation['cash'] ?? 0)) / 100, 2, '.', ''),
         ];
     }
 }

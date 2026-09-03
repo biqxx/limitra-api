@@ -11,6 +11,7 @@ use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Cart\CartService;
 use App\Services\Commerce\DeliveryService;
+use App\Services\Payment\WalletCheckoutService;
 use App\Services\Referral\ReferralRewardService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,7 @@ class OrderLifecycleService
         private readonly DeliveryService $delivery,
         private readonly CartService $carts,
         private readonly ReferralRewardService $referralRewards,
+        private readonly WalletCheckoutService $walletCheckout,
     ) {}
 
     public function cancel(Order $order, int $userId, string $reason): Order
@@ -35,7 +37,11 @@ class OrderLifecycleService
             }
 
             $payments = $order->payments()->lockForUpdate()->get();
-            if ($order->payment_status === 'paid' || $payments->contains(fn ($payment) => in_array($payment->status, ['initializing', 'pending', 'succeeded'], true))) {
+            $walletOnlyPayment = (float) $order->grand_total === 0.0
+                && (float) $order->credit_total > 0
+                && $payments->isEmpty();
+            if (($order->payment_status === 'paid' && ! $walletOnlyPayment)
+                || $payments->contains(fn ($payment) => in_array($payment->status, ['initializing', 'pending', 'succeeded'], true))) {
                 $this->invalid('order', 'This order has an active or completed payment and requires a refund workflow.');
             }
 
@@ -63,7 +69,9 @@ class OrderLifecycleService
                 'cancelled_at' => now(),
                 'cancellation_reason' => $reason,
                 'cancellation_code' => 'customer_requested',
+                'payment_status' => $walletOnlyPayment ? 'refunded' : $order->payment_status,
             ]);
+            $this->walletCheckout->refundForOrder($order, 'customer_cancelled');
             $order->statusEvents()->create([
                 'from_status' => $fromStatus,
                 'to_status' => 'cancelled',

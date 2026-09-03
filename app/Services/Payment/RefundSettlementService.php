@@ -17,6 +17,7 @@ class RefundSettlementService
         private readonly RefundNotificationService $notifications,
         private readonly BusinessSettingsService $settings,
         private readonly ReferralRewardService $referralRewards,
+        private readonly WalletCheckoutService $walletCheckout,
     ) {}
 
     public function apply(Refund $refund, array $providerData): Refund
@@ -78,6 +79,7 @@ class RefundSettlementService
                         : 'partially_refunded',
                 ]);
                 if ($order->payment_status === 'refunded') {
+                    $this->walletCheckout->refundForOrder($order, 'order_fully_refunded');
                     $this->referralRewards->reverseForFullyRefundedOrder($order);
                 }
 

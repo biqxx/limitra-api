@@ -7,6 +7,8 @@ use App\Models\Cart\Cart;
 use App\Models\Commerce\CheckoutQuote;
 use App\Models\Commerce\DeliveryMethod;
 use App\Models\Payment\SavedCard;
+use App\Models\User;
+use App\Services\Payment\WalletBalanceService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,15 +16,12 @@ class CheckoutQuoteService
 {
     public function __construct(
         private readonly DeliveryService $delivery,
-        private readonly PromotionService $promotions
+        private readonly PromotionService $promotions,
+        private readonly WalletBalanceService $wallets,
     ) {}
 
     public function create(array $data, int $userId): CheckoutQuote
     {
-        if (! empty($data['use_wallet_credit'])) {
-            throw ValidationException::withMessages(['use_wallet_credit' => ['Wallet credit is not available until the immutable wallet ledger is enabled.']]);
-        }
-
         $cart = Cart::whereKey($data['cart_id'])->where('user_id', $userId)->where('status', 'active')->firstOrFail();
         $address = Address::whereKey($data['address_id'])->where('user_id', $userId)->firstOrFail();
         $cart->load(['items.product', 'items.variant']);
@@ -84,9 +83,42 @@ class CheckoutQuoteService
         $discount = (float) ($promotion['discount_amount'] ?? 0);
         $shippingTotal = ! empty($promotion['free_shipping']) ? 0 : (float) $shipping['fee'];
         $shipping['fee'] = number_format($shippingTotal, 2, '.', '');
-        $grandTotal = max(0, $subtotal - $discount + $shippingTotal);
+        $grandTotalBeforeWallet = max(0, $subtotal - $discount + $shippingTotal);
+        $walletSnapshot = null;
+        $walletCreditMinor = 0;
+        if (! empty($data['use_wallet_credit'])) {
+            $wallet = $this->wallets->forUser(User::query()->findOrFail($userId));
+            if ($wallet['currency'] !== $cart->currency) {
+                throw ValidationException::withMessages([
+                    'use_wallet_credit' => ['The wallet currency does not match the checkout currency.'],
+                ]);
+            }
 
-        return DB::transaction(function () use ($data, $userId, $cart, $address, $deliveryMethod, $savedCard, $promotion, $subtotal, $discount, $shippingTotal, $grandTotal, $shipping, $warnings, $lines) {
+            $payableMinor = $this->toMinorUnits($grandTotalBeforeWallet);
+            $limCashMinor = min(max(0, (int) $wallet['balances']['lim_cash_minor']), $payableMinor);
+            $cashMinor = min(
+                max(0, (int) $wallet['balances']['cash_minor']),
+                $payableMinor - $limCashMinor,
+            );
+            $walletCreditMinor = $limCashMinor + $cashMinor;
+            $walletSnapshot = [
+                'currency' => $wallet['currency'],
+                'available_minor' => [
+                    'lim_cash' => (int) $wallet['balances']['lim_cash_minor'],
+                    'cash' => (int) $wallet['balances']['cash_minor'],
+                ],
+                'allocation_minor' => [
+                    'lim_cash' => $limCashMinor,
+                    'cash' => $cashMinor,
+                ],
+            ];
+        }
+        $walletCredit = $this->fromMinorUnits($walletCreditMinor);
+        $grandTotal = $this->fromMinorUnits(
+            $this->toMinorUnits($grandTotalBeforeWallet) - $walletCreditMinor,
+        );
+
+        return DB::transaction(function () use ($data, $userId, $cart, $address, $deliveryMethod, $savedCard, $promotion, $subtotal, $discount, $shippingTotal, $walletCredit, $walletSnapshot, $grandTotal, $shipping, $warnings, $lines) {
             $quote = CheckoutQuote::create([
                 'user_id' => $userId,
                 'cart_id' => $cart->id,
@@ -99,7 +131,8 @@ class CheckoutQuoteService
                 'subtotal' => $subtotal,
                 'discount_total' => $discount,
                 'shipping_total' => $shippingTotal,
-                'wallet_credit' => 0,
+                'wallet_credit' => $walletCredit,
+                'wallet_snapshot' => $walletSnapshot,
                 'grand_total' => $grandTotal,
                 'address_snapshot' => [
                     'label' => $address->label, 'recipient_name' => $address->recipient_name, 'phone' => $address->phone,
@@ -115,5 +148,17 @@ class CheckoutQuoteService
 
             return $quote->load('items');
         });
+    }
+
+    private function toMinorUnits(mixed $amount): int
+    {
+        [$whole, $fraction] = explode('.', number_format((float) $amount, 2, '.', ''));
+
+        return ((int) $whole * 100) + (int) $fraction;
+    }
+
+    private function fromMinorUnits(int $amountMinor): string
+    {
+        return number_format($amountMinor / 100, 2, '.', '');
     }
 }

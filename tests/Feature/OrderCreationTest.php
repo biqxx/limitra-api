@@ -14,6 +14,8 @@ use App\Models\Product\Product;
 use App\Models\Settings\BusinessSetting;
 use App\Models\User;
 use App\Services\Cart\CartService;
+use App\Services\Order\InventoryReservationService;
+use App\Services\Payment\WalletLedgerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -163,6 +165,120 @@ class OrderCreationTest extends TestCase
         $this->assertNull(CheckoutQuote::where('quote_id', $secondQuote)->firstOrFail()->consumed_at);
     }
 
+    public function test_wallet_paid_order_debits_once_and_cancellation_restores_the_credit(): void
+    {
+        [$user, $cart, $product, $address] = $this->checkoutContext();
+        app(WalletLedgerService::class)->credit(
+            $user,
+            11000000,
+            'lim_cash',
+            'adjustment',
+            'test:wallet-paid-order',
+            'Test wallet funding.',
+        );
+        $quoteId = $this->quote($user, $cart, $address, 'card', true);
+        $payload = [
+            'quote_id' => $quoteId,
+            'payment_method' => 'card',
+            'contact_email' => $user->email,
+        ];
+        $headers = ['Idempotency-Key' => 'wallet-paid-order'];
+
+        $first = $this->actingAs($user, 'api')->postJson('/api/v1/orders', $payload, $headers)
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'confirmed')
+            ->assertJsonPath('data.payment_status', 'paid')
+            ->assertJsonPath('data.credit_total', '102500.00')
+            ->assertJsonPath('data.grand_total', '0.00');
+        $order = Order::query()->findOrFail($first->json('data.id'));
+        $this->assertNull($order->reservations()->firstOrFail()->expires_at);
+        $this->assertSame(750000, $user->account()->value('lim_cash_balance_minor'));
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'purchase',
+            'direction' => 'debit',
+            'amount_minor' => 10250000,
+            'unique_key' => "order_wallet_debit:{$order->id}:lim_cash",
+            'source_type' => 'order',
+            'source_id' => $order->id,
+        ]);
+
+        $this->actingAs($user, 'api')->postJson('/api/v1/orders', $payload, $headers)
+            ->assertOk()
+            ->assertJsonPath('data.id', $order->id);
+        $this->assertDatabaseCount('wallet_transactions', 2);
+
+        $this->actingAs($user, 'api')->postJson("/api/v1/orders/{$order->id}/cancel", [
+            'reason' => 'No longer needed.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'cancelled')
+            ->assertJsonPath('data.payment_status', 'refunded');
+
+        $purchase = $user->walletTransactions()->where('type', 'purchase')->firstOrFail();
+        $this->assertSame(11000000, $user->account()->value('lim_cash_balance_minor'));
+        $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'refund',
+            'direction' => 'credit',
+            'amount_minor' => 10250000,
+            'unique_key' => "order_wallet_refund:{$order->id}:lim_cash",
+            'reverses_transaction_id' => $purchase->id,
+        ]);
+    }
+
+    public function test_order_creation_rejects_a_quote_when_wallet_balance_has_changed(): void
+    {
+        [$user, $cart, , $address] = $this->checkoutContext();
+        $ledger = app(WalletLedgerService::class);
+        $ledger->credit($user, 700000, 'lim_cash', 'adjustment', 'test:stale-wallet', 'Test wallet funding.');
+        $quoteId = $this->quote($user, $cart, $address, 'card', true);
+        $ledger->debit($user, 700000, 'lim_cash', 'purchase', 'test:wallet-spent', 'Wallet spent elsewhere.');
+
+        $this->actingAs($user, 'api')->postJson('/api/v1/orders', [
+            'quote_id' => $quoteId,
+            'payment_method' => 'card',
+            'contact_email' => $user->email,
+        ], ['Idempotency-Key' => 'stale-wallet-order'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('quote_id');
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertSame('active', $cart->fresh()->status);
+        $this->assertNull(CheckoutQuote::query()->where('quote_id', $quoteId)->firstOrFail()->consumed_at);
+    }
+
+    public function test_expired_online_order_restores_its_wallet_credit(): void
+    {
+        [$user, $cart, $product, $address] = $this->checkoutContext();
+        app(WalletLedgerService::class)->credit(
+            $user,
+            700000,
+            'lim_cash',
+            'adjustment',
+            'test:expiring-wallet-order',
+            'Test wallet funding.',
+        );
+        $quoteId = $this->quote($user, $cart, $address, 'card', true);
+        $response = $this->actingAs($user, 'api')->postJson('/api/v1/orders', [
+            'quote_id' => $quoteId,
+            'payment_method' => 'card',
+            'contact_email' => $user->email,
+        ], ['Idempotency-Key' => 'expiring-wallet-order'])->assertCreated();
+        $order = Order::query()->findOrFail($response->json('data.id'));
+        $order->reservations()->update(['expires_at' => now()->subMinute()]);
+
+        $this->assertTrue(app(InventoryReservationService::class)->releaseOrder($order->id));
+
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertSame(700000, $user->account()->value('lim_cash_balance_minor'));
+        $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseHas('wallet_transactions', [
+            'type' => 'refund',
+            'direction' => 'credit',
+            'amount_minor' => 700000,
+            'unique_key' => "order_wallet_refund:{$order->id}:lim_cash",
+        ]);
+    }
+
     private function checkoutContext(int $quantity = 1): array
     {
         $user = $this->user();
@@ -198,13 +314,19 @@ class OrderCreationTest extends TestCase
         return [$user, $cart, $product, $address];
     }
 
-    private function quote(User $user, Cart $cart, Address $address, string $paymentMethod): string
-    {
+    private function quote(
+        User $user,
+        Cart $cart,
+        Address $address,
+        string $paymentMethod,
+        bool $useWalletCredit = false,
+    ): string {
         return $this->actingAs($user, 'api')->postJson('/api/v1/checkout/quote', [
             'cart_id' => $cart->id,
             'address_id' => $address->id,
             'delivery_method' => 'standard',
             'payment_method' => $paymentMethod,
+            'use_wallet_credit' => $useWalletCredit,
         ])->assertCreated()->json('data.quote_id');
     }
 

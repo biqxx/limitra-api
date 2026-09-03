@@ -13,6 +13,7 @@ use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\User;
 use App\Services\Cart\CartService;
+use App\Services\Payment\WalletLedgerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -100,14 +101,27 @@ class CheckoutQuoteTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('cart_id');
     }
 
-    public function test_wallet_credit_is_explicitly_unavailable_until_ledger_exists(): void
+    public function test_wallet_credit_uses_authoritative_lim_cash_then_cash_balances(): void
     {
         [$user, $cart, , $address] = $this->checkoutContext();
+        $ledger = app(WalletLedgerService::class);
+        $ledger->credit($user, 700000, 'lim_cash', 'referral_reward', 'test:quote:lim', 'Test Lim Cash credit.');
+        $ledger->credit($user, 300000, 'cash', 'deposit', 'test:quote:cash', 'Test cash credit.');
 
         $this->actingAs($user, 'api')->postJson('/api/v1/checkout/quote', [
             'cart_id' => $cart->id, 'address_id' => $address->id, 'delivery_method' => 'standard',
             'payment_method' => 'card', 'use_wallet_credit' => true,
-        ])->assertUnprocessable()->assertJsonValidationErrors('use_wallet_credit');
+        ])->assertCreated()
+            ->assertJsonPath('data.wallet_credit', '10000.00')
+            ->assertJsonPath('data.wallet_credit_breakdown.lim_cash', '7000.00')
+            ->assertJsonPath('data.wallet_credit_breakdown.cash', '3000.00')
+            ->assertJsonPath('data.grand_total', '192500.00');
+
+        $quote = CheckoutQuote::query()->firstOrFail();
+        $this->assertSame([
+            'lim_cash' => 700000,
+            'cash' => 300000,
+        ], $quote->wallet_snapshot['allocation_minor']);
     }
 
     private function checkoutContext(): array

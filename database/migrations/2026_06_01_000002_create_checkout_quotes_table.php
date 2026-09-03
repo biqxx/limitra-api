@@ -23,6 +23,7 @@ return new class extends Migration
             $table->decimal('discount_total', 14, 2)->default(0);
             $table->decimal('shipping_total', 14, 2)->default(0);
             $table->decimal('wallet_credit', 14, 2)->default(0);
+            $table->json('wallet_snapshot')->nullable();
             $table->decimal('grand_total', 14, 2);
             $table->json('address_snapshot');
             $table->json('shipping_snapshot');

@@ -4,6 +4,7 @@ namespace App\AI;
 
 use App\AI\Contracts\AgentDriver;
 use App\AI\Contracts\Tool;
+use App\AI\Data\AgentResponse;
 use App\AI\Data\ToolContext;
 use App\Models\AI\Conversation;
 use App\Models\AI\ConversationMessage;
@@ -23,20 +24,42 @@ class AgentService
      */
     public function respond(Conversation $conversation, string $userMessage): string
     {
-        ConversationMessage::create([
+        $requestMessage = ConversationMessage::create([
             'conversation_id' => $conversation->id,
             'role' => 'user',
             'content' => $userMessage,
         ]);
 
+        return $this->respondToMessage($conversation, $requestMessage)->content
+            ?? 'I\'m sorry, I could not generate a response.';
+    }
+
+    public function respondToMessage(
+        Conversation $conversation,
+        ConversationMessage $requestMessage,
+    ): ConversationMessage {
+        if ($requestMessage->conversation_id !== $conversation->id || $requestMessage->role !== 'user') {
+            throw new \InvalidArgumentException('The AI request message does not belong to this conversation.');
+        }
+
         $toolDefinitions = $this->resolveToolDefinitions();
         $messages = $this->buildMessages($conversation);
         $systemContext = $this->buildSystemContext($conversation);
         $toolContext = ToolContext::fromConversation($conversation);
+        $toolIterations = 0;
 
         // Tool-calling loop: keep calling the driver until it stops requesting tools.
         do {
             $response = $this->driver->complete($messages, $toolDefinitions, $systemContext);
+            $toolIterations++;
+
+            if (! empty($response->toolCalls) && $toolIterations >= config('ai.max_tool_iterations', 5)) {
+                $response = new AgentResponse(
+                    'I could not complete that request safely. Please try a more specific question.',
+                    [],
+                    'tool_limit',
+                );
+            }
 
             if (! empty($response->toolCalls)) {
                 // Persist the assistant's tool-call turn.
@@ -73,14 +96,17 @@ class AgentService
 
         $finalContent = $response->content ?? 'I\'m sorry, I could not generate a response.';
 
-        ConversationMessage::create([
+        $assistantMessage = ConversationMessage::create([
             'conversation_id' => $conversation->id,
             'role' => 'assistant',
             'content' => $finalContent,
             'metadata' => ['finish_reason' => $response->finishReason],
+            'request_message_id' => $requestMessage->id,
         ]);
 
-        return $finalContent;
+        $conversation->forceFill(['last_message_at' => $assistantMessage->created_at])->save();
+
+        return $assistantMessage;
     }
 
     private function buildSystemContext(Conversation $conversation): string

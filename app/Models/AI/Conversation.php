@@ -16,7 +16,19 @@ class Conversation extends Model
         'platform',
         'platform_conversation_id',
         'status',
+        'context',
+        'last_message_at',
+        'closed_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'context' => 'array',
+            'last_message_at' => 'datetime',
+            'closed_at' => 'datetime',
+        ];
+    }
 
     public function user(): BelongsTo
     {

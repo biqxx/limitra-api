@@ -14,6 +14,8 @@ class ConversationMessage extends Model
         'tool_calls',
         'tool_results',
         'metadata',
+        'client_message_id',
+        'request_message_id',
     ];
 
     protected function casts(): array
@@ -28,5 +30,10 @@ class ConversationMessage extends Model
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
+    }
+
+    public function requestMessage(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'request_message_id');
     }
 }

@@ -36,6 +36,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/commerce.php';
     require __DIR__.'/api/notification.php';
     require __DIR__.'/api/support.php';
+    require __DIR__.'/api/ai.php';
     require __DIR__.'/api/referral.php';
     require __DIR__.'/api/reward.php';
 

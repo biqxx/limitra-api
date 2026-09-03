@@ -19,6 +19,10 @@ return [
     // Number of past conversation_messages to include with each request.
     'context_window' => (int) env('AI_CONTEXT_WINDOW', 10),
 
+    'web_greeting' => env('AI_WEB_GREETING', 'Hi! How can I help you today?'),
+
+    'max_tool_iterations' => (int) env('AI_MAX_TOOL_ITERATIONS', 5),
+
     // System prompt sent with every conversation.
     // Override via AI_SYSTEM_PROMPT in .env for production customisation.
     'system_prompt' => env('AI_SYSTEM_PROMPT', <<<'PROMPT'

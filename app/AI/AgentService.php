@@ -50,7 +50,12 @@ class AgentService
 
         // Tool-calling loop: keep calling the driver until it stops requesting tools.
         do {
-            $response = $this->driver->complete($messages, $toolDefinitions, $systemContext);
+            $response = $this->driver->complete(
+                $messages,
+                $toolDefinitions,
+                $systemContext,
+                data_get($conversation->context, 'reasoning') === 'high',
+            );
             $toolIterations++;
 
             if (! empty($response->toolCalls) && $toolIterations >= config('ai.max_tool_iterations', 5)) {

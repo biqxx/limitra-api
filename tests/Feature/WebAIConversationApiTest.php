@@ -134,6 +134,24 @@ class WebAIConversationApiTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_high_reasoning_conversation_context_is_forwarded_to_the_driver(): void
+    {
+        $driver = new WebTestDriver;
+        $this->app->instance(AgentService::class, new AgentService($driver, []));
+        $customer = $this->user('reasoning@example.test');
+
+        $conversationId = $this->actingAs($customer, 'api')->postJson('/api/v1/ai/conversations', [
+            'context' => ['reasoning' => 'high'],
+        ])->assertCreated()->json('data.conversation.id');
+
+        $this->actingAs($customer, 'api')->postJson("/api/v1/ai/conversations/{$conversationId}/messages", [
+            'text' => 'Compare these options carefully.',
+            'client_message_id' => 'browser-high-reasoning',
+        ])->assertCreated();
+
+        $this->assertSame([true], $driver->highReasoningModes);
+    }
+
     private function conversation(User $user): Conversation
     {
         return Conversation::query()->create([
@@ -160,9 +178,16 @@ class WebTestDriver implements AgentDriver
 {
     public int $calls = 0;
 
-    public function complete(array $messages, array $toolDefinitions, string $systemContext = ''): AgentResponse
-    {
+    public array $highReasoningModes = [];
+
+    public function complete(
+        array $messages,
+        array $toolDefinitions,
+        string $systemContext = '',
+        bool $highReasoning = false,
+    ): AgentResponse {
         $this->calls++;
+        $this->highReasoningModes[] = $highReasoning;
 
         return new AgentResponse('Here is a helpful answer.', [], 'end_turn');
     }
@@ -172,8 +197,12 @@ class WebToolCallingDriver implements AgentDriver
 {
     private int $calls = 0;
 
-    public function complete(array $messages, array $toolDefinitions, string $systemContext = ''): AgentResponse
-    {
+    public function complete(
+        array $messages,
+        array $toolDefinitions,
+        string $systemContext = '',
+        bool $highReasoning = false,
+    ): AgentResponse {
         $this->calls++;
 
         if ($this->calls === 1) {

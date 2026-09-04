@@ -193,8 +193,12 @@ class ToolCallingDriver implements AgentDriver
 {
     private int $calls = 0;
 
-    public function complete(array $messages, array $toolDefinitions, string $systemContext = ''): AgentResponse
-    {
+    public function complete(
+        array $messages,
+        array $toolDefinitions,
+        string $systemContext = '',
+        bool $highReasoning = false,
+    ): AgentResponse {
         $this->calls++;
 
         if ($this->calls === 1) {

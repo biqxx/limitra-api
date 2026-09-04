@@ -6,6 +6,7 @@ use App\AI\AgentService;
 use App\AI\Contracts\AgentDriver;
 use App\AI\Drivers\ClaudeDriver;
 use App\AI\Drivers\GeminiDriver;
+use App\AI\Drivers\OpenRouterDriver;
 use App\AI\Tools\AddToCartTool;
 use App\AI\Tools\CheckOrderStatusTool;
 use App\AI\Tools\GeneratePaymentLinkTool;
@@ -23,8 +24,9 @@ class AIServiceProvider extends ServiceProvider
     {
         $this->app->bind(AgentDriver::class, function () {
             return match (config('ai.driver')) {
+                'claude' => new ClaudeDriver,
                 'gemini' => new GeminiDriver,
-                default => new ClaudeDriver,
+                default => $this->app->make(OpenRouterDriver::class),
             };
         });
 

@@ -99,6 +99,9 @@ class BusinessSettingsService
                 && (! isset($constraints['min']) || $value >= $constraints['min'])
                 && (! isset($constraints['max']) || $value <= $constraints['max']),
             'string' => is_string($value)
+                && (! isset($constraints['min_length']) || mb_strlen($value) >= $constraints['min_length'])
+                && (! isset($constraints['max_length']) || mb_strlen($value) <= $constraints['max_length'])
+                && (! isset($constraints['pattern']) || preg_match($constraints['pattern'], $value) === 1)
                 && (! isset($constraints['options']) || in_array($value, $constraints['options'], true)),
             'array' => $this->validArray($value, $constraints),
             default => false,

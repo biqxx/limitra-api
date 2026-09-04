@@ -165,8 +165,12 @@ class StaticResponseDriver implements AgentDriver
 {
     public int $calls = 0;
 
-    public function complete(array $messages, array $toolDefinitions, string $systemContext = ''): AgentResponse
-    {
+    public function complete(
+        array $messages,
+        array $toolDefinitions,
+        string $systemContext = '',
+        bool $highReasoning = false,
+    ): AgentResponse {
         $this->calls++;
 
         return new AgentResponse('How can I help?', [], 'end_turn');

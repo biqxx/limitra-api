@@ -1,7 +1,17 @@
 <?php
 
 return [
-    'driver' => env('AI_DRIVER', 'claude'), // 'claude' | 'gemini'
+    'driver' => env('AI_DRIVER', 'openrouter'), // 'openrouter' | 'claude' | 'gemini'
+
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+        'max_tokens' => (int) env('OPENROUTER_MAX_TOKENS', 1024),
+        'timeout' => (int) env('OPENROUTER_TIMEOUT', 60),
+        'connect_timeout' => (int) env('OPENROUTER_CONNECT_TIMEOUT', 5),
+        'site_url' => env('OPENROUTER_SITE_URL', env('APP_URL')),
+        'app_name' => env('OPENROUTER_APP_NAME', env('APP_NAME', 'Limitra')),
+    ],
 
     'claude' => [
         'api_key' => env('ANTHROPIC_API_KEY'),

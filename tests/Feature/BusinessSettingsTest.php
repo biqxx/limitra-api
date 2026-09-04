@@ -117,6 +117,27 @@ class BusinessSettingsTest extends TestCase
             ->assertJsonPath('data.items.0.changed_by.id', $admin->id);
     }
 
+    public function test_ai_models_are_private_database_backed_settings_with_slug_validation(): void
+    {
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin, 'api')->getJson('/api/v1/admin/settings?group=ai')
+            ->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('data.0.is_public', false)
+            ->assertJsonPath('data.0.value', 'upstage/solar-pro4')
+            ->assertJsonPath('data.1.value', 'deepseek/deepseek-v4-flash-0731')
+            ->assertJsonPath('data.2.value', 'inclusionai/ling-3.0-flash');
+
+        $this->actingAs($admin, 'api')->patchJson('/api/v1/admin/settings', [
+            'settings' => [['key' => 'ai.primary_model', 'value' => 'invalid model slug']],
+        ])->assertUnprocessable()->assertJsonValidationErrors('settings.0.value');
+
+        $this->actingAs($admin, 'api')->patchJson('/api/v1/admin/settings', [
+            'settings' => [['key' => 'ai.primary_model', 'value' => 'provider/replacement-model']],
+        ])->assertOk()->assertJsonPath('data.0.value', 'provider/replacement-model');
+    }
+
     private function user(string $role): User
     {
         return User::create([

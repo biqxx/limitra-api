@@ -8,8 +8,12 @@ use Illuminate\Support\Facades\Http;
 
 class ClaudeDriver implements AgentDriver
 {
-    public function complete(array $messages, array $toolDefinitions, string $systemContext = ''): AgentResponse
-    {
+    public function complete(
+        array $messages,
+        array $toolDefinitions,
+        string $systemContext = '',
+        bool $highReasoning = false,
+    ): AgentResponse {
         $payload = [
             'model' => config('ai.claude.model'),
             'max_tokens' => config('ai.claude.max_tokens'),

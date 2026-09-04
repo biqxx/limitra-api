@@ -24,10 +24,11 @@ class StoreAIConversationRequest extends FormRequest
     {
         return [
             'channel' => ['sometimes', 'string', 'in:web'],
-            'context' => ['sometimes', 'array:page,product_id,order_id'],
+            'context' => ['sometimes', 'array:page,product_id,order_id,reasoning'],
             'context.page' => ['sometimes', 'string', 'max:255'],
             'context.product_id' => ['sometimes', 'integer', 'min:1'],
             'context.order_id' => ['sometimes', 'integer', 'min:1'],
+            'context.reasoning' => ['sometimes', 'string', 'in:standard,high'],
         ];
     }
 }

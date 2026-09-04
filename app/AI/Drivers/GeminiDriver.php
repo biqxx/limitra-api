@@ -8,8 +8,12 @@ use Illuminate\Support\Facades\Http;
 
 class GeminiDriver implements AgentDriver
 {
-    public function complete(array $messages, array $toolDefinitions, string $systemContext = ''): AgentResponse
-    {
+    public function complete(
+        array $messages,
+        array $toolDefinitions,
+        string $systemContext = '',
+        bool $highReasoning = false,
+    ): AgentResponse {
         $contents = array_map(fn (array $m) => [
             'role' => $m['role'] === 'assistant' ? 'model' : $m['role'],
             'parts' => [['text' => is_array($m['content']) ? json_encode($m['content']) : $m['content']]],

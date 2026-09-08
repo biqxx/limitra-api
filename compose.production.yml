@@ -1,7 +1,7 @@
 name: limitra-api
 
 x-runtime: &runtime
-  image: ${LIMITRA_API_IMAGE:-ghcr.io/limitrang/limitra-user-service:main}
+  image: ${LIMITRA_API_IMAGE:-ghcr.io/biqxx/limitra-api:main}
   user: www-data
   env_file:
     - ${LIMITRA_API_ENV_FILE:-.env.production}

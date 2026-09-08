@@ -1,0 +1,96 @@
+name: limitra-api
+
+x-runtime: &runtime
+  image: ${LIMITRA_API_IMAGE:-ghcr.io/limitrang/limitra-user-service:main}
+  user: www-data
+  env_file:
+    - ${LIMITRA_API_ENV_FILE:-.env.production}
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  migrate:
+    <<: *runtime
+    profiles:
+      - tools
+    command: ["php", "artisan", "migrate", "--force"]
+    environment:
+      RUN_MIGRATIONS: "false"
+    networks:
+      - platform_data
+
+  app:
+    <<: *runtime
+    restart: unless-stopped
+    environment:
+      RUN_MIGRATIONS: "false"
+    expose:
+      - "9000"
+    volumes:
+      - app_storage:/var/www/html/storage
+    networks:
+      platform_edge:
+        aliases:
+          - limitra-api
+      platform_data: {}
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/limitra-ready && php-fpm -t"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    <<: *runtime
+    restart: unless-stopped
+    command: ["php", "artisan", "horizon"]
+    environment:
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      app:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - app_storage:/var/www/html/storage
+    networks:
+      - platform_data
+    stop_grace_period: 6m
+    healthcheck:
+      test: ["CMD", "php", "artisan", "horizon:status"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  scheduler:
+    <<: *runtime
+    restart: unless-stopped
+    command: ["php", "artisan", "schedule:work"]
+    environment:
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      app:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - app_storage:/var/www/html/storage
+    networks:
+      - platform_data
+
+networks:
+  platform_edge:
+    external: true
+    name: platform_edge
+  platform_data:
+    external: true
+    name: platform_data
+
+volumes:
+  app_storage:

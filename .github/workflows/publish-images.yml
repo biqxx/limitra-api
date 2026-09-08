@@ -53,3 +53,17 @@ jobs:
           labels: ${{ steps.image-meta.outputs.labels }}
           cache-from: type=gha,scope=app
           cache-to: type=gha,mode=max,scope=app
+
+      - name: Export deployment image
+        shell: bash
+        run: |
+          docker pull "${{ steps.image.outputs.name }}:main"
+          docker save "${{ steps.image.outputs.name }}:main" | gzip -1 > limitra-user-service.tar.gz
+
+      - name: Upload deployment image
+        uses: actions/upload-artifact@v4
+        with:
+          name: limitra-user-service-image
+          path: limitra-user-service.tar.gz
+          retention-days: 1
+          if-no-files-found: error

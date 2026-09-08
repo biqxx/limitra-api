@@ -49,6 +49,8 @@ services:
 
   worker:
     <<: *runtime
+    profiles:
+      - background
     restart: unless-stopped
     command: ["php", "artisan", "horizon"]
     environment:
@@ -71,6 +73,8 @@ services:
 
   scheduler:
     <<: *runtime
+    profiles:
+      - background
     restart: unless-stopped
     command: ["php", "artisan", "schedule:work"]
     environment:

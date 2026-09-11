@@ -19,7 +19,7 @@ abstract class AccessControlRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->has('name') && is_string($this->input('name'))) {
+        if ($this->normalizesRoleName() && $this->has('name') && is_string($this->input('name'))) {
             $this->merge([
                 'name' => Str::of($this->input('name'))->trim()->lower()->snake()->toString(),
             ]);
@@ -29,5 +29,10 @@ abstract class AccessControlRequest extends FormRequest
     protected function requiredPermission(): string
     {
         return 'roles.manage';
+    }
+
+    protected function normalizesRoleName(): bool
+    {
+        return false;
     }
 }

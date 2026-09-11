@@ -7,6 +7,7 @@ use App\Models\Admin\AuditEvent;
 use App\Models\User;
 use App\Models\User\Permission;
 use App\Models\User\Role;
+use App\Models\User\StaffInvitation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -104,5 +105,15 @@ class RoleManagementApiTest extends TestCase
         ])->assertForbidden();
 
         $this->assertDatabaseMissing('roles', ['name' => 'report_exporter']);
+    }
+
+    public function test_role_with_an_active_staff_invitation_cannot_be_deleted(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $role = Role::factory()->create();
+        StaffInvitation::factory()->create(['role_id' => $role->id, 'role_name_snapshot' => $role->name]);
+
+        $this->actingAs($admin, 'api')->deleteJson("/api/v1/admin/roles/{$role->id}")
+            ->assertConflict();
     }
 }

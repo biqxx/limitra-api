@@ -12,6 +12,7 @@ use App\Jobs\ProcessPaymentWebhook;
 use App\Jobs\ReconcileAutomaticRefund;
 use App\Jobs\RecordReferralShareEvent;
 use App\Jobs\SendReferralInvitation;
+use App\Jobs\SendStaffInvitation;
 use App\Notifications\AutomaticRefundAttentionNotification;
 use App\Notifications\AutomaticRefundInitiatedNotification;
 use App\Notifications\AutomaticRefundProcessedNotification;
@@ -44,6 +45,7 @@ class QueueRoutingTest extends TestCase
             'event-id', 1, 1, 'copy', 'url-hash', '/ref/TEST', null, null, now()->toISOString(),
         ))->queue);
         $this->assertSame('notifications', (new SendReferralInvitation(1))->queue);
+        $this->assertSame('notifications', (new SendStaffInvitation(1, 1))->queue);
     }
 
     public function test_automatic_refunds_use_an_execution_lock(): void

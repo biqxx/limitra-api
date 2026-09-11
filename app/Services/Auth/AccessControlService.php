@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\Enums\StaffInvitationStatus;
 use App\Exceptions\AccessControlConflictException;
 use App\Models\User;
 use App\Models\User\Permission;
@@ -81,6 +82,17 @@ class AccessControlService
 
             if ($lockedRole->users()->exists()) {
                 throw new AccessControlConflictException('An assigned role cannot be deleted.');
+            }
+
+            if ($lockedRole->staffInvitations()
+                ->whereIn('status', [
+                    StaffInvitationStatus::Queued->value,
+                    StaffInvitationStatus::Sent->value,
+                    StaffInvitationStatus::Failed->value,
+                ])
+                ->where('expires_at', '>', now())
+                ->exists()) {
+                throw new AccessControlConflictException('A role with active staff invitations cannot be deleted.');
             }
 
             $before = $this->roleSnapshot($lockedRole);

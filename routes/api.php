@@ -40,6 +40,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/ai.php';
     require __DIR__.'/api/referral.php';
     require __DIR__.'/api/reward.php';
+    require __DIR__.'/api/staff_invitation.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
     Route::middleware(['auth:api', 'active.session'])->group(function () {

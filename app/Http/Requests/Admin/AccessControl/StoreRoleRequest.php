@@ -20,4 +20,9 @@ class StoreRoleRequest extends AccessControlRequest
             'is_super_admin' => ['prohibited'],
         ];
     }
+
+    protected function normalizesRoleName(): bool
+    {
+        return true;
+    }
 }

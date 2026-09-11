@@ -7,6 +7,7 @@ use Database\Factories\User\RoleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Role extends Model
 {
@@ -37,5 +38,10 @@ class Role extends Model
         return $this->belongsToMany(User::class)
             ->withPivot(['assigned_by', 'is_primary', 'assigned_at'])
             ->withTimestamps();
+    }
+
+    public function staffInvitations(): HasMany
+    {
+        return $this->hasMany(StaffInvitation::class);
     }
 }

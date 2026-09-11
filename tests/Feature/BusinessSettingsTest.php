@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\TrackAnalytics;
+use App\Models\Admin\AuditEvent;
 use App\Models\Settings\BusinessSetting;
 use App\Models\Settings\BusinessSettingChange;
 use App\Models\User;
@@ -67,6 +68,12 @@ class BusinessSettingsTest extends TestCase
             'version' => 2,
         ]);
         $this->assertSame(2, BusinessSettingChange::query()->count());
+        $this->assertSame(2, AuditEvent::query()->where('action', 'business_setting.updated')->count());
+        $this->assertDatabaseHas('audit_events', [
+            'actor_id' => $admin->id,
+            'subject_type' => BusinessSetting::class,
+            'subject_id' => BusinessSetting::where('key', 'returns.window_days')->value('id'),
+        ]);
     }
 
     public function test_invalid_or_unknown_values_do_not_partially_update_settings(): void

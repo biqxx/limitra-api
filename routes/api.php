@@ -10,6 +10,7 @@ Route::prefix('v1')->group(function () {
     // ── Admin controls (auth + role enforced inside the file) ─────────────────
     Route::prefix('admin')->group(function () {
         require __DIR__.'/api/admin.php';
+        require __DIR__.'/api/access_control.php';
         require __DIR__.'/api/order_admin.php';
         require __DIR__.'/api/review_admin.php';
         require __DIR__.'/api/return_admin.php';

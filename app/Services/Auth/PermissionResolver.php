@@ -11,8 +11,23 @@ class PermissionResolver
     /** @return list<string> */
     public function resolve(User $user): array
     {
-        $roles = $this->roles($user);
+        return $this->resolveRoles($this->roles($user));
+    }
 
+    /** @return list<string> */
+    public function resolveFresh(User $user): array
+    {
+        return $this->resolveRoles($user->roles()->with('permissions')->get());
+    }
+
+    public function isSuperAdmin(User $user): bool
+    {
+        return $user->roles()->where('is_super_admin', true)->exists();
+    }
+
+    /** @param Collection<int, Role> $roles */
+    private function resolveRoles(Collection $roles): array
+    {
         if ($roles->contains('is_super_admin', true)) {
             return ['*'];
         }
@@ -40,18 +55,14 @@ class PermissionResolver
             return false;
         }
 
-        $roles = $user->roles()->with('permissions')->get();
+        $grantedPermissions = $this->resolveFresh($user);
 
-        if ($roles->contains('is_super_admin', true)) {
+        if ($grantedPermissions === ['*']) {
             return true;
         }
 
-        $grantedPermissions = $roles
-            ->flatMap(fn (Role $role) => $role->permissions->pluck('name'))
-            ->unique();
-
         return collect($permissions)->every(
-            fn (string $permission): bool => $grantedPermissions->contains($permission)
+            fn (string $permission): bool => in_array($permission, $grantedPermissions, true)
         );
     }
 }

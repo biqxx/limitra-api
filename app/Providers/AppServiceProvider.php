@@ -8,7 +8,9 @@ use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\Product\ProductSpecification;
 use App\Models\Product\ProductVariant;
+use App\Models\User;
 use App\Observers\CatalogCacheObserver;
+use App\Observers\UserRoleObserver;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -35,5 +37,6 @@ class AppServiceProvider extends ServiceProvider
         ProductSpecification::observe(CatalogCacheObserver::class);
         Category::observe(CatalogCacheObserver::class);
         Image::observe(CatalogCacheObserver::class);
+        User::observe(UserRoleObserver::class);
     }
 }

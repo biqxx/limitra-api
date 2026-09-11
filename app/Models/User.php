@@ -21,10 +21,12 @@ use App\Models\Reward\RewardSpin;
 use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
+use App\Models\User\Role;
 use App\Models\User\UserPreference;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -37,6 +39,10 @@ class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    protected $attributes = [
+        'role' => 'user',
+    ];
 
     protected $fillable = [
         'username',
@@ -126,6 +132,13 @@ class User extends Authenticatable implements JWTSubject
     public function preference(): HasOne
     {
         return $this->hasOne(UserPreference::class);
+    }
+
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class)
+            ->withPivot(['assigned_by', 'is_primary', 'assigned_at'])
+            ->withTimestamps();
     }
 
     public function addresses(): HasMany

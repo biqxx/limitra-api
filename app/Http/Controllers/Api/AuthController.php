@@ -342,7 +342,7 @@ class AuthController extends BaseController
     public function me(): JsonResponse
     {
         return $this->success(
-            new UserResource(auth('api')->user()->load('profile'))
+            new UserResource(auth('api')->user()->load('profile', 'roles.permissions'))
         );
     }
 
@@ -455,6 +455,10 @@ class AuthController extends BaseController
 
     private function tokenPayload(string $token, mixed $user): array
     {
+        if ($user instanceof User) {
+            $user->loadMissing('profile', 'roles.permissions');
+        }
+
         return [
             'access_token' => $token,
             'token_type' => 'bearer',

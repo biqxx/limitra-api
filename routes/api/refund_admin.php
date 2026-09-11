@@ -3,7 +3,7 @@
 use App\Http\Controllers\Api\Admin\RefundController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:api', 'role:admin,staff'])
+Route::middleware(['auth:api', 'active.session', 'permission:refunds.read'])
     ->prefix('refunds')
     ->name('admin.refunds.')
     ->group(function (): void {
@@ -11,7 +11,7 @@ Route::middleware(['auth:api', 'role:admin,staff'])
         Route::get('{refund}', [RefundController::class, 'show'])->name('show');
     });
 
-Route::middleware(['auth:api', 'role:admin'])
+Route::middleware(['auth:api', 'active.session', 'permission:refunds.resolve'])
     ->prefix('refunds')
     ->name('admin.refunds.')
     ->group(function (): void {

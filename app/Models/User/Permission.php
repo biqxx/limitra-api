@@ -16,7 +16,6 @@ class Permission extends Model
         'name',
         'domain',
         'description',
-        'is_system',
     ];
 
     protected function casts(): array

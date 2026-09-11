@@ -4,7 +4,7 @@ use App\Http\Controllers\Api\Admin\NotificationSettingController;
 use App\Http\Controllers\Api\NotificationController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])
+Route::middleware(['auth:api', 'active.session', 'permission:notifications.read'])
     ->prefix('notifications')
     ->name('admin.notifications.')
     ->group(function (): void {
@@ -16,12 +16,14 @@ Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])
         Route::post('read-all', [NotificationController::class, 'readAll'])->name('read-all');
     });
 
-Route::middleware(['auth:api', 'active.session', 'role:admin'])
+Route::middleware(['auth:api', 'active.session', 'permission:notifications.manage'])
     ->prefix('notification-settings')
     ->name('admin.notification-settings.')
     ->group(function (): void {
         Route::get('/', [NotificationSettingController::class, 'index'])->name('index');
-        Route::patch('{event}', [NotificationSettingController::class, 'update'])
-            ->where('event', '[a-z0-9._-]+')
-            ->name('update');
     });
+
+Route::middleware(['auth:api', 'active.session', 'permission:notifications.manage'])
+    ->patch('notification-settings/{event}', [NotificationSettingController::class, 'update'])
+    ->where('event', '[a-z0-9._-]+')
+    ->name('admin.notification-settings.update');

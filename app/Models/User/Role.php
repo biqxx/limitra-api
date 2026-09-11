@@ -17,8 +17,6 @@ class Role extends Model
         'name',
         'display_name',
         'description',
-        'is_system',
-        'is_super_admin',
     ];
 
     protected function casts(): array

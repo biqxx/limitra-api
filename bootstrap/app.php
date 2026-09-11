@@ -2,6 +2,7 @@
 
 use App\Enums\ApiErrorCode;
 use App\Http\Middleware\EnsureActiveSession;
+use App\Http\Middleware\PermissionMiddleware;
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\TrackAnalytics;
 use App\Http\Responses\ApiErrorResponse;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => RoleMiddleware::class,
+            'permission' => PermissionMiddleware::class,
             'track.analytics' => TrackAnalytics::class,
             'active.session' => EnsureActiveSession::class,
         ]);

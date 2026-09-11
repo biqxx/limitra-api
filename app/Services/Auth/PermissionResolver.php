@@ -32,4 +32,26 @@ class PermissionResolver
 
         return $user->roles;
     }
+
+    /** @param list<string> $permissions */
+    public function allowsAll(User $user, array $permissions): bool
+    {
+        if ($permissions === []) {
+            return false;
+        }
+
+        $roles = $user->roles()->with('permissions')->get();
+
+        if ($roles->contains('is_super_admin', true)) {
+            return true;
+        }
+
+        $grantedPermissions = $roles
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('name'))
+            ->unique();
+
+        return collect($permissions)->every(
+            fn (string $permission): bool => $grantedPermissions->contains($permission)
+        );
+    }
 }

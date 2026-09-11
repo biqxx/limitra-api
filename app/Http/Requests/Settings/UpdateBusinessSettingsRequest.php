@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Models\User;
+use App\Services\Auth\PermissionResolver;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateBusinessSettingsRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(PermissionResolver $permissions): bool
     {
-        return $this->user()?->isAdmin() === true;
+        $user = $this->user();
+
+        return $user instanceof User && $permissions->allowsAll($user, ['settings.manage']);
     }
 
     public function rules(): array

@@ -31,9 +31,18 @@ return new class extends Migration
         // expires_at lets us enforce a TTL without relying on created_at math.
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
+            $table->foreignId('user_id')->nullable()->constrained()->cascadeOnDelete();
             $table->string('token');          // bcrypt-hashed OTP or reset token
+            $table->longText('delivery_secret')->nullable();
+            $table->unsignedInteger('delivery_version')->default(0);
+            $table->foreignId('requested_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('expires_at')->nullable();
+            $table->timestamp('sent_at')->nullable();
+            $table->timestamp('failed_at')->nullable();
+            $table->string('failure_code')->nullable();
             $table->timestamp('created_at')->nullable();
+
+            $table->index(['user_id', 'delivery_version']);
         });
 
         Schema::create('sessions', function (Blueprint $table) {

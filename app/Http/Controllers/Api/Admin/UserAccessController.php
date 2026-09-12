@@ -6,12 +6,14 @@ use App\Enums\UserStatus;
 use App\Http\Controllers\Api\BaseController;
 use App\Http\Requests\Admin\AccessControl\RestoreUserRequest;
 use App\Http\Requests\Admin\AccessControl\SuspendUserRequest;
+use App\Http\Requests\Admin\AccessControl\TriggerPasswordResetRequest;
 use App\Http\Requests\Admin\AccessControl\UpdateLegacyRoleRequest;
 use App\Http\Requests\Admin\AccessControl\UpdateUserStatusRequest;
 use App\Http\Resources\AdminUserResource;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\Auth\AccessControlService;
+use App\Services\Auth\PasswordResetService;
 use App\Services\Auth\UserStatusService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +24,7 @@ class UserAccessController extends BaseController
 {
     public function __construct(
         private readonly AccessControlService $accessControl,
+        private readonly PasswordResetService $passwordResets,
         private readonly UserStatusService $statuses,
     ) {}
 
@@ -85,5 +88,18 @@ class UserAccessController extends BaseController
         $user = $this->statuses->restore($actor, $user, $request->validated('note'));
 
         return $this->success(new AdminUserResource($user), 'User restored.');
+    }
+
+    public function passwordReset(TriggerPasswordResetRequest $request, User $user): JsonResponse
+    {
+        /** @var User $actor */
+        $actor = $request->user('api');
+        $this->passwordResets->issue($user, $actor, $request->validated('reason'));
+
+        return $this->success(
+            null,
+            'If the account can receive email, password reset instructions will be sent.',
+            202,
+        );
     }
 }

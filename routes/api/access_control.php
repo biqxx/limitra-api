@@ -37,4 +37,6 @@ Route::middleware(['auth:api', 'active.session', 'permission:customers.update'])
     Route::patch('users/{user}/status', [UserAccessController::class, 'updateStatus'])->name('admin.users.status.update');
     Route::post('users/{user}/suspend', [UserAccessController::class, 'suspend'])->name('admin.users.suspend');
     Route::post('users/{user}/restore', [UserAccessController::class, 'restore'])->name('admin.users.restore');
+    Route::post('users/{user}/password-reset', [UserAccessController::class, 'passwordReset'])
+        ->middleware('throttle:5,15')->name('admin.users.password-reset');
 });

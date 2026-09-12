@@ -14,10 +14,10 @@ use App\Models\User;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
 use App\Notifications\LoginNotification;
-use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
 use App\Services\AffiliateService;
 use App\Services\Auth\AuthSessionManager;
+use App\Services\Auth\PasswordResetService;
 use App\Services\Auth\UserStatusService;
 use App\Services\Referral\CustomerReferralService;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +32,7 @@ class AuthController extends BaseController
     public function __construct(
         private readonly AuthSessionManager $authSessions,
         private readonly CustomerReferralService $customerReferrals,
+        private readonly PasswordResetService $passwordResets,
         private readonly UserStatusService $userStatuses,
     ) {}
 
@@ -392,18 +393,7 @@ class AuthController extends BaseController
             return $this->success(null, 'If an account exists for this email, a password reset OTP has been sent.');
         }
 
-        $otp = (string) random_int(100_000, 999_999);
-
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $email],
-            [
-                'token' => Hash::make($otp),
-                'expires_at' => now()->addMinutes(15),
-                'created_at' => now(),
-            ]
-        );
-
-        $user->notify(new PasswordResetOtpNotification($otp));
+        $this->passwordResets->issue($user);
 
         return $this->success(null, 'If an account exists for this email, a password reset OTP has been sent.');
     }

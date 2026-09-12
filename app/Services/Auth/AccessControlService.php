@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Enums\StaffInvitationStatus;
+use App\Enums\UserStatus;
 use App\Exceptions\AccessControlConflictException;
 use App\Models\User;
 use App\Models\User\Permission;
@@ -327,7 +328,20 @@ class AccessControlService
             return;
         }
 
+        if ($user->status === UserStatus::Suspended
+            && ($user->suspended_until === null || $user->suspended_until->isFuture())) {
+            return;
+        }
+
         $administratorCount = $superAdminRole->users()
+            ->where(function ($query): void {
+                $query->where('status', UserStatus::Active->value)
+                    ->orWhere(function ($query): void {
+                        $query->where('status', UserStatus::Suspended->value)
+                            ->whereNotNull('suspended_until')
+                            ->where('suspended_until', '<=', now());
+                    });
+            })
             ->lockForUpdate()
             ->get(['users.id'])
             ->count();

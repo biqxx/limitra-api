@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Enums\StaffInvitationStatus;
+use App\Enums\UserStatus;
 use App\Exceptions\AccessControlConflictException;
 use App\Jobs\SendStaffInvitation;
 use App\Models\User;
@@ -264,6 +265,11 @@ class StaffInvitationService
 
     private function assertMayInvite(User $actor, ?Role $role): void
     {
+        if ($actor->status === UserStatus::Suspended
+            && ($actor->suspended_until === null || $actor->suspended_until->isFuture())) {
+            throw new AuthorizationException('Suspended accounts cannot manage staff invitations.');
+        }
+
         if (! $this->permissions->allowsAll($actor, ['roles.manage'])) {
             throw new AuthorizationException('You are not authorized to manage staff invitations.');
         }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\UserStatus;
 use App\Models\Address\Address;
 use App\Models\Affiliate\Affiliate;
 use App\Models\Cart\Cart;
@@ -42,6 +43,7 @@ class User extends Authenticatable implements JWTSubject
 
     protected $attributes = [
         'role' => 'user',
+        'status' => 'active',
     ];
 
     protected $fillable = [
@@ -76,6 +78,9 @@ class User extends Authenticatable implements JWTSubject
             'email_verification_sent_at' => 'datetime',
             'email_change_expires_at' => 'datetime',
             'password' => 'hashed',
+            'status' => UserStatus::class,
+            'suspended_at' => 'datetime',
+            'suspended_until' => 'datetime',
         ];
     }
 

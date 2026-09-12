@@ -21,6 +21,7 @@ enum ApiErrorCode: string
     case InvalidOrderTransition = 'INVALID_ORDER_TRANSITION';
     case PaymentPending = 'PAYMENT_PENDING';
     case InsufficientBalance = 'INSUFFICIENT_BALANCE';
+    case AccountSuspended = 'ACCOUNT_SUSPENDED';
 
     public static function forStatus(int $status): self
     {

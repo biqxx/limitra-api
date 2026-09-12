@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ApiErrorCode;
 use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\ResendVerificationRequest;
@@ -17,6 +18,7 @@ use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
 use App\Services\AffiliateService;
 use App\Services\Auth\AuthSessionManager;
+use App\Services\Auth\UserStatusService;
 use App\Services\Referral\CustomerReferralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +32,7 @@ class AuthController extends BaseController
     public function __construct(
         private readonly AuthSessionManager $authSessions,
         private readonly CustomerReferralService $customerReferrals,
+        private readonly UserStatusService $userStatuses,
     ) {}
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -249,6 +252,16 @@ class AuthController extends BaseController
             return $this->error(
                 'Email address not verified. Please check your inbox.',
                 403
+            );
+        }
+
+        if ($this->userStatuses->isSuspended($user)) {
+            auth('api')->logout();
+
+            return $this->error(
+                'This account is suspended.',
+                403,
+                code: ApiErrorCode::AccountSuspended,
             );
         }
 

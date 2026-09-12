@@ -32,3 +32,9 @@ Route::middleware(['auth:api', 'active.session', 'permission:roles.manage'])->gr
     Route::patch('users/{user}/role', [UserAccessController::class, 'updateRole'])->name('admin.users.update-role');
     Route::delete('users/{user}', [UserAccessController::class, 'destroy'])->name('admin.users.destroy');
 });
+
+Route::middleware(['auth:api', 'active.session', 'permission:customers.update'])->group(function () {
+    Route::patch('users/{user}/status', [UserAccessController::class, 'updateStatus'])->name('admin.users.status.update');
+    Route::post('users/{user}/suspend', [UserAccessController::class, 'suspend'])->name('admin.users.suspend');
+    Route::post('users/{user}/restore', [UserAccessController::class, 'restore'])->name('admin.users.restore');
+});

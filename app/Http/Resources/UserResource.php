@@ -26,6 +26,8 @@ class UserResource extends JsonResource
             'phone' => $this->profile?->phone,
             'avatar_url' => $this->profile?->avatar ? Storage::disk('public')->url($this->profile->avatar) : null,
             'role' => $this->role,
+            'status' => $this->status->value,
+            'suspended_until' => $this->suspended_until,
             'permissions' => $permissionResolver->resolve($user),
             'linked_roles' => [
                 'affiliate' => $roles->contains('name', 'affiliate'),

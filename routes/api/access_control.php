@@ -5,7 +5,12 @@ use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\RoleMemberController;
 use App\Http\Controllers\Api\Admin\StaffInvitationController;
 use App\Http\Controllers\Api\Admin\UserAccessController;
+use App\Http\Controllers\Api\Admin\UserDirectoryController;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:api', 'active.session', 'permission:customers.read'])->group(function () {
+    Route::get('users', [UserDirectoryController::class, 'index'])->name('admin.users.index');
+});
 
 Route::middleware(['auth:api', 'active.session', 'permission:roles.read'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('admin.roles.index');

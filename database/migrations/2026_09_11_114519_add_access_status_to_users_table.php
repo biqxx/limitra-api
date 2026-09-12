@@ -21,6 +21,8 @@ return new class extends Migration
             $table->text('deactivation_reason')->nullable();
             $table->foreignId('deactivated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->softDeletes();
+            $table->index(['created_at', 'id']);
+            $table->index(['status', 'created_at', 'id']);
         });
     }
 
@@ -30,6 +32,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
+            $table->dropIndex(['created_at', 'id']);
+            $table->dropIndex(['status', 'created_at', 'id']);
             $table->dropConstrainedForeignId('suspended_by');
             $table->dropConstrainedForeignId('deactivated_by');
             $table->dropSoftDeletes();

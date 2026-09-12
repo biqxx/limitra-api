@@ -25,17 +25,20 @@ class StaffInvitationService
         private readonly AuditEventService $auditEvents,
     ) {}
 
-    /** @param array{name: string, email: string, role_id?: int|null} $attributes */
+    /** @param array{name: string, email: string, role_id?: int|null, role?: string|null} $attributes */
     public function create(User $actor, array $attributes): StaffInvitation
     {
         $email = Str::lower(trim($attributes['email']));
         $token = Str::random(64);
 
         $invitation = DB::transaction(function () use ($actor, $attributes, $email, $token): StaffInvitation {
-            $role = $this->lockRole($attributes['role_id'] ?? null);
+            $roleField = isset($attributes['role_id']) ? 'role_id' : 'role';
+            $role = isset($attributes['role_id'])
+                ? $this->lockRole($attributes['role_id'])
+                : $this->lockRoleByName($attributes['role'] ?? null);
 
-            if (($attributes['role_id'] ?? null) !== null && ! $role) {
-                throw ValidationException::withMessages(['role_id' => ['The selected role is unavailable.']]);
+            if (($attributes['role_id'] ?? $attributes['role'] ?? null) !== null && ! $role) {
+                throw ValidationException::withMessages([$roleField => ['The selected role is unavailable.']]);
             }
 
             $this->assertMayInvite($actor, $role);
@@ -261,6 +264,13 @@ class StaffInvitationService
         return $roleId === null
             ? null
             : Role::query()->with('permissions')->lockForUpdate()->find($roleId);
+    }
+
+    private function lockRoleByName(?string $role): ?Role
+    {
+        return $role === null
+            ? null
+            : Role::query()->with('permissions')->where('name', $role)->lockForUpdate()->first();
     }
 
     private function assertMayInvite(User $actor, ?Role $role): void

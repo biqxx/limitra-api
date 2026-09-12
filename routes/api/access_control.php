@@ -21,6 +21,8 @@ Route::middleware(['auth:api', 'active.session', 'permission:roles.read'])->grou
 });
 
 Route::middleware(['auth:api', 'active.session', 'permission:roles.manage'])->group(function () {
+    Route::post('users', [UserDirectoryController::class, 'store'])
+        ->middleware('throttle:10,1')->name('admin.users.store');
     Route::post('roles', [RoleController::class, 'store'])->name('admin.roles.store');
     Route::patch('roles/{role}', [RoleController::class, 'update'])->name('admin.roles.update');
     Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('admin.roles.destroy');

@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:api', 'active.session', 'permission:customers.read'])->group(function () {
     Route::get('users', [UserDirectoryController::class, 'index'])->name('admin.users.index');
+    Route::get('users/{user}', [UserDirectoryController::class, 'show'])
+        ->withTrashed()->name('admin.users.show');
 });
 
 Route::middleware(['auth:api', 'active.session', 'permission:roles.read'])->group(function () {

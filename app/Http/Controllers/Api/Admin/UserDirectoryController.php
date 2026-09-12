@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\BaseController;
 use App\Http\Requests\Admin\AccessControl\ListUsersRequest;
 use App\Http\Requests\Admin\AccessControl\StoreStaffInvitationRequest;
+use App\Http\Requests\Admin\AccessControl\ViewUserRequest;
+use App\Http\Resources\AdminUserDetailResource;
 use App\Http\Resources\AdminUserResource;
 use App\Http\Resources\StaffInvitationResource;
 use App\Models\User;
+use App\Services\Admin\AdminUserDetailService;
 use App\Services\Admin\AdminUserQuery;
 use App\Services\Auth\StaffInvitationService;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +19,7 @@ class UserDirectoryController extends BaseController
 {
     public function __construct(
         private readonly AdminUserQuery $users,
+        private readonly AdminUserDetailService $userDetails,
         private readonly StaffInvitationService $invitations,
     ) {}
 
@@ -47,5 +51,12 @@ class UserDirectoryController extends BaseController
             'User invitation queued.',
             201,
         );
+    }
+
+    public function show(ViewUserRequest $request, User $user): JsonResponse
+    {
+        return $this->success(new AdminUserDetailResource(
+            $this->userDetails->get($user),
+        ));
     }
 }

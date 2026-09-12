@@ -21,6 +21,9 @@ class AdminUserResource extends JsonResource
             'suspended_until' => $this->suspended_until,
             'suspension_reason' => $this->suspension_reason,
             'suspended_by' => $this->suspended_by,
+            'deactivated_at' => $this->deactivated_at,
+            'deactivation_reason' => $this->deactivation_reason,
+            'deactivated_by' => $this->deactivated_by,
         ];
     }
 }

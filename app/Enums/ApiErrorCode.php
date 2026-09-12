@@ -22,6 +22,7 @@ enum ApiErrorCode: string
     case PaymentPending = 'PAYMENT_PENDING';
     case InsufficientBalance = 'INSUFFICIENT_BALANCE';
     case AccountSuspended = 'ACCOUNT_SUSPENDED';
+    case AccountDeactivated = 'ACCOUNT_DEACTIVATED';
 
     public static function forStatus(int $status): self
     {

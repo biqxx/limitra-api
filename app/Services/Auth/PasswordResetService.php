@@ -147,6 +147,10 @@ class PasswordResetService
 
     public function authorizeAdminRequest(User $actor, User $target): void
     {
+        if ($actor->status === UserStatus::Deactivated) {
+            throw new AuthorizationException('A deactivated account cannot request password resets.');
+        }
+
         if ($actor->status === UserStatus::Suspended
             && ($actor->suspended_until === null || $actor->suspended_until->isFuture())) {
             throw new AuthorizationException('A suspended account cannot request password resets.');

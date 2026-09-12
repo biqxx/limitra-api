@@ -17,6 +17,10 @@ return new class extends Migration
             $table->timestamp('suspended_until')->nullable()->index();
             $table->text('suspension_reason')->nullable();
             $table->foreignId('suspended_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('deactivated_at')->nullable()->index();
+            $table->text('deactivation_reason')->nullable();
+            $table->foreignId('deactivated_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->softDeletes();
         });
     }
 
@@ -27,7 +31,16 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->dropConstrainedForeignId('suspended_by');
-            $table->dropColumn(['status', 'suspended_at', 'suspended_until', 'suspension_reason']);
+            $table->dropConstrainedForeignId('deactivated_by');
+            $table->dropSoftDeletes();
+            $table->dropColumn([
+                'status',
+                'suspended_at',
+                'suspended_until',
+                'suspension_reason',
+                'deactivated_at',
+                'deactivation_reason',
+            ]);
         });
     }
 };

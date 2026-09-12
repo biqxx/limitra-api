@@ -46,6 +46,11 @@ class UserStatusService
         return true;
     }
 
+    public function isDeactivated(User $user): bool
+    {
+        return User::withTrashed()->find($user->getKey())?->status === UserStatus::Deactivated;
+    }
+
     private function transition(
         User $actor,
         User $user,
@@ -70,6 +75,10 @@ class UserStatusService
             }
 
             $this->authorizeTarget($lockedActor, $lockedUser);
+
+            if ($lockedUser->status === UserStatus::Deactivated) {
+                throw new AccessControlConflictException('A deactivated account cannot change status.');
+            }
 
             if ($status === UserStatus::Suspended && $lockedActor->is($lockedUser)) {
                 throw new AccessControlConflictException('You cannot suspend your own account.');

@@ -23,6 +23,14 @@ class EnsureActiveSession
     {
         $user = $request->user('api');
 
+        if ($user instanceof User && $this->statuses->isDeactivated($user)) {
+            return ApiErrorResponse::make(
+                ApiErrorCode::AccountDeactivated,
+                'This account has been deactivated.',
+                403,
+            );
+        }
+
         if ($user instanceof User && $this->statuses->isSuspended($user)) {
             return ApiErrorResponse::make(
                 ApiErrorCode::AccountSuspended,

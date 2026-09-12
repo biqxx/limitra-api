@@ -245,36 +245,6 @@ class AccessControlService
         }, 3);
     }
 
-    public function deleteUser(User $actor, User $user): void
-    {
-        $this->assertSuperAdmin($actor);
-
-        DB::transaction(function () use ($actor, $user): void {
-            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->getKey());
-            $superAdminRole = $this->lockSuperAdminRole();
-            $this->assertSuperAdmin($actor);
-
-            if ($lockedUser->is($actor)) {
-                throw new AccessControlConflictException('You cannot delete your own account.');
-            }
-
-            if ($lockedUser->role === 'admin') {
-                $this->assertNotLastAdministrator($lockedUser, $superAdminRole);
-            }
-
-            $before = $this->userRoleSnapshot($lockedUser);
-
-            $this->auditEvents->record(
-                action: 'user.deleted',
-                actor: $actor,
-                subject: $lockedUser,
-                before: $before,
-            );
-
-            $lockedUser->delete();
-        }, 3);
-    }
-
     /** @param list<string> $permissionNames */
     private function assertMayGrantPermissions(User $actor, array $permissionNames): void
     {

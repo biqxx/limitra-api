@@ -265,6 +265,10 @@ class StaffInvitationService
 
     private function assertMayInvite(User $actor, ?Role $role): void
     {
+        if ($actor->status === UserStatus::Deactivated) {
+            throw new AuthorizationException('Deactivated accounts cannot manage staff invitations.');
+        }
+
         if ($actor->status === UserStatus::Suspended
             && ($actor->suspended_until === null || $actor->suspended_until->isFuture())) {
             throw new AuthorizationException('Suspended accounts cannot manage staff invitations.');

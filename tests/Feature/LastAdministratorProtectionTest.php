@@ -41,7 +41,10 @@ class LastAdministratorProtectionTest extends TestCase
         $this->actingAs($admin, 'api')->patchJson("/api/v1/admin/users/{$admin->id}/role", [
             'role' => 'staff',
         ])->assertConflict()->assertJsonPath('code', 'CONFLICT');
-        $this->actingAs($admin, 'api')->deleteJson("/api/v1/admin/users/{$admin->id}")
+        $this->actingAs($admin, 'api')->deleteJson("/api/v1/admin/users/{$admin->id}", [
+            'confirmation' => true,
+            'reason' => 'Administrative cleanup.',
+        ])
             ->assertConflict();
 
         $this->assertSame('admin', $admin->fresh()->role);
@@ -61,12 +64,16 @@ class LastAdministratorProtectionTest extends TestCase
 
         $deletedAdmin = User::factory()->admin()->create();
         $deletedAdminId = $deletedAdmin->id;
-        $this->actingAs($actor, 'api')->deleteJson("/api/v1/admin/users/{$deletedAdminId}")
+        $this->actingAs($actor, 'api')->deleteJson("/api/v1/admin/users/{$deletedAdminId}", [
+            'confirmation' => true,
+            'reason' => 'Administrator left the organization.',
+        ])
             ->assertNoContent();
 
-        $this->assertDatabaseMissing('users', ['id' => $deletedAdminId]);
+        $this->assertSoftDeleted('users', ['id' => $deletedAdminId]);
+        $this->assertSame('deactivated', User::withTrashed()->findOrFail($deletedAdminId)->status->value);
         $this->assertDatabaseHas('audit_events', [
-            'action' => 'user.deleted', 'subject_id' => $deletedAdminId,
+            'action' => 'user.deactivated', 'subject_id' => $deletedAdminId,
         ]);
     }
 

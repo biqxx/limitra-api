@@ -10,7 +10,10 @@ class UpdateUserStatusRequest extends AccessControlRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::enum(UserStatus::class)],
+            'status' => ['required', Rule::in([
+                UserStatus::Active->value,
+                UserStatus::Suspended->value,
+            ])],
             'reason' => [
                 Rule::requiredIf(fn (): bool => $this->input('status') === UserStatus::Suspended->value),
                 'nullable', 'string', 'max:500',

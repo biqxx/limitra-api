@@ -17,6 +17,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/refund_admin.php';
         require __DIR__.'/api/settings.php';
         require __DIR__.'/api/queue.php';
+        require __DIR__.'/api/mail_preview.php';
         require __DIR__.'/api/notification_admin.php';
         require __DIR__.'/api/support_admin.php';
         require __DIR__.'/api/reward_admin.php';

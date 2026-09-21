@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ApiErrorCode;
 use App\Http\Controllers\Controller;
+use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Http\JsonResponse;
 
 class BaseController extends Controller
@@ -16,12 +18,17 @@ class BaseController extends Controller
         ], $status);
     }
 
-    protected function error(string $message = 'Error', int $status = 400, mixed $errors = null): JsonResponse
-    {
-        return response()->json([
-            'success' => false,
-            'message' => $message,
-            'errors' => $errors,
-        ], $status);
+    protected function error(
+        string $message = 'Error',
+        int $status = 400,
+        mixed $errors = null,
+        ApiErrorCode|string|null $code = null,
+    ): JsonResponse {
+        return ApiErrorResponse::make(
+            $code ?? ApiErrorCode::forStatus($status),
+            $message,
+            $status,
+            $errors,
+        );
     }
 }

@@ -2,15 +2,19 @@
 
 namespace App\Http\Requests\Reward;
 
+use App\Models\User;
+use App\Services\Auth\PermissionResolver;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreRewardCampaignRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(PermissionResolver $permissions): bool
     {
-        return $this->user()?->isAdmin() === true;
+        $user = $this->user();
+
+        return $user instanceof User && $permissions->allowsAll($user, ['rewards.manage']);
     }
 
     public function rules(): array

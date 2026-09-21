@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\ApiErrorCode;
+use App\Http\Responses\ApiErrorResponse;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,10 +21,11 @@ class RoleMiddleware
         $user = $request->user();
 
         if (! $user || ! in_array($user->role, $roles)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Forbidden. Insufficient permissions.',
-            ], 403);
+            return ApiErrorResponse::make(
+                ApiErrorCode::Forbidden,
+                'Forbidden. Insufficient permissions.',
+                403,
+            );
         }
 
         return $next($request);

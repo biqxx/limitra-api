@@ -3,7 +3,7 @@
 use App\Http\Controllers\Api\Admin\QueueMonitorController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:api', 'role:admin,staff'])
+Route::middleware(['auth:api', 'active.session', 'permission:queue.read'])
     ->prefix('queue')
     ->name('admin.queue.')
     ->group(function (): void {
@@ -12,7 +12,7 @@ Route::middleware(['auth:api', 'role:admin,staff'])
         Route::get('failed-jobs', [QueueMonitorController::class, 'failed'])->name('failed');
     });
 
-Route::middleware(['auth:api', 'role:admin'])
+Route::middleware(['auth:api', 'active.session', 'permission:queue.retry'])
     ->prefix('queue')
     ->name('admin.queue.')
     ->group(function (): void {

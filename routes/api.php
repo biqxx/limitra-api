@@ -10,12 +10,14 @@ Route::prefix('v1')->group(function () {
     // ── Admin controls (auth + role enforced inside the file) ─────────────────
     Route::prefix('admin')->group(function () {
         require __DIR__.'/api/admin.php';
+        require __DIR__.'/api/access_control.php';
         require __DIR__.'/api/order_admin.php';
         require __DIR__.'/api/review_admin.php';
         require __DIR__.'/api/return_admin.php';
         require __DIR__.'/api/refund_admin.php';
         require __DIR__.'/api/settings.php';
         require __DIR__.'/api/queue.php';
+        require __DIR__.'/api/mail_preview.php';
         require __DIR__.'/api/notification_admin.php';
         require __DIR__.'/api/support_admin.php';
         require __DIR__.'/api/reward_admin.php';
@@ -39,6 +41,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/ai.php';
     require __DIR__.'/api/referral.php';
     require __DIR__.'/api/reward.php';
+    require __DIR__.'/api/staff_invitation.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
     Route::middleware(['auth:api', 'active.session'])->group(function () {

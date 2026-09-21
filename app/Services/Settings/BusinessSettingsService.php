@@ -5,6 +5,7 @@ namespace App\Services\Settings;
 use App\Models\Settings\BusinessSetting;
 use App\Models\Settings\BusinessSettingChange;
 use App\Models\User;
+use App\Services\Admin\AuditEventService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,8 @@ use LogicException;
 class BusinessSettingsService
 {
     private const CACHE_KEY = 'business_settings.values.v1';
+
+    public function __construct(private readonly AuditEventService $auditEvents) {}
 
     public function value(string $key): mixed
     {
@@ -80,6 +83,15 @@ class BusinessSettingsService
                     'version' => $version,
                     'created_at' => now(),
                 ]);
+
+                $this->auditEvents->record(
+                    action: 'business_setting.updated',
+                    actor: $actor,
+                    subject: $setting,
+                    before: ['value' => $oldValue, 'version' => $version - 1],
+                    after: ['value' => $change['value'], 'version' => $version],
+                    metadata: ['key' => $setting->key, 'group' => $setting->group],
+                );
 
                 return $setting;
             });

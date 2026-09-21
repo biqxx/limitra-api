@@ -2,6 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Models\User;
+use App\Models\User\Role;
+use App\Services\Auth\PermissionResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -10,6 +13,11 @@ class UserResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        /** @var User $user */
+        $user = $this->resource;
+        $permissionResolver = app(PermissionResolver::class);
+        $roles = $permissionResolver->roles($user);
+
         return [
             'id' => $this->id,
             'username' => $this->username,
@@ -18,16 +26,19 @@ class UserResource extends JsonResource
             'phone' => $this->profile?->phone,
             'avatar_url' => $this->profile?->avatar ? Storage::disk('public')->url($this->profile->avatar) : null,
             'role' => $this->role,
-            'permissions' => match ($this->role) {
-                'admin' => ['*'],
-                'staff' => ['customers.read', 'orders.read', 'orders.update', 'affiliates.read'],
-                'affiliate' => ['affiliate.dashboard', 'affiliate.links', 'affiliate.payouts'],
-                default => ['account.manage', 'orders.manage', 'cart.manage'],
-            },
+            'status' => $this->status->value,
+            'suspended_until' => $this->suspended_until,
+            'permissions' => $permissionResolver->resolve($user),
             'linked_roles' => [
-                'affiliate' => $this->role === 'affiliate',
-                'staff' => in_array($this->role, ['staff', 'admin'], true),
+                'affiliate' => $roles->contains('name', 'affiliate'),
+                'staff' => $roles->contains(fn (Role $role): bool => in_array($role->name, ['staff', 'admin'], true)),
             ],
+            'roles' => $roles->map(fn (Role $role): array => [
+                'id' => $role->id,
+                'name' => $role->name,
+                'display_name' => $role->display_name,
+                'is_primary' => (bool) $role->pivot->is_primary,
+            ])->values(),
             'email_verified_at' => $this->email_verified_at,
             'profile' => new ProfileResource($this->whenLoaded('profile')),
             'created_at' => $this->created_at,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ApiErrorCode;
 use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\ResendVerificationRequest;
@@ -13,10 +14,11 @@ use App\Models\User;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
 use App\Notifications\LoginNotification;
-use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\VerifyEmailNotification;
 use App\Services\AffiliateService;
 use App\Services\Auth\AuthSessionManager;
+use App\Services\Auth\PasswordResetService;
+use App\Services\Auth\UserStatusService;
 use App\Services\Referral\CustomerReferralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,6 +32,8 @@ class AuthController extends BaseController
     public function __construct(
         private readonly AuthSessionManager $authSessions,
         private readonly CustomerReferralService $customerReferrals,
+        private readonly PasswordResetService $passwordResets,
+        private readonly UserStatusService $userStatuses,
     ) {}
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -252,6 +256,16 @@ class AuthController extends BaseController
             );
         }
 
+        if ($this->userStatuses->isSuspended($user)) {
+            auth('api')->logout();
+
+            return $this->error(
+                'This account is suspended.',
+                403,
+                code: ApiErrorCode::AccountSuspended,
+            );
+        }
+
         // Queued — does not delay the response.
         $user->notify(new LoginNotification(
             $request->ip() ?? 'unknown',
@@ -342,7 +356,7 @@ class AuthController extends BaseController
     public function me(): JsonResponse
     {
         return $this->success(
-            new UserResource(auth('api')->user()->load('profile'))
+            new UserResource(auth('api')->user()->load('profile', 'roles.permissions'))
         );
     }
 
@@ -379,18 +393,7 @@ class AuthController extends BaseController
             return $this->success(null, 'If an account exists for this email, a password reset OTP has been sent.');
         }
 
-        $otp = (string) random_int(100_000, 999_999);
-
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $email],
-            [
-                'token' => Hash::make($otp),
-                'expires_at' => now()->addMinutes(15),
-                'created_at' => now(),
-            ]
-        );
-
-        $user->notify(new PasswordResetOtpNotification($otp));
+        $this->passwordResets->issue($user);
 
         return $this->success(null, 'If an account exists for this email, a password reset OTP has been sent.');
     }
@@ -455,6 +458,10 @@ class AuthController extends BaseController
 
     private function tokenPayload(string $token, mixed $user): array
     {
+        if ($user instanceof User) {
+            $user->loadMissing('profile', 'roles.permissions');
+        }
+
         return [
             'access_token' => $token,
             'token_type' => 'bearer',

@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Analytics;
 
+use App\Models\User;
+use App\Services\Auth\PermissionResolver;
 use Illuminate\Foundation\Http\FormRequest;
 
 class DateRangeRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(PermissionResolver $permissions): bool
     {
-        return $this->user()?->hasRole('admin') || $this->user()?->hasRole('staff');
+        $user = $this->user();
+
+        return $user instanceof User && $permissions->allowsAll($user, ['analytics.read']);
     }
 
     public function rules(): array

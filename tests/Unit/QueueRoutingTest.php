@@ -11,14 +11,15 @@ use App\Jobs\ProcessAutomaticRefund;
 use App\Jobs\ProcessPaymentWebhook;
 use App\Jobs\ReconcileAutomaticRefund;
 use App\Jobs\RecordReferralShareEvent;
+use App\Jobs\SendPasswordResetOtp;
 use App\Jobs\SendReferralInvitation;
+use App\Jobs\SendStaffInvitation;
 use App\Notifications\AutomaticRefundAttentionNotification;
 use App\Notifications\AutomaticRefundInitiatedNotification;
 use App\Notifications\AutomaticRefundProcessedNotification;
 use App\Notifications\AutomaticRefundStaffAlert;
 use App\Notifications\InventoryReservationExpiredNotification;
 use App\Notifications\LoginNotification;
-use App\Notifications\PasswordResetOtpNotification;
 use App\Notifications\ReferralRewardEarnedNotification;
 use App\Notifications\ReferralRewardReversedNotification;
 use App\Notifications\SupportTicketCustomerNotification;
@@ -44,6 +45,8 @@ class QueueRoutingTest extends TestCase
             'event-id', 1, 1, 'copy', 'url-hash', '/ref/TEST', null, null, now()->toISOString(),
         ))->queue);
         $this->assertSame('notifications', (new SendReferralInvitation(1))->queue);
+        $this->assertSame('notifications', (new SendStaffInvitation(1, 1))->queue);
+        $this->assertSame('notifications', (new SendPasswordResetOtp(1, null, 1))->queue);
     }
 
     public function test_automatic_refunds_use_an_execution_lock(): void
@@ -62,7 +65,6 @@ class QueueRoutingTest extends TestCase
     {
         $notifications = [
             new VerifyEmailNotification('123456'),
-            new PasswordResetOtpNotification('123456'),
             new ReferralRewardEarnedNotification(700000, 'NGN'),
             new ReferralRewardReversedNotification(700000, 'NGN'),
             new LoginNotification('127.0.0.1', 'Test Browser'),

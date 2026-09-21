@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\UserStatus;
 use App\Models\Address\Address;
 use App\Models\Affiliate\Affiliate;
 use App\Models\Cart\Cart;
@@ -21,14 +22,17 @@ use App\Models\Reward\RewardSpin;
 use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
+use App\Models\User\Role;
 use App\Models\User\UserPreference;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
@@ -36,7 +40,12 @@ use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
+
+    protected $attributes = [
+        'role' => 'user',
+        'status' => 'active',
+    ];
 
     protected $fillable = [
         'username',
@@ -70,6 +79,10 @@ class User extends Authenticatable implements JWTSubject
             'email_verification_sent_at' => 'datetime',
             'email_change_expires_at' => 'datetime',
             'password' => 'hashed',
+            'status' => UserStatus::class,
+            'suspended_at' => 'datetime',
+            'suspended_until' => 'datetime',
+            'deactivated_at' => 'datetime',
         ];
     }
 
@@ -126,6 +139,13 @@ class User extends Authenticatable implements JWTSubject
     public function preference(): HasOne
     {
         return $this->hasOne(UserPreference::class);
+    }
+
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class)
+            ->withPivot(['assigned_by', 'is_primary', 'assigned_at'])
+            ->withTimestamps();
     }
 
     public function addresses(): HasMany

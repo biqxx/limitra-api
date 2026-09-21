@@ -124,7 +124,28 @@ class AuthSessionManager
 
     public function revokeAll(User $user): void
     {
-        $this->revokeQuery($user->authSessions()->whereNull('revoked_at'));
+        $this->forgetRevokedSessions($this->revokeAllInDatabase($user));
+    }
+
+    /** @return list<string> */
+    public function revokeAllInDatabase(User $user): array
+    {
+        $query = $user->authSessions()->whereNull('revoked_at');
+        $sessionIds = (clone $query)->pluck('id')->all();
+
+        if ($sessionIds !== []) {
+            $query->update(['revoked_at' => now()]);
+        }
+
+        return $sessionIds;
+    }
+
+    /** @param list<string> $sessionIds */
+    public function forgetRevokedSessions(array $sessionIds): void
+    {
+        foreach ($sessionIds as $sessionId) {
+            $this->markInactive($sessionId);
+        }
     }
 
     private function revokeQuery(HasMany $query): void

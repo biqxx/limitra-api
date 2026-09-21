@@ -3,11 +3,10 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class PasswordResetOtpNotification extends Notification implements ShouldQueue
+class PasswordResetOtpNotification extends Notification
 {
     use Queueable;
 
@@ -16,11 +15,6 @@ class PasswordResetOtpNotification extends Notification implements ShouldQueue
     public function via(object $notifiable): array
     {
         return ['mail'];
-    }
-
-    public function viaQueues(): array
-    {
-        return ['mail' => 'notifications'];
     }
 
     public function toMail(object $notifiable): MailMessage

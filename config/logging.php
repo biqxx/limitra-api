@@ -1,5 +1,6 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -63,6 +64,15 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+        ],
+
+        'mail_preview' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/mail-preview.log'),
+            'level' => 'debug',
+            'permission' => 0600,
+            'locking' => true,
+            'formatter' => JsonFormatter::class,
         ],
 
         'daily' => [

@@ -108,6 +108,11 @@ class Product extends Model
         return $this->hasMany(ProductSpecification::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function sources(): HasMany
+    {
+        return $this->hasMany(ProductSource::class);
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);

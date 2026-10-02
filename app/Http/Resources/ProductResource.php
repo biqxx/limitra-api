@@ -46,6 +46,7 @@ class ProductResource extends JsonResource
                 'stock' => $variant->stock,
                 'status' => $variant->status,
             ])),
+            'variants_count' => $this->whenCounted('variants'),
             'specifications' => $this->whenLoaded('specifications', fn () => $this->specifications->map(fn ($specification) => [
                 'id' => $specification->id,
                 'group' => $specification->group,
@@ -53,6 +54,8 @@ class ProductResource extends JsonResource
                 'value' => $specification->value,
                 'position' => $specification->sort_order,
             ])),
+            'sources_count' => $this->whenCounted('sources'),
+            'sources' => ProductSourceResource::collection($this->whenLoaded('sources')),
             'seo_meta' => $this->seo_meta,
             'category' => new CategoryResource($this->whenLoaded('category')),
             'subcategory' => new CategoryResource($this->whenLoaded('subcategory')),

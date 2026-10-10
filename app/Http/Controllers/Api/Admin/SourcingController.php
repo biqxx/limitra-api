@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\SupplierServiceException;
 use App\Http\Controllers\Api\BaseController;
+use App\Http\Requests\Admin\EnhanceSupplierProductRequest;
 use App\Http\Requests\Admin\ImportSupplierProductRequest;
 use App\Http\Requests\Admin\SearchSupplierProductsRequest;
 use App\Http\Resources\ProductSourceResource;
 use App\Models\Product\ProductSource;
+use App\Services\Sourcing\ProductContentEnhancer;
 use App\Services\Sourcing\SupplierProductImportService;
 use App\Services\Sourcing\SupplierServiceClient;
 use DomainException;
@@ -71,7 +73,7 @@ class SourcingController extends BaseController
     {
         $perPage = min(max($request->integer('per_page', 20), 1), 100);
         $sources = ProductSource::query()
-            ->with(['product.category', 'product.subcategory', 'product.productImages'])
+            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications'])
             ->latest('id')
             ->paginate($perPage);
 
@@ -84,6 +86,24 @@ class SourcingController extends BaseController
                 'total' => $sources->total(),
             ],
         ]);
+    }
+
+    public function enhance(
+        EnhanceSupplierProductRequest $request,
+        ProductContentEnhancer $enhancer,
+    ): JsonResponse {
+        try {
+            $result = $enhancer->enhance(
+                $request->validated('source'),
+                $request->validated('external_product_id'),
+            );
+        } catch (SupplierServiceException $exception) {
+            return $this->error($exception->getMessage(), $exception->httpStatus);
+        } catch (UnexpectedValueException $exception) {
+            return $this->error($exception->getMessage(), 503);
+        }
+
+        return $this->success($result, 'Product content enhanced.');
     }
 
     public function store(

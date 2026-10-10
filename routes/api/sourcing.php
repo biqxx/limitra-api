@@ -9,6 +9,9 @@ Route::middleware(['auth:api', 'role:admin'])
     ->group(function () {
         Route::get('sources', [SourcingController::class, 'sources'])->name('sources');
         Route::get('search', [SourcingController::class, 'search'])->name('search');
+        Route::post('enhance', [SourcingController::class, 'enhance'])
+            ->middleware('throttle:10,1')
+            ->name('enhance');
         Route::get('imports', [SourcingController::class, 'index'])->name('imports.index');
         Route::post('imports', [SourcingController::class, 'store'])->name('imports.store');
     });

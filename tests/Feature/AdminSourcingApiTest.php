@@ -23,6 +23,12 @@ class AdminSourcingApiTest extends TestCase
             'services.supplier.base_url' => 'https://supplier.test',
             'services.supplier.secret' => 'internal-secret',
             'services.supplier.retries' => 1,
+            'ai.openrouter.api_key' => 'test-openrouter-key',
+            'ai.openrouter.base_url' => 'https://openrouter.test/api/v1',
+            'ai.openrouter.product_content_models' => [
+                'google/gemini-2.0-flash-lite-001',
+                'deepseek/deepseek-v4-flash',
+            ],
         ]);
         $this->withoutMiddleware(TrackAnalytics::class);
     }
@@ -107,23 +113,35 @@ class AdminSourcingApiTest extends TestCase
             'source' => 'amazon',
             'external_product_id' => 'B0TEST',
             'category_id' => $category->id,
-            'brand' => 'Example',
+            'name' => 'Limitra Enhanced Phone',
+            'brand' => 'Example Brand',
+            'description' => 'A clearer reviewed description.',
+            'specifications' => [
+                ['name' => 'Colour', 'value' => 'Black'],
+            ],
         ];
 
         $this->actingAs($admin, 'api')
             ->postJson('/api/v1/admin/sourcing/imports', $payload)
             ->assertCreated()
             ->assertJsonPath('data.supplier', 'amazon')
-            ->assertJsonPath('data.product.name', 'Imported Phone')
+            ->assertJsonPath('data.product.name', 'Limitra Enhanced Phone')
             ->assertJsonPath('data.product.status', 'draft')
             ->assertJsonPath('data.product.stock', 0)
-            ->assertJsonPath('data.product.price', '625000.00');
+            ->assertJsonPath('data.product.price', '625000.00')
+            ->assertJsonPath('data.product.specifications.0.name', 'Colour');
 
         $this->assertDatabaseHas('products', [
-            'name' => 'Imported Phone',
+            'name' => 'Limitra Enhanced Phone',
+            'brand' => 'Example Brand',
+            'description' => 'A clearer reviewed description.',
             'currency' => 'NGN',
             'status' => 'draft',
             'stock' => 0,
+        ]);
+        $this->assertDatabaseHas('product_specifications', [
+            'name' => 'Colour',
+            'value' => 'Black',
         ]);
         $this->assertDatabaseHas('product_sources', [
             'supplier' => 'amazon',
@@ -140,6 +158,68 @@ class AdminSourcingApiTest extends TestCase
             ->assertConflict();
 
         Http::assertSentCount(1);
+    }
+
+    public function test_admin_can_generate_a_reviewable_ai_product_draft(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $category = Category::create(['name' => 'Phones', 'slug' => 'phones', 'active' => true]);
+        $subcategory = Category::create([
+            'parent_id' => $category->id,
+            'name' => 'Smartphones',
+            'slug' => 'smartphones',
+            'active' => true,
+        ]);
+
+        Http::fake([
+            'https://supplier.test/import/ebay/EBAY-1' => Http::response([
+                'supplier_id' => 'EBAY-1',
+                'supplier' => 'ebay',
+                'title' => 'Supplier Phone Title',
+                'brand' => 'Example',
+                'description' => 'Raw supplier description.',
+                'price' => 100,
+                'currency' => 'USD',
+                'image_url' => 'https://images.test/phone.jpg',
+                'product_url' => 'https://ebay.test/itm/EBAY-1',
+                'available' => true,
+                'final_price_ngn' => 250000,
+            ]),
+            'https://openrouter.test/api/v1/chat/completions' => Http::sequence()
+                ->push(['choices' => [['message' => ['content' => 'not valid json']]]])
+                ->push([
+                    'choices' => [[
+                        'message' => [
+                            'content' => json_encode([
+                                'name' => 'Example Smartphone',
+                                'brand' => 'Example',
+                                'description' => 'A polished and factual product description.',
+                                'category_id' => $category->id,
+                                'subcategory_id' => $subcategory->id,
+                                'specifications' => [
+                                    ['name' => 'Colour', 'value' => 'Black'],
+                                ],
+                            ]),
+                        ],
+                    ]],
+                ]),
+        ]);
+
+        $this->actingAs($admin, 'api')
+            ->postJson('/api/v1/admin/sourcing/enhance', [
+                'source' => 'ebay',
+                'external_product_id' => 'EBAY-1',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.supplier_product.final_price_ngn', 250000)
+            ->assertJsonPath('data.enhanced.name', 'Example Smartphone')
+            ->assertJsonPath('data.enhanced.category_id', $category->id)
+            ->assertJsonPath('data.enhanced.subcategory_id', $subcategory->id)
+            ->assertJsonPath('data.enhanced.specifications.0.name', 'Colour');
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://openrouter.test/api/v1/chat/completions'
+            && $request['model'] === 'deepseek/deepseek-v4-flash'
+            && $request->hasHeader('Authorization', 'Bearer test-openrouter-key'));
     }
 
     public function test_import_requires_subcategory_to_belong_to_category(): void

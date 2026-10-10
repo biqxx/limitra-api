@@ -36,7 +36,7 @@ class SupplierProductImportService
                 throw new DomainException('This supplier product has already been imported.');
             }
 
-            $name = trim((string) ($supplierProduct['title'] ?? ''));
+            $name = trim((string) ($attributes['name'] ?? $supplierProduct['title'] ?? ''));
 
             if ($name === '') {
                 throw new UnexpectedValueException('The supplier product does not have a valid title.');
@@ -48,9 +48,11 @@ class SupplierProductImportService
                 'subcategory_id' => $attributes['subcategory_id'] ?? null,
                 'name' => $name,
                 'slug' => $this->uniqueSlug($name),
-                'brand' => $attributes['brand'] ?? null,
+                'brand' => $attributes['brand'] ?? $supplierProduct['brand'] ?? null,
                 'sku' => $this->uniqueSku($attributes['sku'] ?? null, $supplier, $externalProductId),
-                'description' => $supplierProduct['description'] ?? null,
+                'description' => array_key_exists('description', $attributes)
+                    ? $attributes['description']
+                    : ($supplierProduct['description'] ?? null),
                 'price' => $price,
                 'currency' => 'NGN',
                 'stock' => 0,
@@ -58,6 +60,16 @@ class SupplierProductImportService
                 'images' => $imageUrl ? [$imageUrl] : null,
                 'created_by' => $admin->id,
             ]);
+
+            $product->specifications()->createMany(array_map(
+                fn (array $specification, int $position): array => [
+                    'name' => $specification['name'],
+                    'value' => $specification['value'],
+                    'sort_order' => $position,
+                ],
+                $attributes['specifications'] ?? [],
+                array_keys($attributes['specifications'] ?? []),
+            ));
 
             if ($imageUrl) {
                 Image::create([
@@ -91,7 +103,7 @@ class SupplierProductImportService
                 'last_synced_at' => now(),
             ]);
 
-            return $source->load(['product.category', 'product.subcategory', 'product.productImages']);
+            return $source->load(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications']);
         });
     }
 

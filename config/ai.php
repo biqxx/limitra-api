@@ -11,6 +11,10 @@ return [
         'connect_timeout' => (int) env('OPENROUTER_CONNECT_TIMEOUT', 5),
         'site_url' => env('OPENROUTER_SITE_URL', env('APP_URL')),
         'app_name' => env('OPENROUTER_APP_NAME', env('APP_NAME', 'Limitra')),
+        'product_content_models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', env('OPENROUTER_PRODUCT_CONTENT_MODELS', 'google/gemini-2.0-flash-lite-001,deepseek/deepseek-v4-flash,inclusionai/ling-3.0-flash')),
+        ))),
     ],
 
     'claude' => [

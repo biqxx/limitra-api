@@ -30,8 +30,13 @@ class ImportSupplierProductRequest extends FormRequest
             'external_product_id' => ['required', 'string', 'max:255'],
             'category_id' => ['required', 'integer', 'exists:categories,id'],
             'subcategory_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
             'brand' => ['nullable', 'string', 'max:255'],
             'sku' => ['nullable', 'string', 'max:255', 'unique:products,sku'],
+            'description' => ['nullable', 'string', 'max:20000'],
+            'specifications' => ['nullable', 'array', 'max:12'],
+            'specifications.*.name' => ['required', 'string', 'max:100'],
+            'specifications.*.value' => ['required', 'string', 'max:2000'],
         ];
     }
 

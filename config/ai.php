@@ -13,7 +13,7 @@ return [
         'app_name' => env('OPENROUTER_APP_NAME', env('APP_NAME', 'Limitra')),
         'product_content_models' => array_values(array_filter(array_map(
             'trim',
-            explode(',', env('OPENROUTER_PRODUCT_CONTENT_MODELS', 'google/gemini-2.0-flash-lite-001,deepseek/deepseek-v4-flash,inclusionai/ling-3.0-flash')),
+            explode(',', env('OPENROUTER_PRODUCT_CONTENT_MODELS', 'google/gemini-2.5-flash-lite,deepseek/deepseek-v4-flash,inclusionai/ling-3.0-flash')),
         ))),
     ],
 

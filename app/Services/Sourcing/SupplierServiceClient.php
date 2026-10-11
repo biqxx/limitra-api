@@ -30,6 +30,17 @@ class SupplierServiceClient
         return $this->send(fn (PendingRequest $http) => $http->post($endpoint));
     }
 
+    public function details(string $supplier, string $externalProductId): array
+    {
+        $endpoint = sprintf(
+            'details/%s/%s',
+            rawurlencode($supplier),
+            rawurlencode($externalProductId),
+        );
+
+        return $this->send(fn (PendingRequest $http) => $http->get($endpoint));
+    }
+
     private function send(callable $request): array
     {
         try {
@@ -48,7 +59,9 @@ class SupplierServiceClient
             throw new SupplierServiceException('The supplier service returned an invalid response.');
         }
 
-        return is_array($payload['data'] ?? null) ? $payload['data'] : $payload;
+        return $this->secureImageUrls(
+            is_array($payload['data'] ?? null) ? $payload['data'] : $payload
+        );
     }
 
     private function http(): PendingRequest
@@ -74,5 +87,21 @@ class SupplierServiceClient
             $response->clientError() => new SupplierServiceException('The supplier rejected the request.', 422),
             default => new SupplierServiceException('The supplier service could not complete the request.'),
         };
+    }
+
+    /** @return array<string, mixed> */
+    private function secureImageUrls(array $payload): array
+    {
+        array_walk_recursive($payload, function (mixed &$value, string|int $key): void {
+            if (! is_string($value)
+                || ! in_array((string) $key, ['image_url', 'image', 'thumbnail'], true)
+                || ! str_starts_with($value, 'http://')) {
+                return;
+            }
+
+            $value = 'https://'.substr($value, 7);
+        });
+
+        return $payload;
     }
 }

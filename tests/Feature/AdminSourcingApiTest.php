@@ -3,11 +3,16 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\TrackAnalytics;
+use App\Jobs\ProcessSourcingProduct;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
+use App\Models\Product\SourcingJob;
+use App\Services\Sourcing\ProductContentEnhancer;
+use App\Services\Sourcing\SupplierProductImportService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AdminSourcingApiTest extends TestCase
@@ -172,7 +177,7 @@ class AdminSourcingApiTest extends TestCase
         ]);
 
         Http::fake([
-            'https://supplier.test/import/ebay/EBAY-1' => Http::response([
+            'https://supplier.test/details/ebay/EBAY-1' => Http::response([
                 'supplier_id' => 'EBAY-1',
                 'supplier' => 'ebay',
                 'title' => 'Supplier Phone Title',
@@ -242,5 +247,86 @@ class AdminSourcingApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('subcategory_id');
 
         Http::assertNothingSent();
+    }
+
+    public function test_admin_can_queue_ai_rewrite_and_it_creates_a_draft_in_the_background(): void
+    {
+        Queue::fake();
+        $admin = User::factory()->admin()->create();
+        $category = Category::create(['name' => 'Audio', 'slug' => 'audio', 'active' => true]);
+
+        Http::fake([
+            'https://supplier.test/details/ebay/EBAY-QUEUE' => Http::response([
+                'supplier_id' => 'EBAY-QUEUE',
+                'supplier' => 'ebay',
+                'title' => 'Supplier Headphones',
+                'description' => 'Raw description.',
+                'price' => 40,
+                'currency' => 'USD',
+                'image_url' => 'http://i.ebayimg.test/headphones.jpg',
+                'product_url' => 'https://ebay.test/itm/EBAY-QUEUE',
+                'available' => true,
+            ]),
+            'https://supplier.test/import/ebay/EBAY-QUEUE' => Http::response([
+                'error' => 'MISSING_PRICING_DATA',
+                'detail' => 'weight must be greater than zero',
+            ], 422),
+            'https://openrouter.test/api/v1/chat/completions' => Http::response([
+                'choices' => [[
+                    'message' => ['content' => json_encode([
+                        'name' => 'Wireless Over-Ear Headphones',
+                        'brand' => '',
+                        'description' => 'Comfortable wireless headphones for everyday listening.',
+                        'category_id' => $category->id,
+                        'subcategory_id' => null,
+                        'specifications' => [],
+                    ])],
+                ]],
+            ]),
+        ]);
+
+        $response = $this->actingAs($admin, 'api')
+            ->postJson('/api/v1/admin/sourcing/jobs', [
+                'products' => [[
+                    'source' => 'ebay',
+                    'external_product_id' => 'EBAY-QUEUE',
+                ]],
+            ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.0.status', 'queued');
+
+        $jobRecord = SourcingJob::findOrFail($response->json('data.0.id'));
+        Queue::assertPushedOn('ai', ProcessSourcingProduct::class);
+
+        (new ProcessSourcingProduct($jobRecord->id))->handle(
+            app(ProductContentEnhancer::class),
+            app(SupplierProductImportService::class),
+        );
+
+        $jobRecord->refresh();
+        $this->assertSame('completed', $jobRecord->status);
+        $this->assertNotNull($jobRecord->product_id);
+        $this->assertNotNull($jobRecord->warning);
+        $this->assertDatabaseHas('products', [
+            'id' => $jobRecord->product_id,
+            'name' => 'Wireless Over-Ear Headphones',
+            'price' => 0,
+            'status' => 'draft',
+        ]);
+        $this->assertDatabaseHas('product_sources', [
+            'product_id' => $jobRecord->product_id,
+            'sync_status' => 'needs_review',
+            'validation_status' => 'manual_review',
+        ]);
+        $this->assertDatabaseHas('images', [
+            'imageable_id' => $jobRecord->product_id,
+            'path' => 'https://i.ebayimg.test/headphones.jpg',
+        ]);
+
+        $this->actingAs($admin, 'api')
+            ->getJson('/api/v1/admin/sourcing/jobs')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.status', 'completed')
+            ->assertJsonPath('data.items.0.product_id', $jobRecord->product_id);
     }
 }

@@ -6,9 +6,13 @@ use App\Exceptions\SupplierServiceException;
 use App\Http\Controllers\Api\BaseController;
 use App\Http\Requests\Admin\EnhanceSupplierProductRequest;
 use App\Http\Requests\Admin\ImportSupplierProductRequest;
+use App\Http\Requests\Admin\QueueSupplierProductsRequest;
 use App\Http\Requests\Admin\SearchSupplierProductsRequest;
 use App\Http\Resources\ProductSourceResource;
+use App\Http\Resources\SourcingJobResource;
+use App\Jobs\ProcessSourcingProduct;
 use App\Models\Product\ProductSource;
+use App\Models\Product\SourcingJob;
 use App\Services\Sourcing\ProductContentEnhancer;
 use App\Services\Sourcing\SupplierProductImportService;
 use App\Services\Sourcing\SupplierServiceClient;
@@ -86,6 +90,63 @@ class SourcingController extends BaseController
                 'total' => $sources->total(),
             ],
         ]);
+    }
+
+    public function jobs(Request $request): JsonResponse
+    {
+        $perPage = min(max($request->integer('per_page', 20), 1), 100);
+        $jobs = SourcingJob::query()
+            ->where('user_id', $request->user()->id)
+            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications'])
+            ->latest('id')
+            ->paginate($perPage);
+
+        return $this->success([
+            'items' => SourcingJobResource::collection($jobs->getCollection())->resolve($request),
+            'pagination' => [
+                'current_page' => $jobs->currentPage(),
+                'last_page' => $jobs->lastPage(),
+                'per_page' => $jobs->perPage(),
+                'total' => $jobs->total(),
+            ],
+        ]);
+    }
+
+    public function queue(QueueSupplierProductsRequest $request): JsonResponse
+    {
+        $jobs = collect($request->validated('products'))
+            ->unique(fn (array $product): string => $product['source'].':'.$product['external_product_id'])
+            ->map(function (array $product) use ($request): SourcingJob {
+                $existing = SourcingJob::query()
+                    ->where('user_id', $request->user()->id)
+                    ->where('supplier', $product['source'])
+                    ->where('external_product_id', $product['external_product_id'])
+                    ->whereIn('status', ['queued', 'processing'])
+                    ->latest('id')
+                    ->first();
+
+                if ($existing) {
+                    return $existing;
+                }
+
+                $job = SourcingJob::create([
+                    'user_id' => $request->user()->id,
+                    'supplier' => $product['source'],
+                    'external_product_id' => $product['external_product_id'],
+                    'status' => 'queued',
+                ]);
+
+                ProcessSourcingProduct::dispatch($job->id)->afterCommit();
+
+                return $job;
+            })
+            ->values();
+
+        return $this->success(
+            SourcingJobResource::collection($jobs)->resolve($request),
+            'Selected products were queued for AI rewriting and draft creation.',
+            202,
+        );
     }
 
     public function enhance(

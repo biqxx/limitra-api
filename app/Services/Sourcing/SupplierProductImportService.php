@@ -25,13 +25,26 @@ class SupplierProductImportService
         }
 
         $supplierProduct = $this->client->import($supplier, $externalProductId);
+
+        return $this->importResolved($attributes, $admin, $supplierProduct);
+    }
+
+    /** @param array<string, mixed> $attributes @param array<string, mixed> $supplierProduct */
+    public function importResolved(
+        array $attributes,
+        User $admin,
+        array $supplierProduct,
+        bool $needsPricingReview = false,
+    ): ProductSource {
+        $supplier = $attributes['source'];
+        $externalProductId = $attributes['external_product_id'];
         $price = (float) ($supplierProduct['final_price_ngn'] ?? 0);
 
-        if ($price <= 0) {
+        if ($price <= 0 && ! $needsPricingReview) {
             throw new UnexpectedValueException('The supplier did not return a valid NGN selling price.');
         }
 
-        return DB::transaction(function () use ($attributes, $admin, $supplier, $externalProductId, $supplierProduct, $price) {
+        return DB::transaction(function () use ($attributes, $admin, $supplier, $externalProductId, $supplierProduct, $price, $needsPricingReview) {
             if ($this->alreadyImported($supplier, $externalProductId)) {
                 throw new DomainException('This supplier product has already been imported.');
             }
@@ -42,7 +55,7 @@ class SupplierProductImportService
                 throw new UnexpectedValueException('The supplier product does not have a valid title.');
             }
 
-            $imageUrl = filter_var($supplierProduct['image_url'] ?? null, FILTER_VALIDATE_URL) ?: null;
+            $imageUrl = $this->secureUrl($supplierProduct['image_url'] ?? null);
             $product = Product::create([
                 'category_id' => $attributes['category_id'],
                 'subcategory_id' => $attributes['subcategory_id'] ?? null,
@@ -94,17 +107,26 @@ class SupplierProductImportService
                 'delivery_days_min' => $supplierProduct['us_delivery_days_min'] ?? null,
                 'delivery_days_max' => $supplierProduct['us_delivery_days_max'] ?? null,
                 'restriction_status' => $supplierProduct['restriction_status'] ?? null,
-                'validation_status' => $supplierProduct['validation_status'] ?? null,
-                'final_price_ngn' => $price,
+                'validation_status' => $needsPricingReview ? 'manual_review' : ($supplierProduct['validation_status'] ?? null),
+                'final_price_ngn' => $price > 0 ? $price : null,
                 'variants' => $supplierProduct['variants'] ?? null,
                 'cost_breakdown' => $supplierProduct['cost_breakdown'] ?? null,
                 'source_snapshot' => $supplierProduct,
-                'sync_status' => 'imported',
+                'sync_status' => $needsPricingReview ? 'needs_review' : 'imported',
                 'last_synced_at' => now(),
             ]);
 
             return $source->load(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications']);
         });
+    }
+
+    private function secureUrl(mixed $value): ?string
+    {
+        if (! is_string($value) || ! filter_var($value, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        return str_starts_with($value, 'http://') ? 'https://'.substr($value, 7) : $value;
     }
 
     private function alreadyImported(string $supplier, string $externalProductId): bool

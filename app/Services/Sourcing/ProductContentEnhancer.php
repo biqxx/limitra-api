@@ -21,7 +21,7 @@ class ProductContentEnhancer
             throw new UnexpectedValueException('AI product enhancement is not configured.');
         }
 
-        $supplierProduct = $this->client->import($supplier, $externalProductId);
+        $supplierProduct = $this->client->details($supplier, $externalProductId);
         $categories = $this->categories();
         $prompt = $this->prompt($supplierProduct, $categories);
         $lastError = null;
@@ -191,18 +191,9 @@ PROMPT;
      */
     private function supplierPreview(string $supplier, string $externalProductId, array $supplierProduct): array
     {
-        return [
+        return array_merge($supplierProduct, [
             'source' => $supplier,
             'external_product_id' => $externalProductId,
-            'title' => $supplierProduct['title'] ?? null,
-            'brand' => $supplierProduct['brand'] ?? null,
-            'description' => $supplierProduct['description'] ?? null,
-            'image_url' => $supplierProduct['image_url'] ?? null,
-            'product_url' => $supplierProduct['product_url'] ?? null,
-            'price' => $supplierProduct['price'] ?? null,
-            'currency' => $supplierProduct['currency'] ?? null,
-            'final_price_ngn' => $supplierProduct['final_price_ngn'] ?? null,
-            'available' => $supplierProduct['available'] ?? null,
-        ];
+        ]);
     }
 }

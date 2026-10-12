@@ -6,6 +6,7 @@ use App\Models\Image;
 use App\Models\Product\Product;
 use App\Models\Product\ProductSource;
 use App\Models\User;
+use App\Services\Currency\CurrencyExchangeService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -13,7 +14,10 @@ use UnexpectedValueException;
 
 class SupplierProductImportService
 {
-    public function __construct(private readonly SupplierServiceClient $client) {}
+    public function __construct(
+        private readonly SupplierServiceClient $client,
+        private readonly CurrencyExchangeService $exchangeRates,
+    ) {}
 
     public function import(array $attributes, User $admin): ProductSource
     {
@@ -38,13 +42,13 @@ class SupplierProductImportService
     ): ProductSource {
         $supplier = $attributes['source'];
         $externalProductId = $attributes['external_product_id'];
-        $price = (float) ($supplierProduct['final_price_ngn'] ?? 0);
+        [$price, $conversion] = $this->resolveNairaPrice($supplierProduct);
 
         if ($price <= 0 && ! $needsPricingReview) {
             throw new UnexpectedValueException('The supplier did not return a valid NGN selling price.');
         }
 
-        return DB::transaction(function () use ($attributes, $admin, $supplier, $externalProductId, $supplierProduct, $price, $needsPricingReview) {
+        return DB::transaction(function () use ($attributes, $admin, $supplier, $externalProductId, $supplierProduct, $price, $conversion, $needsPricingReview) {
             if ($this->alreadyImported($supplier, $externalProductId)) {
                 throw new DomainException('This supplier product has already been imported.');
             }
@@ -95,6 +99,14 @@ class SupplierProductImportService
                 ]);
             }
 
+            $costBreakdown = is_array($supplierProduct['cost_breakdown'] ?? null)
+                ? $supplierProduct['cost_breakdown']
+                : [];
+
+            if ($conversion !== null) {
+                $costBreakdown['currency_conversion'] = $conversion;
+            }
+
             $source = ProductSource::create([
                 'product_id' => $product->id,
                 'supplier' => $supplier,
@@ -110,7 +122,7 @@ class SupplierProductImportService
                 'validation_status' => $needsPricingReview ? 'manual_review' : ($supplierProduct['validation_status'] ?? null),
                 'final_price_ngn' => $price > 0 ? $price : null,
                 'variants' => $supplierProduct['variants'] ?? null,
-                'cost_breakdown' => $supplierProduct['cost_breakdown'] ?? null,
+                'cost_breakdown' => $costBreakdown !== [] ? $costBreakdown : null,
                 'source_snapshot' => $supplierProduct,
                 'sync_status' => $needsPricingReview ? 'needs_review' : 'imported',
                 'last_synced_at' => now(),
@@ -118,6 +130,27 @@ class SupplierProductImportService
 
             return $source->load(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications']);
         });
+    }
+
+    /** @param array<string, mixed> $supplierProduct @return array{0: float, 1: array<string, float|string>|null} */
+    private function resolveNairaPrice(array $supplierProduct): array
+    {
+        $finalPrice = (float) ($supplierProduct['final_price_ngn'] ?? 0);
+
+        if ($finalPrice > 0) {
+            return [$finalPrice, null];
+        }
+
+        $supplierPrice = (float) ($supplierProduct['price'] ?? 0);
+        $supplierCurrency = trim((string) ($supplierProduct['currency'] ?? ''));
+
+        if ($supplierPrice <= 0 || $supplierCurrency === '') {
+            return [0.0, null];
+        }
+
+        $conversion = $this->exchangeRates->quoteToNaira($supplierPrice, $supplierCurrency);
+
+        return [$conversion['converted_amount'], $conversion];
     }
 
     private function secureUrl(mixed $value): ?string

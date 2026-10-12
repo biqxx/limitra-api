@@ -30,6 +30,12 @@ Schedule::job(new AggregateDailyStats)
     ->onOneServer()
     ->name('analytics:daily');
 
+Schedule::command('currency:refresh-rates')
+    ->dailyAt('00:10')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('currency:daily-rate-refresh');
+
 // Roll daily summaries into a monthly summary — runs at 00:15 on the 1st of each month.
 Schedule::job(new AggregateMonthlyStats)
     ->monthlyOn(1, '00:15')

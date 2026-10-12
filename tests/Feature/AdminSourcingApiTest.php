@@ -7,9 +7,9 @@ use App\Jobs\ProcessSourcingProduct;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\Product\SourcingJob;
+use App\Models\User;
 use App\Services\Sourcing\ProductContentEnhancer;
 use App\Services\Sourcing\SupplierProductImportService;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -28,6 +28,9 @@ class AdminSourcingApiTest extends TestCase
             'services.supplier.base_url' => 'https://supplier.test',
             'services.supplier.secret' => 'internal-secret',
             'services.supplier.retries' => 1,
+            'services.exchange_rates.base_url' => 'https://rates.test/v6',
+            'services.exchange_rates.naira_markup' => 100,
+            'services.exchange_rates.retries' => 1,
             'ai.openrouter.api_key' => 'test-openrouter-key',
             'ai.openrouter.base_url' => 'https://openrouter.test/api/v1',
             'ai.openrouter.product_content_models' => [
@@ -283,6 +286,10 @@ class AdminSourcingApiTest extends TestCase
                     ])],
                 ]],
             ]),
+            'https://rates.test/v6/latest/USD' => Http::response([
+                'result' => 'success',
+                'rates' => ['NGN' => 1500],
+            ]),
         ]);
 
         $response = $this->actingAs($admin, 'api')
@@ -310,7 +317,7 @@ class AdminSourcingApiTest extends TestCase
         $this->assertDatabaseHas('products', [
             'id' => $jobRecord->product_id,
             'name' => 'Wireless Over-Ear Headphones',
-            'price' => 0,
+            'price' => 64000,
             'status' => 'draft',
         ]);
         $this->assertDatabaseHas('product_sources', [

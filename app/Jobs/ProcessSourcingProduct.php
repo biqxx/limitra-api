@@ -6,13 +6,13 @@ use App\Exceptions\SupplierServiceException;
 use App\Models\Product\ProductSource;
 use App\Models\Product\SourcingJob;
 use App\Services\Sourcing\ProductContentEnhancer;
+use App\Services\Sourcing\SourcingCategoryResolver;
 use App\Services\Sourcing\SupplierProductImportService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
-use UnexpectedValueException;
 
 class ProcessSourcingProduct implements ShouldQueue
 {
@@ -29,8 +29,11 @@ class ProcessSourcingProduct implements ShouldQueue
         $this->onQueue('ai');
     }
 
-    public function handle(ProductContentEnhancer $enhancer, SupplierProductImportService $importer): void
-    {
+    public function handle(
+        ProductContentEnhancer $enhancer,
+        SupplierProductImportService $importer,
+        SourcingCategoryResolver $categoryResolver,
+    ): void {
         $job = SourcingJob::query()->with('user')->find($this->sourcingJobId);
 
         if (! $job || $job->status === 'completed') {
@@ -62,9 +65,13 @@ class ProcessSourcingProduct implements ShouldQueue
         try {
             $result = $enhancer->enhance($job->supplier, $job->external_product_id);
             $enhanced = $result['enhanced'];
+            $warnings = [];
 
             if (empty($enhanced['category_id'])) {
-                throw new UnexpectedValueException('AI could not select a catalog category for this product.');
+                $fallbackCategory = $categoryResolver->fallback();
+                $enhanced['category_id'] = $fallbackCategory->id;
+                $enhanced['subcategory_id'] = null;
+                $warnings[] = 'AI could not match this product to the current catalog. It was placed in Uncategorized; choose the correct category before activating the draft.';
             }
 
             $attributes = [
@@ -77,8 +84,6 @@ class ProcessSourcingProduct implements ShouldQueue
                 'description' => $enhanced['description'] ?: null,
                 'specifications' => $enhanced['specifications'] ?? [],
             ];
-            $warning = null;
-
             try {
                 $source = $importer->import($attributes, $job->user);
             } catch (SupplierServiceException $exception) {
@@ -92,7 +97,7 @@ class ProcessSourcingProduct implements ShouldQueue
                     $result['supplier_product'],
                     needsPricingReview: true,
                 );
-                $warning = 'Supplier pricing data is incomplete. Review the price and shipping details before activating this draft.';
+                $warnings[] = 'Supplier pricing data is incomplete. Review the price and shipping details before activating this draft.';
             }
 
             $this->complete(
@@ -100,7 +105,7 @@ class ProcessSourcingProduct implements ShouldQueue
                 $source->product_id,
                 $result['supplier_product'],
                 $enhanced,
-                $warning,
+                $warnings !== [] ? implode(' ', $warnings) : null,
             );
         } catch (Throwable $exception) {
             $job->update([

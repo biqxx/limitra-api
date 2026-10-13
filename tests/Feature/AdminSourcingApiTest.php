@@ -9,6 +9,7 @@ use App\Models\Product\Product;
 use App\Models\Product\SourcingJob;
 use App\Models\User;
 use App\Services\Sourcing\ProductContentEnhancer;
+use App\Services\Sourcing\SourcingCategoryResolver;
 use App\Services\Sourcing\SupplierProductImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -308,6 +309,7 @@ class AdminSourcingApiTest extends TestCase
         (new ProcessSourcingProduct($jobRecord->id))->handle(
             app(ProductContentEnhancer::class),
             app(SupplierProductImportService::class),
+            app(SourcingCategoryResolver::class),
         );
 
         $jobRecord->refresh();
@@ -335,5 +337,70 @@ class AdminSourcingApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.items.0.status', 'completed')
             ->assertJsonPath('data.items.0.product_id', $jobRecord->product_id);
+    }
+
+    public function test_background_job_uses_hidden_fallback_when_ai_cannot_match_a_category(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Category::create(['name' => 'Fashion', 'slug' => 'fashion', 'active' => true]);
+
+        Http::fake([
+            'https://supplier.test/details/ebay/EBAY-UNMATCHED' => Http::response([
+                'supplier_id' => 'EBAY-UNMATCHED',
+                'supplier' => 'ebay',
+                'title' => 'Wireless Headphones',
+                'description' => 'Raw description.',
+                'price' => 40,
+                'currency' => 'USD',
+                'available' => true,
+            ]),
+            'https://supplier.test/import/ebay/EBAY-UNMATCHED' => Http::response([
+                'supplier_id' => 'EBAY-UNMATCHED',
+                'supplier' => 'ebay',
+                'title' => 'Wireless Headphones',
+                'price' => 40,
+                'currency' => 'USD',
+                'available' => true,
+                'final_price_ngn' => 64000,
+            ]),
+            'https://openrouter.test/api/v1/chat/completions' => Http::response([
+                'choices' => [[
+                    'message' => ['content' => json_encode([
+                        'name' => 'Wireless Headphones',
+                        'brand' => '',
+                        'description' => 'Wireless headphones for everyday listening.',
+                        'category_id' => null,
+                        'subcategory_id' => null,
+                        'specifications' => [],
+                    ])],
+                ]],
+            ]),
+        ]);
+
+        $jobRecord = SourcingJob::create([
+            'user_id' => $admin->id,
+            'supplier' => 'ebay',
+            'external_product_id' => 'EBAY-UNMATCHED',
+            'status' => 'queued',
+        ]);
+
+        (new ProcessSourcingProduct($jobRecord->id))->handle(
+            app(ProductContentEnhancer::class),
+            app(SupplierProductImportService::class),
+            app(SourcingCategoryResolver::class),
+        );
+
+        $jobRecord->refresh();
+        $fallback = Category::query()->where('slug', 'uncategorized')->firstOrFail();
+
+        $this->assertSame('completed', $jobRecord->status);
+        $this->assertFalse($fallback->active);
+        $this->assertStringContainsString('placed in Uncategorized', (string) $jobRecord->warning);
+        $this->assertDatabaseHas('products', [
+            'id' => $jobRecord->product_id,
+            'category_id' => $fallback->id,
+            'name' => 'Wireless Headphones',
+            'status' => 'draft',
+        ]);
     }
 }

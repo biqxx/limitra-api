@@ -395,6 +395,7 @@ class AdminSourcingApiTest extends TestCase
 
         $this->assertSame('completed', $jobRecord->status);
         $this->assertFalse($fallback->active);
+        $this->assertSame(32767, $fallback->sort_order);
         $this->assertStringContainsString('placed in Uncategorized', (string) $jobRecord->warning);
         $this->assertDatabaseHas('products', [
             'id' => $jobRecord->product_id,

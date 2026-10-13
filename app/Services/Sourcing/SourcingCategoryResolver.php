@@ -13,7 +13,7 @@ class SourcingCategoryResolver
             [
                 'name' => 'Uncategorized',
                 'description' => 'Supplier products awaiting an administrator category review.',
-                'sort_order' => 65535,
+                'sort_order' => 32767,
                 'active' => false,
             ],
         );

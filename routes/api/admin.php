@@ -1,8 +1,13 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\ProductController as CatalogProductController;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:api', 'active.session', 'role:admin'])
+    ->get('categories', [AdminCategoryController::class, 'index'])
+    ->name('admin.categories.index');
 
 Route::middleware(['auth:api', 'active.session', 'role:admin'])
     ->prefix('products')

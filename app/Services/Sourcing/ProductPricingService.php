@@ -102,16 +102,6 @@ class ProductPricingService
             ];
         }
 
-        if ($blockedReasons !== []) {
-            return [
-                ...$base,
-                'status' => 'blocked',
-                'pricing_status' => 'blocked',
-                'proposed_price_ngn' => null,
-                'cost_breakdown' => null,
-            ];
-        }
-
         $fxBuffer = $this->minorToNaira((int) $rules['pricing.fx_buffer_ngn_minor']);
         $supplierMarketRate = $this->exchangeRates->marketRateToNaira($supplierCurrency);
         $supplierEffectiveRate = $supplierMarketRate + $fxBuffer;
@@ -146,8 +136,8 @@ class ProductPricingService
 
         return [
             ...$base,
-            'status' => 'proposed',
-            'pricing_status' => 'pending_approval',
+            'status' => $blockedReasons === [] ? 'proposed' : 'blocked',
+            'pricing_status' => $blockedReasons === [] ? 'pending_approval' : 'blocked',
             'proposed_price_ngn' => round($finalPriceNgn, 2),
             'cost_breakdown' => [
                 'supplier_price' => $supplierPrice,

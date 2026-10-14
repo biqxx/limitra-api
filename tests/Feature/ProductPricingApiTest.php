@@ -135,6 +135,47 @@ class ProductPricingApiTest extends TestCase
             ->assertJsonPath('data.current_price_quote.cost_breakdown.air_cargo_ngn', 0);
     }
 
+    public function test_blocked_supplier_product_still_receives_a_proposed_price(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $product = Product::factory()->create(['price' => 0]);
+        $source = ProductSource::factory()->create([
+            'product_id' => $product->id,
+            'supplier_price' => 100,
+            'supplier_currency' => 'USD',
+            'weight_lb' => 1,
+            'delivery_days_min' => 20,
+            'delivery_days_max' => 33,
+        ]);
+        Http::fake([
+            'https://rates.test/v6/latest/USD' => Http::response([
+                'result' => 'success',
+                'rates' => ['NGN' => 1500],
+            ]),
+        ]);
+
+        $recalculated = $this->actingAs($admin, 'api')
+            ->postJson("/api/v1/admin/sourcing/imports/{$source->id}/pricing/recalculate")
+            ->assertOk()
+            ->assertJsonPath('data.pricing_status', 'blocked')
+            ->assertJsonPath('data.current_price_quote.status', 'blocked')
+            ->assertJsonPath('data.current_price_quote.blocked_reasons.0', 'delivery_above_limit')
+            ->assertJsonPath('data.current_price_quote.proposed_price_ngn', '552000.00');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'price' => 552000,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($admin, 'api')
+            ->postJson("/api/v1/admin/sourcing/imports/{$source->id}/pricing/approve", [
+                'quote_id' => $recalculated->json('data.current_price_quote.id'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('pricing');
+    }
+
     public function test_recalculation_preserves_quote_history_and_flags_a_large_change(): void
     {
         $admin = User::factory()->admin()->create();

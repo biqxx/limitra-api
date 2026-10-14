@@ -8,6 +8,7 @@ use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Analytics\AnalyticsTrackingService;
 use App\Services\Catalog\CatalogCache;
+use App\Services\Sourcing\ProductPublicationGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,10 @@ use OpenApi\Attributes as OA;
 
 class ProductController extends BaseController
 {
-    public function __construct(private readonly CatalogCache $catalogCache) {}
+    public function __construct(
+        private readonly CatalogCache $catalogCache,
+        private readonly ProductPublicationGuard $publicationGuard,
+    ) {}
 
     #[OA\Get(
         path: '/products',
@@ -334,6 +338,14 @@ class ProductController extends BaseController
         $variants = $data['variants'] ?? null;
         $specifications = $data['specifications'] ?? null;
         unset($data['variants'], $data['specifications']);
+
+        if (array_key_exists('price', $data)) {
+            $this->publicationGuard->assertPriceIsManaged($product, $data['price']);
+        }
+
+        if (($data['status'] ?? null) === 'active') {
+            $this->publicationGuard->assertCanActivate($product);
+        }
 
         if (isset($data['currency'])) {
             $data['currency'] = strtoupper($data['currency']);

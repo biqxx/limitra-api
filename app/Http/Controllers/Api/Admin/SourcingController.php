@@ -77,7 +77,7 @@ class SourcingController extends BaseController
     {
         $perPage = min(max($request->integer('per_page', 20), 1), 100);
         $sources = ProductSource::query()
-            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications'])
+            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications', 'currentPriceQuote', 'approvedPriceQuote'])
             ->latest('id')
             ->paginate($perPage);
 

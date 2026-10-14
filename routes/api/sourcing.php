@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\ProductPricingController;
 use App\Http\Controllers\Api\Admin\SourcingController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,4 +19,11 @@ Route::middleware(['auth:api', 'role:admin'])
             ->name('jobs.store');
         Route::get('imports', [SourcingController::class, 'index'])->name('imports.index');
         Route::post('imports', [SourcingController::class, 'store'])->name('imports.store');
+        Route::get('imports/{productSource}/pricing', [ProductPricingController::class, 'show'])->name('pricing.show');
+        Route::post('imports/{productSource}/pricing/recalculate', [ProductPricingController::class, 'recalculate'])
+            ->middleware('throttle:30,1')
+            ->name('pricing.recalculate');
+        Route::post('imports/{productSource}/pricing/approve', [ProductPricingController::class, 'approve'])
+            ->middleware('throttle:30,1')
+            ->name('pricing.approve');
     });

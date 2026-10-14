@@ -23,7 +23,8 @@ class ProductController extends BaseController
         'productImages',
         'variants',
         'specifications',
-        'sources',
+        'sources.currentPriceQuote',
+        'sources.approvedPriceQuote',
     ];
 
     public function index(Request $request): JsonResponse

@@ -7,6 +7,8 @@ use App\Models\Cart\Favorite;
 use App\Models\Image;
 use App\Models\Order\OrderItem;
 use App\Models\User;
+use Database\Factories\Product\ProductFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +17,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use SoftDeletes;
+    /** @use HasFactory<ProductFactory> */
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'category_id',

@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Exceptions\SupplierServiceException;
 use App\Models\Product\ProductSource;
 use App\Models\Product\SourcingJob;
 use App\Services\Sourcing\ProductContentEnhancer;
@@ -84,20 +83,16 @@ class ProcessSourcingProduct implements ShouldQueue
                 'description' => $enhanced['description'] ?: null,
                 'specifications' => $enhanced['specifications'] ?? [],
             ];
-            try {
-                $source = $importer->import($attributes, $job->user);
-            } catch (SupplierServiceException $exception) {
-                if ($exception->httpStatus !== 422) {
-                    throw $exception;
-                }
+            $source = $importer->importResolved(
+                $attributes,
+                $job->user,
+                $result['supplier_product'],
+            );
 
-                $source = $importer->importResolved(
-                    $attributes,
-                    $job->user,
-                    $result['supplier_product'],
-                    needsPricingReview: true,
-                );
-                $warnings[] = 'Supplier pricing data is incomplete. Review the price and shipping details before activating this draft.';
+            if ($source->pricing_status !== 'pending_approval') {
+                $warnings[] = 'Supplier pricing data is incomplete or blocked. Complete the pricing review before activating this draft.';
+            } else {
+                $warnings[] = 'The selling price was calculated and requires administrator approval before activation.';
             }
 
             $this->complete(

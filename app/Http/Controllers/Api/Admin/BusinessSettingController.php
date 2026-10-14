@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BaseController;
 use App\Http\Requests\Settings\UpdateBusinessSettingsRequest;
 use App\Http\Resources\Settings\BusinessSettingChangeResource;
 use App\Http\Resources\Settings\BusinessSettingResource;
+use App\Jobs\DispatchProductRepricing;
 use App\Models\Settings\BusinessSetting;
 use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +33,14 @@ class BusinessSettingController extends BaseController
         UpdateBusinessSettingsRequest $request,
         BusinessSettingsService $settings,
     ): JsonResponse {
-        $updated = $settings->update($request->validated('settings'), $request->user());
+        $changes = $request->validated('settings');
+        $updated = $settings->update($changes, $request->user());
+
+        if (collect($changes)->contains(
+            fn (array $change): bool => str_starts_with($change['key'], 'pricing.'),
+        )) {
+            DispatchProductRepricing::dispatch();
+        }
 
         return $this->success(
             BusinessSettingResource::collection($updated),

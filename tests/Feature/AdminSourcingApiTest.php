@@ -96,7 +96,7 @@ class AdminSourcingApiTest extends TestCase
         $admin = User::factory()->admin()->create();
         $category = Category::create(['name' => 'Phones', 'slug' => 'phones', 'active' => true]);
         Http::fake([
-            'https://supplier.test/import/amazon/B0TEST' => Http::response([
+            'https://supplier.test/details/amazon/B0TEST' => Http::response([
                 'id' => 'B0TEST',
                 'supplier_id' => 'B0TEST',
                 'supplier' => 'amazon',
@@ -111,10 +111,10 @@ class AdminSourcingApiTest extends TestCase
                 'weight_lb' => 2.1,
                 'us_delivery_days_min' => 2,
                 'us_delivery_days_max' => 5,
-                'restriction_status' => 'allowed',
-                'validation_status' => 'valid',
-                'final_price_ngn' => 625000,
-                'cost_breakdown' => ['supplier_price_usd' => 249.99],
+            ]),
+            'https://rates.test/v6/latest/USD' => Http::response([
+                'result' => 'success',
+                'rates' => ['NGN' => 1500],
             ]),
         ]);
 
@@ -137,7 +137,9 @@ class AdminSourcingApiTest extends TestCase
             ->assertJsonPath('data.product.name', 'Limitra Enhanced Phone')
             ->assertJsonPath('data.product.status', 'draft')
             ->assertJsonPath('data.product.stock', 0)
-            ->assertJsonPath('data.product.price', '625000.00')
+            ->assertJsonPath('data.product.price', '1392000.00')
+            ->assertJsonPath('data.pricing_status', 'pending_approval')
+            ->assertJsonPath('data.current_price_quote.status', 'proposed')
             ->assertJsonPath('data.product.specifications.0.name', 'Colour');
 
         $this->assertDatabaseHas('products', [
@@ -155,7 +157,14 @@ class AdminSourcingApiTest extends TestCase
         $this->assertDatabaseHas('product_sources', [
             'supplier' => 'amazon',
             'external_product_id' => 'B0TEST',
-            'validation_status' => 'valid',
+            'validation_status' => 'pricing_review',
+            'pricing_status' => 'pending_approval',
+            'final_price_ngn' => 1392000,
+        ]);
+        $this->assertDatabaseHas('product_price_quotes', [
+            'product_source_id' => 1,
+            'status' => 'proposed',
+            'proposed_price_ngn' => 1392000,
         ]);
         $this->assertDatabaseHas('images', [
             'imageable_type' => Product::class,
@@ -166,7 +175,7 @@ class AdminSourcingApiTest extends TestCase
             ->postJson('/api/v1/admin/sourcing/imports', $payload)
             ->assertConflict();
 
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     public function test_admin_can_generate_a_reviewable_ai_product_draft(): void
@@ -220,7 +229,7 @@ class AdminSourcingApiTest extends TestCase
                 'external_product_id' => 'EBAY-1',
             ])
             ->assertOk()
-            ->assertJsonPath('data.supplier_product.final_price_ngn', 250000)
+            ->assertJsonPath('data.supplier_product.price', 100)
             ->assertJsonPath('data.enhanced.name', 'Example Smartphone')
             ->assertJsonPath('data.enhanced.category_id', $category->id)
             ->assertJsonPath('data.enhanced.subcategory_id', $subcategory->id)
@@ -271,10 +280,6 @@ class AdminSourcingApiTest extends TestCase
                 'product_url' => 'https://ebay.test/itm/EBAY-QUEUE',
                 'available' => true,
             ]),
-            'https://supplier.test/import/ebay/EBAY-QUEUE' => Http::response([
-                'error' => 'MISSING_PRICING_DATA',
-                'detail' => 'weight must be greater than zero',
-            ], 422),
             'https://openrouter.test/api/v1/chat/completions' => Http::response([
                 'choices' => [[
                     'message' => ['content' => json_encode([
@@ -286,10 +291,6 @@ class AdminSourcingApiTest extends TestCase
                         'specifications' => [],
                     ])],
                 ]],
-            ]),
-            'https://rates.test/v6/latest/USD' => Http::response([
-                'result' => 'success',
-                'rates' => ['NGN' => 1500],
             ]),
         ]);
 
@@ -319,13 +320,14 @@ class AdminSourcingApiTest extends TestCase
         $this->assertDatabaseHas('products', [
             'id' => $jobRecord->product_id,
             'name' => 'Wireless Over-Ear Headphones',
-            'price' => 64000,
+            'price' => 0,
             'status' => 'draft',
         ]);
         $this->assertDatabaseHas('product_sources', [
             'product_id' => $jobRecord->product_id,
             'sync_status' => 'needs_review',
             'validation_status' => 'manual_review',
+            'pricing_status' => 'pending_inputs',
         ]);
         $this->assertDatabaseHas('images', [
             'imageable_id' => $jobRecord->product_id,
@@ -353,15 +355,9 @@ class AdminSourcingApiTest extends TestCase
                 'price' => 40,
                 'currency' => 'USD',
                 'available' => true,
-            ]),
-            'https://supplier.test/import/ebay/EBAY-UNMATCHED' => Http::response([
-                'supplier_id' => 'EBAY-UNMATCHED',
-                'supplier' => 'ebay',
-                'title' => 'Wireless Headphones',
-                'price' => 40,
-                'currency' => 'USD',
-                'available' => true,
-                'final_price_ngn' => 64000,
+                'weight_lb' => 1,
+                'us_delivery_days_min' => 2,
+                'us_delivery_days_max' => 5,
             ]),
             'https://openrouter.test/api/v1/chat/completions' => Http::response([
                 'choices' => [[
@@ -374,6 +370,10 @@ class AdminSourcingApiTest extends TestCase
                         'specifications' => [],
                     ])],
                 ]],
+            ]),
+            'https://rates.test/v6/latest/USD' => Http::response([
+                'result' => 'success',
+                'rates' => ['NGN' => 1500],
             ]),
         ]);
 

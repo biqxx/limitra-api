@@ -105,6 +105,36 @@ class ProductPricingApiTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_calculate_a_supplier_price_without_weight(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $product = Product::factory()->create(['price' => 0]);
+        $source = ProductSource::factory()->create([
+            'product_id' => $product->id,
+            'supplier_price' => 100,
+            'supplier_currency' => 'USD',
+            'weight_lb' => null,
+            'delivery_days_min' => 2,
+            'delivery_days_max' => 5,
+        ]);
+        Http::fake([
+            'https://rates.test/v6/latest/USD' => Http::response([
+                'result' => 'success',
+                'rates' => ['NGN' => 1500],
+            ]),
+        ]);
+
+        $this->actingAs($admin, 'api')
+            ->postJson("/api/v1/admin/sourcing/imports/{$source->id}/pricing/recalculate")
+            ->assertOk()
+            ->assertJsonPath('data.pricing_status', 'pending_approval')
+            ->assertJsonPath('data.current_price_quote.proposed_price_ngn', '528000.00')
+            ->assertJsonPath('data.current_price_quote.missing_inputs', [])
+            ->assertJsonPath('data.current_price_quote.cost_breakdown.weight_missing', true)
+            ->assertJsonPath('data.current_price_quote.cost_breakdown.chargeable_weight_lb', 0)
+            ->assertJsonPath('data.current_price_quote.cost_breakdown.air_cargo_ngn', 0);
+    }
+
     public function test_recalculation_preserves_quote_history_and_flags_a_large_change(): void
     {
         $admin = User::factory()->admin()->create();

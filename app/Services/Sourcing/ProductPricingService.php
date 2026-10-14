@@ -52,7 +52,6 @@ class ProductPricingService
         $missingInputs = array_values(array_filter([
             $supplierPrice === null ? 'supplier_price' : null,
             preg_match('/^[A-Z]{3}$/', $supplierCurrency) === 1 ? null : 'supplier_currency',
-            $weightLb === null ? 'weight_lb' : null,
             $deliveryDaysMax === null ? 'delivery_days_max' : null,
         ]));
         $blockedReasons = [];
@@ -123,7 +122,11 @@ class ProductPricingService
         $salesTaxRate = ((int) $rules['pricing.sales_tax_basis_points']) / 10000;
         $customsRate = ((int) $rules['pricing.customs_basis_points']) / 10000;
         $profitMarkupRate = ((int) $rules['pricing.profit_markup_basis_points']) / 10000;
-        $chargeableWeightLb = ceil($weightLb);
+        // Supplier feeds frequently omit weight. Until a reliable weight
+        // enrichment step is available, calculate without air cargo instead
+        // of leaving the product at a zero price. Supplied weights still use
+        // the normal rounded-up cargo charge and maximum-weight validation.
+        $chargeableWeightLb = $weightLb === null ? 0.0 : ceil($weightLb);
         $salesTaxSupplierCurrency = $supplierPrice * $salesTaxRate;
         $airCargoUsd = $chargeableWeightLb * (((int) $rules['pricing.air_cargo_usd_cents_per_lb']) / 100);
         $supplierCostNgn = $supplierPrice * $supplierEffectiveRate;
@@ -156,6 +159,7 @@ class ProductPricingService
                 'sales_tax_rate' => $salesTaxRate,
                 'sales_tax_supplier_currency' => round($salesTaxSupplierCurrency, 4),
                 'sales_tax_ngn' => round($salesTaxNgn, 2),
+                'weight_missing' => $weightLb === null,
                 'chargeable_weight_lb' => $chargeableWeightLb,
                 'air_cargo_usd' => round($airCargoUsd, 2),
                 'usd_market_rate_ngn' => round($usdMarketRate, 6),

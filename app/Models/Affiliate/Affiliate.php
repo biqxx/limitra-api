@@ -56,6 +56,26 @@ class Affiliate extends Model
         return $this->hasMany(AffiliateCommission::class);
     }
 
+    public function links(): HasMany
+    {
+        return $this->hasMany(AffiliateLink::class);
+    }
+
+    public function payoutMethods(): HasMany
+    {
+        return $this->hasMany(AffiliatePayoutMethod::class);
+    }
+
+    public function withdrawals(): HasMany
+    {
+        return $this->hasMany(AffiliateWithdrawal::class);
+    }
+
+    public function promoCodes(): HasMany
+    {
+        return $this->hasMany(AffiliatePromoCode::class);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Balance not yet paid out: total_earnings minus total_paid. */

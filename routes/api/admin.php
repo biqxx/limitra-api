@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AffiliateController as AdminAffiliateController;
+use App\Http\Controllers\Api\Admin\AffiliateOperationsAdminController;
 use App\Http\Controllers\Api\Admin\CommissionController as AdminCommissionController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use Illuminate\Support\Facades\Route;
@@ -30,7 +31,29 @@ Route::middleware(['auth:api', 'role:admin,staff'])->prefix('commissions')->name
     Route::get('{commission}', [AdminCommissionController::class, 'show'])->name('show');
 });
 
-Route::middleware(['auth:api', 'role:admin'])->prefix('commissions')->name('admin.commissions.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('commissions')->name('admin.commissions.')->group(function () {
     Route::patch('{commission}', [AdminCommissionController::class, 'update'])->name('update');
     Route::post('bulk-update', [AdminCommissionController::class, 'bulkUpdate'])->name('bulk-update');
+});
+
+// ── Affiliate Applications ──────────────────────────────────────────────────
+Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('affiliate-applications')->name('admin.affiliate-applications.')->group(function (): void {
+    Route::get('/', [AffiliateOperationsAdminController::class, 'applications'])->name('index');
+    Route::get('{application}', [AffiliateOperationsAdminController::class, 'showApplication'])->name('show');
+});
+
+Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('affiliate-applications')->name('admin.affiliate-applications.')->group(function (): void {
+    Route::post('{application}/approve', [AffiliateOperationsAdminController::class, 'approveApplication'])->name('approve');
+    Route::post('{application}/reject', [AffiliateOperationsAdminController::class, 'rejectApplication'])->name('reject');
+});
+
+// ── Affiliate Withdrawals ───────────────────────────────────────────────────
+Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
+    Route::get('/', [AffiliateOperationsAdminController::class, 'withdrawals'])->name('index');
+});
+
+Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
+    Route::post('{withdrawal}/approve', [AffiliateOperationsAdminController::class, 'approveWithdrawal'])->name('approve');
+    Route::post('{withdrawal}/reject', [AffiliateOperationsAdminController::class, 'rejectWithdrawal'])->name('reject');
+    Route::post('{withdrawal}/mark-paid', [AffiliateOperationsAdminController::class, 'markPaidWithdrawal'])->name('mark-paid');
 });

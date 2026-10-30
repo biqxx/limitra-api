@@ -13,6 +13,8 @@ use App\Models\Order\ReturnRequest;
 use App\Models\Payment\Account;
 use App\Models\Payment\SavedCard;
 use App\Models\Payment\WalletTransaction;
+use App\Models\Privacy\AccountDataExport;
+use App\Models\Privacy\PrivacyConsent;
 use App\Models\Product\Review;
 use App\Models\Referral\CustomerReferral;
 use App\Models\Referral\CustomerReferralCode;
@@ -84,6 +86,9 @@ class User extends Authenticatable implements JWTSubject
             'suspended_at' => 'datetime',
             'suspended_until' => 'datetime',
             'deactivated_at' => 'datetime',
+            'deletion_scheduled_for' => 'datetime',
+            'is_age_verified' => 'boolean',
+            'age_verified_at' => 'datetime',
         ];
     }
 
@@ -259,5 +264,15 @@ class User extends Authenticatable implements JWTSubject
     public function socialAccounts(): HasMany
     {
         return $this->hasMany(SocialAccount::class);
+    }
+
+    public function privacyConsents(): HasMany
+    {
+        return $this->hasMany(PrivacyConsent::class);
+    }
+
+    public function accountDataExports(): HasMany
+    {
+        return $this->hasMany(AccountDataExport::class);
     }
 }

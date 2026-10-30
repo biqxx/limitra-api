@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\ProductResource;
 use App\Jobs\RecordAnalyticsEvent;
+use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Analytics\AnalyticsTrackingService;
@@ -387,6 +388,91 @@ class ProductController extends BaseController
         $product->delete();
 
         return $this->success(message: 'Product deleted.');
+    }
+
+    public function suggestions(Request $request): JsonResponse
+    {
+        $query = trim((string) $request->input('q', $request->input('search', '')));
+        if ($query === '') {
+            return $this->success([
+                'categories' => [],
+                'products' => [],
+                'popular_terms' => [],
+            ]);
+        }
+
+        $categories = Category::query()
+            ->where('name', 'like', "%{$query}%")
+            ->limit(4)
+            ->get(['id', 'name', 'slug']);
+
+        $products = Product::query()
+            ->where('status', 'active')
+            ->where(function ($q) use ($query): void {
+                $q->where('name', 'like', "%{$query}%")
+                    ->orWhere('brand', 'like', "%{$query}%");
+            })
+            ->limit(6)
+            ->get(['id', 'name', 'slug', 'price', 'brand', 'average_rating']);
+
+        $terms = Product::query()
+            ->where('status', 'active')
+            ->where('name', 'like', "%{$query}%")
+            ->pluck('name')
+            ->map(fn ($n) => Str::limit($n, 40))
+            ->unique()
+            ->take(5)
+            ->values();
+
+        return $this->success([
+            'query' => $query,
+            'categories' => $categories,
+            'products' => $products,
+            'popular_terms' => $terms,
+        ]);
+    }
+
+    public function related(Product $product): JsonResponse
+    {
+        $query = Product::query()
+            ->where('status', 'active')
+            ->where('id', '!=', $product->id);
+
+        if ($product->subcategory_id) {
+            $query->where('subcategory_id', $product->subcategory_id);
+        } elseif ($product->category_id) {
+            $query->where('category_id', $product->category_id);
+        }
+
+        $related = $query->limit(8)->get();
+
+        return $this->success([
+            'items' => ProductResource::collection($related),
+        ]);
+    }
+
+    public function alternatives(Product $product): JsonResponse
+    {
+        $price = (float) $product->price;
+        $min = $price * 0.70;
+        $max = $price * 1.30;
+
+        $query = Product::query()
+            ->where('status', 'active')
+            ->where('id', '!=', $product->id);
+
+        if ($product->category_id) {
+            $query->where('category_id', $product->category_id);
+        }
+
+        $alternatives = $query->whereBetween('price', [$min, $max])
+            ->orderByRaw('ABS(price - ?)', [$price])
+            ->limit(8)
+            ->get();
+
+        return $this->success([
+            'items' => ProductResource::collection($alternatives),
+        ]);
     }
 
     private function resolveSort(Request $request): array

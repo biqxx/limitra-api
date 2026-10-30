@@ -85,9 +85,93 @@ class CommerceRuleController extends BaseController
         return $this->success($pickup, 'Pickup location updated.');
     }
 
-    public function promotions(): JsonResponse
+    public function promotions(Request $request): JsonResponse
     {
-        return $this->success(Promotion::with('products:id', 'categories:id')->latest()->get());
+        $query = Promotion::with('products:id,name', 'categories:id,name');
+
+        if ($request->filled('search')) {
+            $search = '%'.$request->string('search')->toString().'%';
+            $query->where(function ($q) use ($search) {
+                $q->where('code', 'like', $search)
+                    ->orWhere('name', 'like', $search);
+            });
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->string('type')->toString());
+        }
+
+        if ($request->has('active')) {
+            $query->where('active', $request->boolean('active'));
+        }
+
+        if ($request->filled('date_from')) {
+            $query->where('created_at', '>=', $request->date('date_from'));
+        }
+
+        if ($request->filled('date_to')) {
+            $query->where('created_at', '<=', $request->date('date_to'));
+        }
+
+        if ($request->has('per_page') || $request->has('page')) {
+            $page = $query->latest()->paginate($request->integer('per_page', 20));
+
+            return $this->success([
+                'items' => $page->items(),
+                'pagination' => [
+                    'current_page' => $page->currentPage(),
+                    'per_page' => $page->perPage(),
+                    'total' => $page->total(),
+                    'last_page' => $page->lastPage(),
+                    'from' => $page->firstItem(),
+                    'to' => $page->lastItem(),
+                ],
+            ]);
+        }
+
+        return $this->success($query->latest()->get());
+    }
+
+    public function showPromotion(Promotion $promotion): JsonResponse
+    {
+        $promotion->load(['products:id,name', 'categories:id,name']);
+
+        $sum = $promotion->redemptions()->sum('discount_amount');
+        $data = $promotion->toArray();
+        $data['statistics'] = [
+            'total_redemptions' => $promotion->redemptions()->count(),
+            'total_discount_amount' => number_format((float) $sum, 2, '.', ''),
+            'unique_customers' => $promotion->redemptions()->distinct('user_id')->count('user_id'),
+        ];
+
+        return $this->success($data, 'Promotion retrieved successfully.');
+    }
+
+    public function destroyPromotion(Promotion $promotion): JsonResponse
+    {
+        $promotion->update(['active' => false]);
+
+        return $this->success($promotion->fresh(), 'Promotion disabled successfully.');
+    }
+
+    public function promotionRedemptions(Request $request, Promotion $promotion): JsonResponse
+    {
+        $page = $promotion->redemptions()
+            ->with(['user:id,username,email', 'order:id,number,grand_total,status'])
+            ->latest()
+            ->paginate($request->integer('per_page', 20));
+
+        return $this->success([
+            'items' => $page->items(),
+            'pagination' => [
+                'current_page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'last_page' => $page->lastPage(),
+                'from' => $page->firstItem(),
+                'to' => $page->lastItem(),
+            ],
+        ]);
     }
 
     public function storePromotion(Request $request): JsonResponse

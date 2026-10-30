@@ -30,11 +30,14 @@ Route::middleware(['auth:api', 'active.session', 'permission:delivery.manage'])-
 
 Route::middleware(['auth:api', 'active.session', 'permission:promotions.read'])->prefix('admin')->group(function () {
     Route::get('promotions', [CommerceRuleController::class, 'promotions']);
+    Route::get('promotions/{promotion}', [CommerceRuleController::class, 'showPromotion']);
+    Route::get('promotions/{promotion}/redemptions', [CommerceRuleController::class, 'promotionRedemptions']);
 });
 
 Route::middleware(['auth:api', 'active.session', 'permission:promotions.manage'])->prefix('admin')->group(function () {
     Route::post('promotions', [CommerceRuleController::class, 'storePromotion']);
     Route::patch('promotions/{promotion}', [CommerceRuleController::class, 'updatePromotion']);
+    Route::delete('promotions/{promotion}', [CommerceRuleController::class, 'destroyPromotion']);
 });
 
 Route::middleware(['auth:api', 'active.session'])->group(function () {

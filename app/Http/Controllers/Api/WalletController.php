@@ -147,8 +147,8 @@ class WalletController extends BaseController
             'currency' => $account->currency,
             'status' => 'pending',
             'method' => $method,
-            'authorization_url' => $paystackResponse['data']['authorization_url'] ?? null,
-            'access_code' => $paystackResponse['data']['access_code'] ?? null,
+            'authorization_url' => $paystackResponse['authorization_url'] ?? $paystackResponse['data']['authorization_url'] ?? null,
+            'access_code' => $paystackResponse['access_code'] ?? $paystackResponse['data']['access_code'] ?? null,
             'metadata' => [
                 'callback_url' => $validated['callback_url'],
             ],
@@ -192,7 +192,7 @@ class WalletController extends BaseController
             return $this->error($e->getMessage(), 502);
         }
 
-        $status = $verified['data']['status'] ?? null;
+        $status = $verified['status'] ?? $verified['data']['status'] ?? null;
         if ($status !== 'success') {
             return $this->error('The payment has not been confirmed by the gateway.', 400);
         }
@@ -204,10 +204,12 @@ class WalletController extends BaseController
                 return;
             }
 
+            $providerRef = (string) ($verified['id'] ?? $verified['data']['id'] ?? $verified['reference'] ?? '');
+
             $locked->update([
                 'status' => 'completed',
                 'paid_at' => now(),
-                'provider_reference' => (string) ($verified['data']['id'] ?? ''),
+                'provider_reference' => $providerRef,
             ]);
 
             $ledger->credit(

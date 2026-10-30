@@ -32,11 +32,9 @@ class WalletDepositApiTest extends TestCase
         $paystack->shouldReceive('initializeTransaction')
             ->once()
             ->andReturn([
-                'status' => true,
-                'data' => [
-                    'authorization_url' => 'https://checkout.paystack.com/auth-dep-123',
-                    'access_code' => 'access-dep-123',
-                ],
+                'authorization_url' => 'https://checkout.paystack.com/auth-dep-123',
+                'access_code' => 'access-dep-123',
+                'reference' => 'test-ref',
             ]);
 
         $this->app->instance(PaystackService::class, $paystack);
@@ -66,11 +64,9 @@ class WalletDepositApiTest extends TestCase
             ->with($reference)
             ->once()
             ->andReturn([
-                'status' => true,
-                'data' => [
-                    'status' => 'success',
-                    'id' => 998877,
-                ],
+                'status' => 'success',
+                'id' => 998877,
+                'reference' => $reference,
             ]);
 
         $verifyResponse = $this->actingAs($user, 'api')

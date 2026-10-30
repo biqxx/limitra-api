@@ -73,13 +73,19 @@ class RefundSettlementService
 
             if ($status === 'processed') {
                 $orderRefundedMinor = (int) $order->refunds()->where('status', 'processed')->sum('amount_minor');
+                $orderTotalMinor = $this->toMinorUnits($order->grand_total) + $this->toMinorUnits($order->credit_total);
+                if ($orderTotalMinor === 0) {
+                    $orderTotalMinor = $this->toMinorUnits($order->total_amount);
+                }
                 $order->update([
-                    'payment_status' => $orderRefundedMinor >= $this->toMinorUnits($order->grand_total)
+                    'payment_status' => $orderRefundedMinor >= $orderTotalMinor
                         ? 'refunded'
                         : 'partially_refunded',
                 ]);
                 if ($order->payment_status === 'refunded') {
-                    $this->walletCheckout->refundForOrder($order, 'order_fully_refunded');
+                    if ($order->refunds()->where('method', 'wallet')->where('status', 'processed')->doesntExist()) {
+                        $this->walletCheckout->refundForOrder($order, 'order_fully_refunded');
+                    }
                     $this->referralRewards->reverseForFullyRefundedOrder($order);
                 }
 

@@ -214,6 +214,98 @@ class ReturnRefundTest extends TestCase
         $this->assertSame('partially_refunded', $order->fresh()->payment_status);
     }
 
+    public function test_admin_can_refund_wallet_only_return_request_to_wallet(): void
+    {
+        $user = $this->user('return-wallet-'.str()->random(6).'@example.com');
+        $category = Category::create(['name' => 'Fashion', 'slug' => 'fashion-'.str()->random(6), 'status' => 'active']);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Leather Shoes',
+            'slug' => 'shoes-'.str()->random(6),
+            'sku' => 'SHOES-'.str()->upper(str()->random(6)),
+            'price' => 50000,
+            'stock' => 10,
+            'status' => 'active',
+        ]);
+        $order = Order::create([
+            'user_id' => $user->id,
+            'number' => 'LMT-WLTRET-'.str()->upper(str()->random(8)),
+            'currency' => 'NGN',
+            'subtotal' => 50000,
+            'credit_total' => 50000,
+            'grand_total' => 0,
+            'total_amount' => 0,
+            'status' => 'delivered',
+            'payment_status' => 'paid',
+            'fulfilment_status' => 'delivered',
+            'payment_method' => 'card',
+            'contact_email' => $user->email,
+            'delivery_method' => 'standard',
+            'shipping_address' => ['line1' => '10 Victoria Island', 'country' => 'NG'],
+        ]);
+        $order->shipment()->create([
+            'courier' => 'Standard Express',
+            'tracking_number' => 'TRK-'.str()->upper(str()->random(10)),
+            'status' => 'delivered',
+            'shipped_at' => now()->subDays(2),
+            'delivered_at' => now()->subDay(),
+        ]);
+        $item = OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'sku' => $product->sku,
+            'quantity' => 1,
+            'unit_price' => 50000,
+            'price_at_purchase' => 50000,
+            'line_total' => 50000,
+        ]);
+
+        $returnRequest = $this->submitReturn($user, $order, $item, quantity: 1);
+        $returnItem = $returnRequest->items()->firstOrFail();
+        $staff = $this->user('refund-staff-w@example.com', 'staff');
+        $admin = $this->user('refund-admin-w@example.com', 'admin');
+
+        $this->actingAs($staff, 'api')->patchJson("/api/v1/admin/returns/{$returnRequest->id}", [
+            'status' => 'approved',
+            'items' => [['id' => $returnItem->id, 'approved_quantity' => 1]],
+        ])->assertOk();
+        $this->actingAs($staff, 'api')->patchJson("/api/v1/admin/returns/{$returnRequest->id}", [
+            'status' => 'received',
+        ])->assertOk();
+
+        $refundPayload = [
+            'amount' => '50000.00',
+            'method' => 'wallet',
+            'reason' => 'Wallet order item returned and refunded to wallet.',
+        ];
+
+        $response = $this->actingAs($admin, 'api')->postJson(
+            "/api/v1/admin/returns/{$returnRequest->id}/refund",
+            $refundPayload,
+            ['Idempotency-Key' => 'wallet-return-key-001']
+        );
+
+        $response->assertCreated()
+            ->assertJsonPath('data.status', 'processed')
+            ->assertJsonPath('data.method', 'wallet')
+            ->assertJsonPath('data.amount', '50000.00');
+
+        $this->assertDatabaseHas('refunds', [
+            'return_request_id' => $returnRequest->id,
+            'payment_id' => null,
+            'provider' => 'wallet',
+            'method' => 'wallet',
+            'status' => 'processed',
+        ]);
+        $this->assertSame('completed', $returnRequest->fresh()->status);
+        $this->assertSame('refunded', $order->fresh()->payment_status);
+
+        $account = $user->account()->first();
+        $this->assertNotNull($account);
+        $this->assertEquals(5000000, $account->cash_balance_minor);
+    }
+
     private function user(string $email, string $role = 'user'): User
     {
         return User::create([

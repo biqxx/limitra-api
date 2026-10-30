@@ -8,6 +8,8 @@ use App\Models\Order\Order;
 use App\Models\Order\ReturnRequest;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
+use App\Services\Notification\RefundNotificationService;
+use App\Services\Referral\ReferralRewardService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -19,6 +21,9 @@ class RefundService
     public function __construct(
         private readonly PaystackService $paystack,
         private readonly RefundSettlementService $settlement,
+        private readonly WalletLedgerService $walletLedger,
+        private readonly RefundNotificationService $notifications,
+        private readonly ReferralRewardService $referralRewards,
     ) {}
 
     /** @return array{refund: Refund, replayed: bool} */
@@ -39,11 +44,11 @@ class RefundService
         }
 
         try {
-            $refund = DB::transaction(function () use ($returnRequest, $data, $actorId, $idempotencyKey, $operation, $requestHash, $amountMinor) {
+            $result = DB::transaction(function () use ($returnRequest, $data, $actorId, $idempotencyKey, $operation, $requestHash, $amountMinor) {
                 $existing = IdempotencyKey::where('user_id', $actorId)->where('operation', $operation)
                     ->where('key', $idempotencyKey)->lockForUpdate()->first();
                 if ($existing) {
-                    return $this->replay($existing, $requestHash)['refund'];
+                    return $this->replay($existing, $requestHash);
                 }
 
                 $returnRequest = ReturnRequest::whereKey($returnRequest->id)->lockForUpdate()->firstOrFail();
@@ -60,14 +65,22 @@ class RefundService
                     $this->invalid('amount', 'The refund amount exceeds the remaining approved amount.');
                 }
 
+                $order = Order::whereKey($returnRequest->order_id)->lockForUpdate()->firstOrFail();
                 $payment = Payment::where('order_id', $returnRequest->order_id)
                     ->where('status', 'succeeded')->latest('id')->lockForUpdate()->first();
-                if (! $payment) {
+
+                $isWallet = ($data['method'] ?? '') === 'wallet'
+                    || (! $payment && ((float) $order->credit_total > 0 || $order->payment_method === 'wallet'));
+
+                if (! $isWallet && ! $payment) {
                     $this->invalid('method', 'No successful online payment is available for an original-payment refund.');
                 }
-                $paymentCommittedMinor = (int) $payment->refunds()->whereNotIn('status', ['failed'])->sum('amount_minor');
-                if ($amountMinor > $payment->amount_minor - $paymentCommittedMinor) {
-                    $this->invalid('amount', 'The refund amount exceeds the remaining captured payment amount.');
+
+                if (! $isWallet) {
+                    $paymentCommittedMinor = (int) $payment->refunds()->whereNotIn('status', ['failed'])->sum('amount_minor');
+                    if ($amountMinor > $payment->amount_minor - $paymentCommittedMinor) {
+                        $this->invalid('amount', 'The refund amount exceeds the remaining captured payment amount.');
+                    }
                 }
 
                 $record = IdempotencyKey::create([
@@ -77,6 +90,76 @@ class RefundService
                     'request_hash' => $requestHash,
                     'response_status' => 201,
                 ]);
+
+                if ($isWallet) {
+                    $refund = Refund::create([
+                        'return_request_id' => $returnRequest->id,
+                        'order_id' => $returnRequest->order_id,
+                        'payment_id' => $payment?->id,
+                        'user_id' => $returnRequest->user_id,
+                        'processed_by' => $actorId,
+                        'reference' => 'LMT-REF-'.Str::upper(Str::random(20)),
+                        'provider' => 'wallet',
+                        'method' => 'wallet',
+                        'source' => 'return',
+                        'status' => 'processed',
+                        'currency' => $returnRequest->currency,
+                        'amount' => $this->fromMinorUnits($amountMinor),
+                        'amount_minor' => $amountMinor,
+                        'reason' => $data['reason'],
+                        'processed_at' => now(),
+                    ]);
+                    $record->update(['resource_type' => Refund::class, 'resource_id' => $refund->id]);
+
+                    $this->walletLedger->credit(
+                        user: $returnRequest->user,
+                        amountMinor: $amountMinor,
+                        balanceType: 'cash',
+                        type: 'refund',
+                        uniqueKey: "return_refund:{$refund->id}",
+                        description: "Refund for return {$returnRequest->number}.",
+                        sourceType: 'refund',
+                        sourceId: $refund->id,
+                        metadata: [
+                            'return_request_id' => $returnRequest->id,
+                            'order_id' => $order->id,
+                            'refund_reference' => $refund->reference,
+                            'reason' => $data['reason'],
+                        ],
+                    );
+
+                    $orderRefundedMinor = (int) $order->refunds()->where('status', 'processed')->sum('amount_minor');
+                    $orderTotalMinor = $this->toMinorUnits($order->grand_total) + $this->toMinorUnits($order->credit_total);
+                    if ($orderTotalMinor === 0) {
+                        $orderTotalMinor = $this->toMinorUnits($order->total_amount);
+                    }
+                    $order->update([
+                        'payment_status' => $orderRefundedMinor >= $orderTotalMinor
+                            ? 'refunded'
+                            : 'partially_refunded',
+                    ]);
+                    if ($order->payment_status === 'refunded') {
+                        $this->referralRewards->reverseForFullyRefundedOrder($order);
+                    }
+
+                    $returnRefundedMinor = (int) $returnRequest->refunds()->where('status', 'processed')->sum('amount_minor');
+                    if ($returnRequest->status === 'received' && $returnRefundedMinor >= $approvedMinor) {
+                        $returnRequest->update(['status' => 'completed', 'completed_at' => now()]);
+                        $returnRequest->events()->create([
+                            'from_status' => 'received',
+                            'to_status' => 'completed',
+                            'source' => 'payment',
+                            'note' => 'Approved refund processed to wallet.',
+                            'metadata' => ['refund_id' => $refund->id],
+                            'created_at' => now(),
+                        ]);
+                    }
+
+                    $this->notifications->queueProcessed($refund);
+
+                    return ['refund' => $refund, 'replayed' => false];
+                }
+
                 $refund = Refund::create([
                     'return_request_id' => $returnRequest->id,
                     'order_id' => $returnRequest->order_id,
@@ -95,7 +178,7 @@ class RefundService
                 ]);
                 $record->update(['resource_type' => Refund::class, 'resource_id' => $refund->id]);
 
-                return $refund;
+                return ['refund' => $refund, 'replayed' => false];
             }, 3);
         } catch (QueryException $exception) {
             $existing = $this->idempotency($actorId, $operation, $idempotencyKey);
@@ -106,9 +189,11 @@ class RefundService
             return $this->replay($existing, $requestHash);
         }
 
-        if ($refund->status !== 'initiating') {
-            return ['refund' => $refund, 'replayed' => true];
+        if ($result['replayed'] || $result['refund']->status !== 'initiating') {
+            return $result;
         }
+
+        $refund = $result['refund'];
 
         try {
             $providerData = $this->paystack->createRefund([
@@ -148,11 +233,11 @@ class RefundService
         }
 
         try {
-            $refund = DB::transaction(function () use ($order, $data, $actorId, $idempotencyKey, $operation, $requestHash, $amountMinor) {
+            $result = DB::transaction(function () use ($order, $data, $actorId, $idempotencyKey, $operation, $requestHash, $amountMinor) {
                 $existing = IdempotencyKey::where('user_id', $actorId)->where('operation', $operation)
                     ->where('key', $idempotencyKey)->lockForUpdate()->first();
                 if ($existing) {
-                    return $this->replay($existing, $requestHash)['refund'];
+                    return $this->replay($existing, $requestHash);
                 }
 
                 $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
@@ -165,12 +250,21 @@ class RefundService
                     ->latest('id')
                     ->lockForUpdate()
                     ->first();
-                if (! $payment) {
+
+                $isWallet = ($data['method'] ?? '') === 'wallet'
+                    || (! $payment && ((float) $order->credit_total > 0 || $order->payment_method === 'wallet'));
+
+                if (! $isWallet && ! $payment) {
                     $this->invalid('method', 'No successful online payment is available for an original-payment refund.');
                 }
 
                 $committedMinor = (int) $order->refunds()->whereNotIn('status', ['failed'])->sum('amount_minor');
-                $capturedMinor = $this->toMinorUnits($order->grand_total);
+                $orderTotalMinor = $this->toMinorUnits($order->grand_total) + $this->toMinorUnits($order->credit_total);
+                if ($orderTotalMinor === 0) {
+                    $orderTotalMinor = $this->toMinorUnits($order->total_amount);
+                }
+
+                $capturedMinor = $isWallet ? $orderTotalMinor : $payment->amount_minor;
                 if ($amountMinor > $capturedMinor - $committedMinor) {
                     $this->invalid('amount', 'The refund amount exceeds the remaining captured payment amount.');
                 }
@@ -182,6 +276,57 @@ class RefundService
                     'request_hash' => $requestHash,
                     'response_status' => 201,
                 ]);
+
+                if ($isWallet) {
+                    $refund = Refund::create([
+                        'return_request_id' => null,
+                        'order_id' => $order->id,
+                        'payment_id' => $payment?->id,
+                        'user_id' => $order->user_id,
+                        'processed_by' => $actorId,
+                        'reference' => 'LMT-REF-'.Str::upper(Str::random(20)),
+                        'provider' => 'wallet',
+                        'method' => 'wallet',
+                        'source' => 'admin_order',
+                        'status' => 'processed',
+                        'currency' => $order->currency,
+                        'amount' => $this->fromMinorUnits($amountMinor),
+                        'amount_minor' => $amountMinor,
+                        'reason' => $data['reason'],
+                        'processed_at' => now(),
+                    ]);
+                    $record->update(['resource_type' => Refund::class, 'resource_id' => $refund->id]);
+
+                    $this->walletLedger->credit(
+                        user: $order->user,
+                        amountMinor: $amountMinor,
+                        balanceType: 'cash',
+                        type: 'refund',
+                        uniqueKey: "order_refund:{$refund->id}",
+                        description: "Refund for order {$order->number}.",
+                        sourceType: 'refund',
+                        sourceId: $refund->id,
+                        metadata: [
+                            'order_id' => $order->id,
+                            'refund_reference' => $refund->reference,
+                            'reason' => $data['reason'],
+                        ],
+                    );
+
+                    $orderRefundedMinor = (int) $order->refunds()->where('status', 'processed')->sum('amount_minor');
+                    $order->update([
+                        'payment_status' => $orderRefundedMinor >= $orderTotalMinor
+                            ? 'refunded'
+                            : 'partially_refunded',
+                    ]);
+                    if ($order->payment_status === 'refunded') {
+                        $this->referralRewards->reverseForFullyRefundedOrder($order);
+                    }
+
+                    $this->notifications->queueProcessed($refund);
+
+                    return ['refund' => $refund, 'replayed' => false];
+                }
 
                 $refund = Refund::create([
                     'return_request_id' => null,
@@ -201,7 +346,7 @@ class RefundService
                 ]);
                 $record->update(['resource_type' => Refund::class, 'resource_id' => $refund->id]);
 
-                return $refund;
+                return ['refund' => $refund, 'replayed' => false];
             }, 3);
         } catch (QueryException $exception) {
             $existing = $this->idempotency($actorId, $operation, $idempotencyKey);
@@ -212,9 +357,11 @@ class RefundService
             return $this->replay($existing, $requestHash);
         }
 
-        if ($refund->status !== 'initiating') {
-            return ['refund' => $refund, 'replayed' => true];
+        if ($result['replayed'] || $result['refund']->status !== 'initiating') {
+            return $result;
         }
+
+        $refund = $result['refund'];
 
         try {
             $providerData = $this->paystack->createRefund([

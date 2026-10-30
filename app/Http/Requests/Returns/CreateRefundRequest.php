@@ -15,7 +15,7 @@ class CreateRefundRequest extends FormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0.01'],
-            'method' => ['required', 'in:original_payment'],
+            'method' => ['required', 'in:original_payment,wallet'],
             'reason' => ['required', 'string', 'min:3', 'max:2000'],
         ];
     }

@@ -6,6 +6,7 @@ use App\Http\Middleware\TrackAnalytics;
 use App\Models\Order\Order;
 use App\Models\Payment\Payment;
 use App\Models\User;
+use App\Services\Payment\PaymentSettlementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -151,5 +152,93 @@ class AdminOrderRefundTest extends TestCase
             ->assertJsonPath('message', 'Refund request already submitted.');
 
         $this->assertDatabaseCount('refunds', 1);
+    }
+
+    public function test_admin_can_refund_wallet_only_order_to_wallet_balance(): void
+    {
+        $buyer = User::factory()->create();
+        $walletOrder = Order::create([
+            'user_id' => $buyer->id,
+            'number' => 'LMT-WLTORD-'.Str::upper(Str::random(10)),
+            'currency' => 'NGN',
+            'subtotal' => 4000.00,
+            'credit_total' => 4000.00,
+            'grand_total' => 0.00,
+            'total_amount' => 0.00,
+            'status' => 'confirmed',
+            'payment_status' => 'paid',
+            'fulfilment_status' => 'delivered',
+            'payment_method' => 'card',
+            'contact_email' => $buyer->email,
+            'delivery_method' => 'standard',
+            'shipping_address' => ['city' => 'Abuja'],
+        ]);
+
+        $idempotencyKey = 'wallet-refund-'.Str::uuid();
+
+        $response = $this->actingAs($this->admin, 'api')
+            ->postJson(
+                "/api/v1/admin/orders/{$walletOrder->id}/refund",
+                [
+                    'amount' => 4000.00,
+                    'method' => 'wallet',
+                    'reason' => 'Defective item returned on wallet order',
+                ],
+                ['Idempotency-Key' => $idempotencyKey]
+            );
+
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.amount', '4000.00')
+            ->assertJsonPath('data.status', 'processed')
+            ->assertJsonPath('data.method', 'wallet');
+
+        $walletOrder->refresh();
+        $this->assertSame('refunded', $walletOrder->payment_status);
+
+        $this->assertDatabaseHas('refunds', [
+            'order_id' => $walletOrder->id,
+            'payment_id' => null,
+            'provider' => 'wallet',
+            'method' => 'wallet',
+            'status' => 'processed',
+        ]);
+
+        $account = $buyer->account()->first();
+        $this->assertNotNull($account);
+        $this->assertEquals(400000, $account->cash_balance_minor);
+
+        $this->assertDatabaseHas('wallet_transactions', [
+            'account_id' => $account->id,
+            'direction' => 'credit',
+            'type' => 'refund',
+            'amount_minor' => 400000,
+        ]);
+    }
+
+    public function test_payment_settlement_replay_does_not_overwrite_refunded_order(): void
+    {
+        $this->order->update(['payment_status' => 'refunded']);
+
+        $settlement = app(PaymentSettlementService::class);
+        $settlement->apply($this->payment, [
+            'status' => 'success',
+            'amount' => 500000,
+            'currency' => 'NGN',
+            'reference' => $this->payment->reference,
+        ]);
+
+        $this->order->refresh();
+        $this->assertSame('refunded', $this->order->payment_status);
+
+        $settlement->apply($this->payment, [
+            'status' => 'failed',
+            'amount' => 500000,
+            'currency' => 'NGN',
+            'reference' => $this->payment->reference,
+        ]);
+
+        $this->order->refresh();
+        $this->assertSame('refunded', $this->order->payment_status);
     }
 }

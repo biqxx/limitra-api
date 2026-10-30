@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Social\Channels\MetaChannel;
-use App\Social\Data\InboundMessage;
 use App\Social\InboundMessageReceiver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,9 +38,9 @@ class WebhookController extends BaseController
         }
 
         $payload = $request->json()->all();
-        $dto = $this->meta->parseInboundPayload($payload);
+        $messages = $this->meta->parseInboundPayloads($payload);
 
-        if ($dto instanceof InboundMessage) {
+        foreach ($messages as $dto) {
             $this->receiver->accept($dto);
         }
 

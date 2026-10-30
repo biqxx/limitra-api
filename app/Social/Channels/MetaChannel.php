@@ -41,24 +41,48 @@ class MetaChannel implements SocialChannel
     }
 
     /**
+     * Parse a raw Meta webhook payload into standardized InboundMessage DTOs.
+     *
+     * @return array<int, InboundMessage>
+     */
+    public function parseInboundPayloads(array $payload): array
+    {
+        $object = $payload['object'] ?? null;
+        $entries = $payload['entry'] ?? [];
+
+        if (! is_string($object) || ! is_array($entries)) {
+            return [];
+        }
+
+        $messages = [];
+
+        foreach ($entries as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $parsed = match ($object) {
+                'whatsapp_business_account' => $this->parseWhatsAppMessages($entry),
+                'instagram' => $this->parseInstagramMessages($entry),
+                'page' => $this->parseFacebookMessages($entry),
+                default => [],
+            };
+
+            foreach ($parsed as $message) {
+                $messages[] = $message;
+            }
+        }
+
+        return $messages;
+    }
+
+    /**
      * Parse a raw Meta webhook payload into a standardized DTO.
      * Returns null if the payload contains no actionable message.
      */
     public function parseInboundPayload(array $payload): ?InboundMessage
     {
-        $entry = $payload['entry'][0] ?? null;
-        $object = $payload['object'] ?? null;
-
-        if (! $entry || ! $object) {
-            return null;
-        }
-
-        return match ($object) {
-            'whatsapp_business_account' => $this->parseWhatsApp($entry),
-            'instagram' => $this->parseInstagram($entry),
-            'page' => $this->parseFacebook($entry),
-            default => null,
-        };
+        return $this->parseInboundPayloads($payload)[0] ?? null;
     }
 
     /**
@@ -76,82 +100,122 @@ class MetaChannel implements SocialChannel
 
     // ── Platform parsers ──────────────────────────────────────────────────────
 
-    private function parseWhatsApp(array $entry): ?InboundMessage
+    /** @return array<int, InboundMessage> */
+    private function parseWhatsAppMessages(array $entry): array
     {
-        $change = $entry['changes'][0] ?? null;
-        $value = $change['value'] ?? null;
-        $msgData = $value['messages'][0] ?? null;
-        $contact = $value['contacts'][0] ?? null;
-
-        if (! $msgData || ($msgData['type'] ?? '') !== 'text') {
-            return null;
+        $changes = $entry['changes'] ?? [];
+        if (! is_array($changes)) {
+            return [];
         }
 
-        $providerMessageId = (string) ($msgData['id'] ?? '');
+        $messages = [];
 
-        if ($providerMessageId === '') {
-            return null;
+        foreach ($changes as $change) {
+            $value = $change['value'] ?? null;
+            if (! is_array($value)) {
+                continue;
+            }
+
+            $rawMessages = $value['messages'] ?? [];
+            if (! is_array($rawMessages)) {
+                continue;
+            }
+
+            $contact = $value['contacts'][0] ?? null;
+            $username = is_array($contact) ? ($contact['profile']['name'] ?? null) : null;
+            $recipientId = (string) ($value['metadata']['phone_number_id'] ?? '');
+
+            foreach ($rawMessages as $msgData) {
+                if (! is_array($msgData) || ($msgData['type'] ?? '') !== 'text') {
+                    continue;
+                }
+
+                $providerMessageId = (string) ($msgData['id'] ?? '');
+                if ($providerMessageId === '') {
+                    continue;
+                }
+
+                $messages[] = new InboundMessage(
+                    platform: 'whatsapp',
+                    providerMessageId: $providerMessageId,
+                    platformSenderId: (string) ($msgData['from'] ?? ''),
+                    platformRecipientId: $recipientId,
+                    message: (string) ($msgData['text']['body'] ?? ''),
+                    username: $username,
+                    timestamp: (int) ($msgData['timestamp'] ?? time()),
+                );
+            }
         }
 
-        return new InboundMessage(
-            platform: 'whatsapp',
-            providerMessageId: $providerMessageId,
-            platformSenderId: $msgData['from'],
-            platformRecipientId: $value['metadata']['phone_number_id'] ?? '',
-            message: $msgData['text']['body'] ?? '',
-            username: $contact['profile']['name'] ?? null,
-            timestamp: (int) ($msgData['timestamp'] ?? time()),
-        );
+        return $messages;
     }
 
-    private function parseInstagram(array $entry): ?InboundMessage
+    /** @return array<int, InboundMessage> */
+    private function parseInstagramMessages(array $entry): array
     {
-        $messaging = $entry['messaging'][0] ?? null;
-
-        if (! $messaging || ! isset($messaging['message']['text'])) {
-            return null;
+        $messagingList = $entry['messaging'] ?? [];
+        if (! is_array($messagingList)) {
+            return [];
         }
 
-        $providerMessageId = (string) ($messaging['message']['mid'] ?? '');
+        $messages = [];
 
-        if ($providerMessageId === '') {
-            return null;
+        foreach ($messagingList as $messaging) {
+            if (! is_array($messaging) || ! isset($messaging['message']['text'])) {
+                continue;
+            }
+
+            $providerMessageId = (string) ($messaging['message']['mid'] ?? '');
+            if ($providerMessageId === '') {
+                continue;
+            }
+
+            $messages[] = new InboundMessage(
+                platform: 'instagram',
+                providerMessageId: $providerMessageId,
+                platformSenderId: (string) ($messaging['sender']['id'] ?? ''),
+                platformRecipientId: (string) ($messaging['recipient']['id'] ?? ''),
+                message: (string) $messaging['message']['text'],
+                username: null,
+                timestamp: (int) ($messaging['timestamp'] ?? time()),
+            );
         }
 
-        return new InboundMessage(
-            platform: 'instagram',
-            providerMessageId: $providerMessageId,
-            platformSenderId: $messaging['sender']['id'],
-            platformRecipientId: $messaging['recipient']['id'],
-            message: $messaging['message']['text'],
-            username: null,
-            timestamp: (int) ($messaging['timestamp'] ?? time()),
-        );
+        return $messages;
     }
 
-    private function parseFacebook(array $entry): ?InboundMessage
+    /** @return array<int, InboundMessage> */
+    private function parseFacebookMessages(array $entry): array
     {
-        $messaging = $entry['messaging'][0] ?? null;
-
-        if (! $messaging || ! isset($messaging['message']['text'])) {
-            return null;
+        $messagingList = $entry['messaging'] ?? [];
+        if (! is_array($messagingList)) {
+            return [];
         }
 
-        $providerMessageId = (string) ($messaging['message']['mid'] ?? '');
+        $messages = [];
 
-        if ($providerMessageId === '') {
-            return null;
+        foreach ($messagingList as $messaging) {
+            if (! is_array($messaging) || ! isset($messaging['message']['text'])) {
+                continue;
+            }
+
+            $providerMessageId = (string) ($messaging['message']['mid'] ?? '');
+            if ($providerMessageId === '') {
+                continue;
+            }
+
+            $messages[] = new InboundMessage(
+                platform: 'facebook',
+                providerMessageId: $providerMessageId,
+                platformSenderId: (string) ($messaging['sender']['id'] ?? ''),
+                platformRecipientId: (string) ($messaging['recipient']['id'] ?? ''),
+                message: (string) $messaging['message']['text'],
+                username: null,
+                timestamp: (int) ($messaging['timestamp'] ?? time()),
+            );
         }
 
-        return new InboundMessage(
-            platform: 'facebook',
-            providerMessageId: $providerMessageId,
-            platformSenderId: $messaging['sender']['id'],
-            platformRecipientId: $messaging['recipient']['id'],
-            message: $messaging['message']['text'],
-            username: null,
-            timestamp: (int) ($messaging['timestamp'] ?? time()),
-        );
+        return $messages;
     }
 
     // ── Platform senders ──────────────────────────────────────────────────────

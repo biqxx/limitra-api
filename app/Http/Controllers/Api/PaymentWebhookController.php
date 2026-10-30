@@ -35,7 +35,7 @@ class PaymentWebhookController extends BaseController
             'payload' => $payload,
         ]);
 
-        if ($webhook->wasRecentlyCreated) {
+        if ($webhook->wasRecentlyCreated || in_array($webhook->status, ['pending', 'failed'], true)) {
             ProcessPaymentWebhook::dispatch($webhook->id);
         }
 

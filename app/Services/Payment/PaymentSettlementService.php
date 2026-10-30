@@ -50,7 +50,7 @@ class PaymentSettlementService
                 'verified_at' => now(),
             ]);
 
-            if ($status === 'succeeded' && $order->payment_status !== 'paid') {
+            if ($status === 'succeeded' && ! in_array($order->payment_status, ['paid', 'partially_refunded', 'refunded'], true)) {
                 $fromStatus = $order->status;
                 $restored = $order->cancellation_code === InventoryReservationService::EXPIRY_CANCELLATION_CODE
                     ? $this->reservations->restoreForLatePayment($order)
@@ -85,7 +85,7 @@ class PaymentSettlementService
                         'source' => 'payment',
                     ]);
                 }
-            } elseif (in_array($status, ['failed', 'abandoned'], true) && $order->payment_status !== 'paid') {
+            } elseif (in_array($status, ['failed', 'abandoned'], true) && ! in_array($order->payment_status, ['paid', 'partially_refunded', 'refunded'], true)) {
                 $order->update(['payment_status' => 'failed']);
             }
 

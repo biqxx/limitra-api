@@ -21,6 +21,8 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/notification_admin.php';
         require __DIR__.'/api/support_admin.php';
         require __DIR__.'/api/reward_admin.php';
+        require __DIR__.'/api/sourcing.php';
+        require __DIR__.'/api/activity_admin.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────
@@ -42,6 +44,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/referral.php';
     require __DIR__.'/api/reward.php';
     require __DIR__.'/api/staff_invitation.php';
+    require __DIR__.'/api/public_settings.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
     Route::middleware(['auth:api', 'active.session'])->group(function () {
@@ -50,6 +53,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/payment.php';
         require __DIR__.'/api/return.php';
         require __DIR__.'/api/wallet.php';
+        require __DIR__.'/api/user_preference.php';
     });
 
     // ── Meta webhook (no auth — signed by Meta app secret) ───────────────────

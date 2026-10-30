@@ -32,6 +32,27 @@ class BusinessSettingsService
     }
 
     /**
+     * @return array<string, array<string, mixed>>
+     */
+    public function publicSettings(): array
+    {
+        return Cache::rememberForever('business_settings.public.v1', function (): array {
+            $settings = BusinessSetting::query()
+                ->where('is_public', true)
+                ->orderBy('group')
+                ->orderBy('key')
+                ->get();
+
+            $grouped = [];
+            foreach ($settings as $setting) {
+                $grouped[$setting->group][$setting->key] = $setting->value;
+            }
+
+            return $grouped;
+        });
+    }
+
+    /**
      * @param  array<int, array{key: string, value: mixed}>  $changes
      * @return Collection<int, BusinessSetting>
      */
@@ -98,6 +119,7 @@ class BusinessSettingsService
         });
 
         Cache::forget(self::CACHE_KEY);
+        Cache::forget('business_settings.public.v1');
 
         return $updated->each->load('updatedBy');
     }

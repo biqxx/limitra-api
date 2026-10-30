@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Auth\PasswordlessOtpController;
+use App\Http\Controllers\Api\Auth\SocialAuthController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ConnectedAccountController;
 use App\Http\Controllers\Api\CustomerAccountController;
@@ -17,6 +19,18 @@ Route::post('forgot-password', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:5,1')
     ->name('auth.forgot-password');
 Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('auth.reset-password');
+
+// Passwordless OTP login
+Route::prefix('auth/otp')->name('auth.otp.')->group(function (): void {
+    Route::post('request', [PasswordlessOtpController::class, 'requestOtp'])->name('request');
+    Route::post('verify', [PasswordlessOtpController::class, 'verifyOtp'])->name('verify');
+});
+
+// Social authentication
+Route::prefix('auth/social/{provider}')->name('auth.social.')->group(function (): void {
+    Route::get('redirect', [SocialAuthController::class, 'redirect'])->name('redirect');
+    Route::post('callback', [SocialAuthController::class, 'callback'])->name('callback');
+});
 
 // ── Protected auth routes ───────────────────────────────────────────────────
 Route::middleware(['auth:api', 'active.session'])->group(function () {

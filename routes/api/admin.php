@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AffiliateController as AdminAffiliateController;
 use App\Http\Controllers\Api\Admin\AffiliateOperationsAdminController;
 use App\Http\Controllers\Api\Admin\CommissionController as AdminCommissionController;
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\Admin\ReportController;
 use Illuminate\Support\Facades\Route;
 
 // ── Order management ──────────────────────────────────────────────────────────
@@ -56,4 +58,17 @@ Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('withdra
     Route::post('{withdrawal}/approve', [AffiliateOperationsAdminController::class, 'approveWithdrawal'])->name('approve');
     Route::post('{withdrawal}/reject', [AffiliateOperationsAdminController::class, 'rejectWithdrawal'])->name('reject');
     Route::post('{withdrawal}/mark-paid', [AffiliateOperationsAdminController::class, 'markPaidWithdrawal'])->name('mark-paid');
+});
+
+// ── Dashboard & Health ──────────────────────────────────────────────────────
+Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(function (): void {
+    Route::get('dashboard', [AdminDashboardController::class, 'dashboard'])->name('admin.dashboard');
+    Route::get('health', [AdminDashboardController::class, 'health'])->name('admin.health');
+
+    // ── Reports ─────────────────────────────────────────────────────────────
+    Route::prefix('reports')->name('admin.reports.')->group(function (): void {
+        Route::get('/', [ReportController::class, 'index'])->name('index');
+        Route::post('/', [ReportController::class, 'store'])->name('store');
+        Route::get('{report}', [ReportController::class, 'show'])->name('show');
+    });
 });

@@ -2,12 +2,18 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Exceptions\PaymentGatewayException;
 use App\Http\Controllers\Api\BaseController;
+use App\Http\Requests\Returns\CreateRefundRequest;
+use App\Http\Resources\AdminRefundResource;
 use App\Http\Resources\OrderResource;
 use App\Models\Order\Order;
+use App\Services\Admin\AuditEventService;
 use App\Services\Order\OrderLifecycleService;
+use App\Services\Payment\RefundService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class OrderController extends BaseController
 {
@@ -98,13 +104,49 @@ class OrderController extends BaseController
         return $this->success(new OrderResource($order->load(self::DETAIL_RELATIONS)), 'Order shipped.');
     }
 
-    public function update(Request $request, Order $order): JsonResponse
-    {
-        return $this->error('Use the explicit order status or shipping action.', 405);
-    }
+    public function refund(
+        CreateRefundRequest $request,
+        Order $order,
+        RefundService $refunds,
+        AuditEventService $auditEvents,
+    ): JsonResponse {
+        $key = $request->header('Idempotency-Key');
+        Validator::make(['idempotency_key' => $key], [
+            'idempotency_key' => ['required', 'string', 'min:8', 'max:100'],
+        ])->validate();
 
-    public function destroy(Order $order): JsonResponse
-    {
-        return $this->error('Placed orders cannot be deleted.', 405);
+        try {
+            $result = $refunds->createForOrder(
+                $order,
+                $request->validated(),
+                (int) auth('api')->id(),
+                (string) $key,
+            );
+        } catch (PaymentGatewayException $exception) {
+            return $this->error($exception->getMessage(), 502);
+        }
+
+        $auditEvents->record(
+            action: 'order.refunded',
+            actor: auth('api')->user(),
+            subject: $order,
+            reason: $request->input('reason'),
+            after: [
+                'refund_id' => $result['refund']->id,
+                'amount' => $result['refund']->amount,
+                'status' => $result['refund']->status,
+            ],
+            metadata: [
+                'replayed' => $result['replayed'],
+                'order_number' => $order->number,
+            ],
+            request: $request,
+        );
+
+        return $this->success(
+            new AdminRefundResource($result['refund']->load(['user', 'order', 'payment'])),
+            $result['replayed'] ? 'Refund request already submitted.' : 'Refund submitted to the payment provider.',
+            $result['replayed'] ? 200 : 201,
+        );
     }
 }

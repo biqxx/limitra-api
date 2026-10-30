@@ -4,6 +4,7 @@ namespace App\Services\Payment;
 
 use App\Exceptions\PaymentGatewayException;
 use App\Models\IdempotencyKey;
+use App\Models\Order\Order;
 use App\Models\Order\ReturnRequest;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
@@ -116,6 +117,112 @@ class RefundService
                 'currency' => strtoupper($refund->currency),
                 'customer_note' => $refund->reason,
                 'merchant_note' => "Return {$refund->returnRequest->number}: {$refund->reason}",
+            ]);
+            $refund = $this->settlement->apply($refund, $providerData);
+        } catch (PaymentGatewayException $exception) {
+            $refund->update([
+                'status' => $exception->outcomeUnknown ? 'pending' : 'failed',
+                'failure_message' => $exception->getMessage(),
+            ]);
+            throw $exception;
+        }
+
+        return ['refund' => $refund, 'replayed' => false];
+    }
+
+    /** @return array{refund: Refund, replayed: bool} */
+    public function createForOrder(Order $order, array $data, int $actorId, string $idempotencyKey): array
+    {
+        $operation = "refund_order:{$order->id}";
+        $amountMinor = $this->toMinorUnits($data['amount']);
+        $requestHash = hash('sha256', json_encode([
+            'order_id' => $order->id,
+            'amount_minor' => $amountMinor,
+            'method' => $data['method'] ?? 'original_payment',
+            'reason' => $data['reason'],
+        ], JSON_THROW_ON_ERROR));
+
+        $existing = $this->idempotency($actorId, $operation, $idempotencyKey);
+        if ($existing) {
+            return $this->replay($existing, $requestHash);
+        }
+
+        try {
+            $refund = DB::transaction(function () use ($order, $data, $actorId, $idempotencyKey, $operation, $requestHash, $amountMinor) {
+                $existing = IdempotencyKey::where('user_id', $actorId)->where('operation', $operation)
+                    ->where('key', $idempotencyKey)->lockForUpdate()->first();
+                if ($existing) {
+                    return $this->replay($existing, $requestHash)['refund'];
+                }
+
+                $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+                if (! in_array($order->payment_status, ['paid', 'partially_refunded'], true)) {
+                    $this->invalid('order', 'Only paid or partially refunded orders can be refunded.');
+                }
+
+                $payment = Payment::where('order_id', $order->id)
+                    ->where('status', 'succeeded')
+                    ->latest('id')
+                    ->lockForUpdate()
+                    ->first();
+                if (! $payment) {
+                    $this->invalid('method', 'No successful online payment is available for an original-payment refund.');
+                }
+
+                $committedMinor = (int) $order->refunds()->whereNotIn('status', ['failed'])->sum('amount_minor');
+                $capturedMinor = $this->toMinorUnits($order->grand_total);
+                if ($amountMinor > $capturedMinor - $committedMinor) {
+                    $this->invalid('amount', 'The refund amount exceeds the remaining captured payment amount.');
+                }
+
+                $record = IdempotencyKey::create([
+                    'user_id' => $actorId,
+                    'operation' => $operation,
+                    'key' => $idempotencyKey,
+                    'request_hash' => $requestHash,
+                    'response_status' => 201,
+                ]);
+
+                $refund = Refund::create([
+                    'return_request_id' => null,
+                    'order_id' => $order->id,
+                    'payment_id' => $payment->id,
+                    'user_id' => $order->user_id,
+                    'processed_by' => $actorId,
+                    'reference' => 'LMT-REF-'.Str::upper(Str::random(20)),
+                    'provider' => $payment->provider,
+                    'method' => $data['method'] ?? 'original_payment',
+                    'source' => 'admin_order',
+                    'status' => 'initiating',
+                    'currency' => $order->currency,
+                    'amount' => $this->fromMinorUnits($amountMinor),
+                    'amount_minor' => $amountMinor,
+                    'reason' => $data['reason'],
+                ]);
+                $record->update(['resource_type' => Refund::class, 'resource_id' => $refund->id]);
+
+                return $refund;
+            }, 3);
+        } catch (QueryException $exception) {
+            $existing = $this->idempotency($actorId, $operation, $idempotencyKey);
+            if (! $existing) {
+                throw $exception;
+            }
+
+            return $this->replay($existing, $requestHash);
+        }
+
+        if ($refund->status !== 'initiating') {
+            return ['refund' => $refund, 'replayed' => true];
+        }
+
+        try {
+            $providerData = $this->paystack->createRefund([
+                'transaction' => $refund->payment->reference,
+                'amount' => $refund->amount_minor,
+                'currency' => strtoupper($refund->currency),
+                'customer_note' => $refund->reason,
+                'merchant_note' => "Order {$order->number}: {$refund->reason}",
             ]);
             $refund = $this->settlement->apply($refund, $providerData);
         } catch (PaymentGatewayException $exception) {

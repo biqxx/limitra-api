@@ -11,6 +11,7 @@ use App\Models\IdempotencyKey;
 use App\Models\Order\Order;
 use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
+use App\Services\AffiliateService;
 use App\Services\Commerce\DeliveryService;
 use App\Services\Commerce\PromotionService;
 use App\Services\Payment\WalletCheckoutService;
@@ -30,6 +31,7 @@ class OrderCreationService
         private readonly PromotionService $promotions,
         private readonly BusinessSettingsService $settings,
         private readonly WalletCheckoutService $walletCheckout,
+        private readonly AffiliateService $affiliates,
     ) {}
 
     /**
@@ -174,6 +176,9 @@ class OrderCreationService
 
                 $quote->update(['consumed_at' => now()]);
                 $cart->checkout();
+                if ($isWalletPaid) {
+                    $this->affiliates->recordSales($order);
+                }
                 $record->update([
                     'resource_type' => Order::class,
                     'resource_id' => $order->id,

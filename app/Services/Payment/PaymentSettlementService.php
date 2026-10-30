@@ -4,6 +4,7 @@ namespace App\Services\Payment;
 
 use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Payment;
+use App\Services\AffiliateService;
 use App\Services\Order\InventoryReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ class PaymentSettlementService
     public function __construct(
         private readonly InventoryReservationService $reservations,
         private readonly LatePaymentRefundService $latePaymentRefunds,
+        private readonly AffiliateService $affiliates,
     ) {}
 
     public function apply(Payment $payment, array $transaction): Payment
@@ -71,6 +73,7 @@ class PaymentSettlementService
 
                 $order->update($attributes);
                 $this->reservations->removeExpiry($order);
+                $this->affiliates->recordSales($order);
 
                 if ($fromStatus !== $order->status || $order->cancellation_code === InventoryReservationService::LATE_PAYMENT_CANCELLATION_CODE) {
                     $order->statusEvents()->create([

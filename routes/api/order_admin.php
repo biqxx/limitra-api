@@ -10,3 +10,7 @@ Route::middleware(['auth:api', 'active.session', 'permission:orders.update'])
 Route::middleware(['auth:api', 'active.session', 'permission:orders.fulfill'])
     ->post('orders/{order}/ship', [OrderController::class, 'ship'])
     ->name('admin.orders.ship');
+
+Route::middleware(['auth:api', 'active.session', 'permission:refunds.resolve'])
+    ->post('orders/{order}/refund', [OrderController::class, 'refund'])
+    ->name('admin.orders.refund');

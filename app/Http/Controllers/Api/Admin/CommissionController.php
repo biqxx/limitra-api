@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\BaseController;
 use App\Http\Resources\AffiliateCommissionResource;
+use App\Models\Affiliate\Affiliate;
 use App\Models\Affiliate\AffiliateCommission;
+use App\Services\Admin\AuditEventService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 /**
@@ -19,6 +23,13 @@ use OpenApi\Attributes as OA;
  */
 class CommissionController extends BaseController
 {
+    private const ALLOWED_TRANSITIONS = [
+        'pending' => ['approved', 'rejected'],
+        'approved' => ['paid', 'rejected'],
+        'paid' => ['rejected'],
+        'rejected' => ['approved'],
+    ];
+
     #[OA\Get(
         path: '/admin/commissions',
         tags: ['Admin - Commissions'],
@@ -108,28 +119,65 @@ class CommissionController extends BaseController
             new OA\Response(response: 200, description: 'Commission updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
         ]
     )]
-    public function update(Request $request, AffiliateCommission $commission): JsonResponse
+    public function update(Request $request, AffiliateCommission $commission, AuditEventService $auditEvents): JsonResponse
     {
         $data = $request->validate([
             'payment_status' => ['required', Rule::in(['pending', 'approved', 'paid', 'rejected'])],
         ]);
 
-        $paid_at = ($data['payment_status'] === 'paid' && $commission->payment_status !== 'paid')
-            ? now()
-            : $commission->paid_at;
+        $newStatus = $data['payment_status'];
+        $currentStatus = $commission->payment_status;
 
-        // If rejecting a previously pending/approved commission, reverse the
-        // running earnings total on the affiliate.
-        if ($data['payment_status'] === 'rejected' && in_array($commission->payment_status, ['pending', 'approved'])) {
-            $commission->affiliate()->decrement('total_earnings', $commission->commission_amount);
+        if ($currentStatus === $newStatus) {
+            return $this->success(
+                new AffiliateCommissionResource($commission->fresh()->load(['affiliate.user', 'sale.product'])),
+                'Commission updated.'
+            );
         }
 
-        // When marking as paid, increment total_paid on the affiliate.
-        if ($data['payment_status'] === 'paid' && $commission->payment_status !== 'paid') {
-            $commission->affiliate()->increment('total_paid', $commission->commission_amount);
+        if (! in_array($newStatus, self::ALLOWED_TRANSITIONS[$currentStatus] ?? [], true)) {
+            throw ValidationException::withMessages([
+                'payment_status' => ["Cannot transition commission from {$currentStatus} to {$newStatus}."],
+            ]);
         }
 
-        $commission->update(array_merge($data, ['paid_at' => $paid_at]));
+        DB::transaction(function () use ($commission, $currentStatus, $newStatus, $auditEvents, $request): void {
+            /** @var AffiliateCommission $lockedCommission */
+            $lockedCommission = AffiliateCommission::whereKey($commission->id)->lockForUpdate()->firstOrFail();
+            /** @var Affiliate $affiliate */
+            $affiliate = Affiliate::whereKey($lockedCommission->affiliate_id)->lockForUpdate()->firstOrFail();
+
+            $paidAt = $lockedCommission->paid_at;
+            if ($newStatus === 'paid') {
+                $paidAt = now();
+                $affiliate->increment('total_paid', $lockedCommission->commission_amount);
+            } elseif ($newStatus === 'rejected') {
+                if ($currentStatus === 'paid') {
+                    $affiliate->decrement('total_paid', $lockedCommission->commission_amount);
+                }
+                $affiliate->decrement('total_earnings', $lockedCommission->commission_amount);
+            } elseif ($currentStatus === 'rejected' && $newStatus === 'approved') {
+                $affiliate->increment('total_earnings', $lockedCommission->commission_amount);
+            }
+
+            $lockedCommission->update([
+                'payment_status' => $newStatus,
+                'paid_at' => $paidAt,
+            ]);
+
+            $auditEvents->record(
+                action: 'commission.status_updated',
+                actor: $request->user('api'),
+                subject: $lockedCommission,
+                before: ['payment_status' => $currentStatus],
+                after: ['payment_status' => $newStatus],
+                metadata: [
+                    'affiliate_id' => $affiliate->id,
+                    'commission_amount' => $lockedCommission->commission_amount,
+                ],
+                request: $request,
+            );
+        });
 
         return $this->success(
             new AffiliateCommissionResource($commission->fresh()->load(['affiliate.user', 'sale.product'])),
@@ -156,7 +204,7 @@ class CommissionController extends BaseController
             new OA\Response(response: 200, description: 'Commissions updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
         ]
     )]
-    public function bulkUpdate(Request $request): JsonResponse
+    public function bulkUpdate(Request $request, AuditEventService $auditEvents): JsonResponse
     {
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
@@ -164,31 +212,68 @@ class CommissionController extends BaseController
             'payment_status' => ['required', Rule::in(['pending', 'approved', 'paid', 'rejected'])],
         ]);
 
-        $commissions = AffiliateCommission::whereIn('id', $data['ids'])->get();
         $newStatus = $data['payment_status'];
-        $updated = 0;
 
-        foreach ($commissions as $commission) {
-            if ($commission->payment_status === $newStatus) {
-                continue; // Skip already-set records.
+        $updatedCount = DB::transaction(function () use ($data, $newStatus, $auditEvents, $request): int {
+            $commissions = AffiliateCommission::whereIn('id', $data['ids'])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $count = 0;
+
+            foreach ($commissions as $commission) {
+                $currentStatus = $commission->payment_status;
+                if ($currentStatus === $newStatus) {
+                    continue;
+                }
+
+                if (! in_array($newStatus, self::ALLOWED_TRANSITIONS[$currentStatus] ?? [], true)) {
+                    throw ValidationException::withMessages([
+                        'payment_status' => ["Commission #{$commission->id} cannot transition from {$currentStatus} to {$newStatus}."],
+                    ]);
+                }
+
+                /** @var Affiliate $affiliate */
+                $affiliate = Affiliate::whereKey($commission->affiliate_id)->lockForUpdate()->firstOrFail();
+
+                $paidAt = $commission->paid_at;
+                if ($newStatus === 'paid') {
+                    $paidAt = now();
+                    $affiliate->increment('total_paid', $commission->commission_amount);
+                } elseif ($newStatus === 'rejected') {
+                    if ($currentStatus === 'paid') {
+                        $affiliate->decrement('total_paid', $commission->commission_amount);
+                    }
+                    $affiliate->decrement('total_earnings', $commission->commission_amount);
+                } elseif ($currentStatus === 'rejected' && $newStatus === 'approved') {
+                    $affiliate->increment('total_earnings', $commission->commission_amount);
+                }
+
+                $commission->update([
+                    'payment_status' => $newStatus,
+                    'paid_at' => $paidAt,
+                ]);
+
+                $auditEvents->record(
+                    action: 'commission.status_updated',
+                    actor: $request->user('api'),
+                    subject: $commission,
+                    before: ['payment_status' => $currentStatus],
+                    after: ['payment_status' => $newStatus],
+                    metadata: [
+                        'affiliate_id' => $affiliate->id,
+                        'commission_amount' => $commission->commission_amount,
+                    ],
+                    request: $request,
+                );
+
+                $count++;
             }
 
-            $paid_at = ($newStatus === 'paid') ? now() : $commission->paid_at;
+            return $count;
+        });
 
-            // Reverse earnings if rejecting.
-            if ($newStatus === 'rejected' && in_array($commission->payment_status, ['pending', 'approved'])) {
-                $commission->affiliate()->decrement('total_earnings', $commission->commission_amount);
-            }
-
-            // Track paid out amount.
-            if ($newStatus === 'paid' && $commission->payment_status !== 'paid') {
-                $commission->affiliate()->increment('total_paid', $commission->commission_amount);
-            }
-
-            $commission->update(['payment_status' => $newStatus, 'paid_at' => $paid_at]);
-            $updated++;
-        }
-
-        return $this->success(['updated' => $updated], "{$updated} commission(s) updated.");
+        return $this->success(['updated' => $updatedCount], "{$updatedCount} commission(s) updated.");
     }
 }

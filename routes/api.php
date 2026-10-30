@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/reward_admin.php';
         require __DIR__.'/api/sourcing.php';
         require __DIR__.'/api/activity_admin.php';
+        require __DIR__.'/api/inventory_admin.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────

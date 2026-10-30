@@ -108,9 +108,19 @@ class Product extends Model
         return $this->hasMany(ProductSpecification::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function sources(): HasMany
+    {
+        return $this->hasMany(ProductSource::class);
+    }
+
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function inventoryAdjustments(): HasMany
+    {
+        return $this->hasMany(InventoryAdjustment::class)->orderByDesc('id');
     }
 
     public function resolveRouteBindingQuery($query, $value, $field = null)

@@ -5,10 +5,14 @@ namespace App\Services\AI;
 use App\AI\AgentService;
 use App\Models\AI\Conversation;
 use App\Models\AI\ConversationMessage;
+use App\Models\Support\SupportTicket;
 use App\Models\User;
+use App\Services\Support\SupportTicketService;
 use Illuminate\Contracts\Pagination\CursorPaginator;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class WebConversationService
@@ -47,8 +51,12 @@ class WebConversationService
             ->cursorPaginate($perPage);
     }
 
-    /** @return array{message: ConversationMessage, replayed: bool} */
-    public function send(Conversation $conversation, User $user, array $data): array
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, UploadedFile>  $images
+     * @return array{message: ConversationMessage, replayed: bool}
+     */
+    public function send(Conversation $conversation, User $user, array $data, array $images = []): array
     {
         $this->assertOwner($conversation, $user);
         $lock = Cache::lock("ai:web:conversation:{$conversation->id}", 180);
@@ -59,7 +67,7 @@ class WebConversationService
         }
 
         try {
-            $requestMessage = $this->requestMessage($conversation, $user, $data);
+            $requestMessage = $this->requestMessage($conversation, $user, $data, $images);
             $existing = ConversationMessage::query()
                 ->where('request_message_id', $requestMessage->id)
                 ->where('role', 'assistant')
@@ -81,6 +89,67 @@ class WebConversationService
         }
     }
 
+    /** @return array{conversation: Conversation, ticket: SupportTicket} */
+    public function handoff(
+        Conversation $conversation,
+        User $user,
+        ?string $reason,
+        SupportTicketService $tickets,
+    ): array {
+        $this->assertOwner($conversation, $user);
+
+        return DB::transaction(function () use ($conversation, $user, $reason, $tickets): array {
+            $conversation = Conversation::query()->lockForUpdate()->findOrFail($conversation->id);
+            if ($conversation->status === 'closed') {
+                throw ValidationException::withMessages([
+                    'conversation' => ['Cannot hand off a closed conversation.'],
+                ]);
+            }
+
+            $subject = "AI Support Transfer: Conversation #{$conversation->id}";
+            $messageContent = 'Customer requested human support handoff from AI conversation.'
+                .($reason ? "\nReason: {$reason}" : '');
+
+            $ticket = $tickets->create([
+                'category' => 'general',
+                'subject' => $subject,
+                'message' => $messageContent,
+                'order_id' => $conversation->context['order_id'] ?? null,
+                'contact_name' => $user->name ?? $user->username,
+                'contact_email' => $user->email,
+            ], $user);
+
+            $conversation->forceFill([
+                'status' => 'handed_off',
+                'context' => array_merge($conversation->context ?? [], [
+                    'support_ticket_id' => $ticket->id,
+                    'support_ticket_number' => $ticket->number,
+                    'handoff_reason' => $reason,
+                    'handed_off_at' => now()->toIso8601String(),
+                ]),
+            ])->save();
+
+            $conversation->messages()->create([
+                'role' => 'assistant',
+                'content' => "You have been transferred to human support. Your support ticket is #{$ticket->number}.",
+                'metadata' => [
+                    'actions' => [
+                        [
+                            'type' => 'ticket_created',
+                            'ticket_id' => $ticket->id,
+                            'ticket_number' => $ticket->number,
+                        ],
+                    ],
+                ],
+            ]);
+
+            return [
+                'conversation' => $conversation->fresh(),
+                'ticket' => $ticket,
+            ];
+        }, 3);
+    }
+
     public function close(Conversation $conversation, User $user): Conversation
     {
         $this->assertOwner($conversation, $user);
@@ -95,15 +164,27 @@ class WebConversationService
         }, 3);
     }
 
-    private function requestMessage(Conversation $conversation, User $user, array $data): ConversationMessage
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, UploadedFile>  $images
+     */
+    private function requestMessage(Conversation $conversation, User $user, array $data, array $images = []): ConversationMessage
     {
-        return DB::transaction(function () use ($conversation, $user, $data): ConversationMessage {
+        return DB::transaction(function () use ($conversation, $user, $data, $images): ConversationMessage {
             $conversation = Conversation::query()->lockForUpdate()->findOrFail($conversation->id);
             $this->assertOwner($conversation, $user);
-            if ($conversation->status !== 'open') {
+            if (! in_array($conversation->status, ['open', 'handed_off'], true)) {
                 throw ValidationException::withMessages([
                     'conversation' => ['This conversation is closed.'],
                 ]);
+            }
+
+            $storedImageUrls = [];
+            foreach ($images as $img) {
+                if ($img instanceof UploadedFile) {
+                    $path = $img->store('ai/attachments', 'public');
+                    $storedImageUrls[] = Storage::disk('public')->url($path);
+                }
             }
 
             $message = ConversationMessage::query()->firstOrCreate(
@@ -111,7 +192,11 @@ class WebConversationService
                     'conversation_id' => $conversation->id,
                     'client_message_id' => $data['client_message_id'],
                 ],
-                ['role' => 'user', 'content' => $data['text']],
+                [
+                    'role' => 'user',
+                    'content' => $data['text'],
+                    'metadata' => ! empty($storedImageUrls) ? ['images' => $storedImageUrls] : null,
+                ],
             );
             if ($message->role !== 'user' || ! hash_equals((string) $message->content, $data['text'])) {
                 throw ValidationException::withMessages([

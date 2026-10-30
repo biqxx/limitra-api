@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ConnectedAccountController;
 use App\Http\Controllers\Api\CustomerAccountController;
 use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -34,4 +35,7 @@ Route::middleware(['auth:api', 'active.session'])->group(function () {
     Route::post('account/password/change', [CustomerAccountController::class, 'changePassword'])->name('account.password.change');
     Route::get('account/sessions', [CustomerAccountController::class, 'sessions'])->name('account.sessions.index');
     Route::delete('account/sessions/{session}', [CustomerAccountController::class, 'revokeSession'])->name('account.sessions.destroy');
+
+    Route::get('account/connected-accounts', [ConnectedAccountController::class, 'index'])->name('account.connected-accounts.index');
+    Route::delete('account/connected-accounts/{platform}', [ConnectedAccountController::class, 'destroy'])->name('account.connected-accounts.destroy');
 });

@@ -17,6 +17,7 @@ class AIConversationMessageResource extends JsonResource
             'content' => $this->content,
             'products' => $metadata['products'] ?? [],
             'actions' => $metadata['actions'] ?? [],
+            'images' => $metadata['images'] ?? [],
             'created_at' => $this->created_at,
         ];
     }

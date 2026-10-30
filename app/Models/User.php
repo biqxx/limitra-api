@@ -19,6 +19,7 @@ use App\Models\Referral\CustomerReferralCode;
 use App\Models\Referral\CustomerReferralInvitation;
 use App\Models\Referral\CustomerReferralShareEvent;
 use App\Models\Reward\RewardSpin;
+use App\Models\Social\SocialAccount;
 use App\Models\Support\SupportTicket;
 use App\Models\User\AuthSession;
 use App\Models\User\Profile;
@@ -253,5 +254,10 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasOne(Image::class, 'imageable_id')
             ->where('imageable_type', self::class)
             ->where('type', 'user_avatar');
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
     }
 }

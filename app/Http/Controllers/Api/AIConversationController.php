@@ -7,8 +7,10 @@ use App\Http\Requests\AI\StoreAIConversationMessageRequest;
 use App\Http\Requests\AI\StoreAIConversationRequest;
 use App\Http\Resources\AIConversationMessageResource;
 use App\Http\Resources\AIConversationResource;
+use App\Http\Resources\SupportTicketResource;
 use App\Models\AI\Conversation;
 use App\Services\AI\WebConversationService;
+use App\Services\Support\SupportTicketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -52,13 +54,41 @@ class AIConversationController extends BaseController
         Conversation $conversation,
         WebConversationService $conversations,
     ): JsonResponse {
-        $result = $conversations->send($conversation, $request->user('api'), $request->validated());
+        $result = $conversations->send(
+            $conversation,
+            $request->user('api'),
+            $request->validated(),
+            $request->file('images', []),
+        );
 
         return $this->success(
             new AIConversationMessageResource($result['message']),
             $result['replayed'] ? 'AI response replayed.' : 'AI response created.',
             $result['replayed'] ? 200 : 201,
         );
+    }
+
+    public function handoff(
+        Request $request,
+        Conversation $conversation,
+        WebConversationService $conversations,
+        SupportTicketService $tickets,
+    ): JsonResponse {
+        $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:500'],
+        ]);
+
+        $result = $conversations->handoff(
+            $conversation,
+            $request->user('api'),
+            $request->input('reason'),
+            $tickets,
+        );
+
+        return $this->success([
+            'conversation' => new AIConversationResource($result['conversation']),
+            'ticket' => new SupportTicketResource($result['ticket']),
+        ], 'Conversation transferred to human support successfully.', 200);
     }
 
     public function destroy(

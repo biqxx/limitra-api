@@ -104,8 +104,10 @@ Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(fun
 
     // ── Reports ─────────────────────────────────────────────────────────────
     Route::prefix('reports')->name('admin.reports.')->group(function (): void {
-        Route::get('/', [ReportController::class, 'index'])->name('index');
-        Route::post('/', [ReportController::class, 'store'])->name('store');
-        Route::get('{report}', [ReportController::class, 'show'])->name('show');
+        Route::get('/', [ReportController::class, 'index'])->middleware('permission:reports.read')->name('index');
+        Route::post('/', [ReportController::class, 'store'])->middleware('permission:reports.create')->name('store');
+        Route::get('{report}', [ReportController::class, 'show'])->middleware('permission:reports.read')->name('show');
+        Route::post('{report}/retry', [ReportController::class, 'retry'])->middleware('permission:reports.retry')->name('retry');
+        Route::get('{report}/download', [ReportController::class, 'download'])->middleware(['signed', 'permission:reports.download'])->name('download');
     });
 });

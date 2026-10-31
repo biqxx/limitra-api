@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\BaseController;
+use App\Http\Requests\Admin\GenerateReportRequest;
 use App\Models\Admin\AdminReport;
-use App\Models\Affiliate\Affiliate;
-use App\Models\Order\Order;
-use App\Models\Product\Product;
-use App\Models\User;
+use App\Services\Reports\AdminReportService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
+use Symfony\Component\HttpFoundation\Response;
 
 class ReportController extends BaseController
 {
@@ -25,7 +26,16 @@ class ReportController extends BaseController
             $query->where('status', (string) $request->input('status'));
         }
 
-        $paginator = $query->paginate($request->integer('per_page', 20));
+        if ($request->filled('from')) {
+            $query->where('created_at', '>=', Carbon::parse($request->input('from'))->startOfDay());
+        }
+
+        if ($request->filled('to')) {
+            $query->where('created_at', '<=', Carbon::parse($request->input('to'))->endOfDay());
+        }
+
+        $perPage = min($request->integer('per_page', 20), 100);
+        $paginator = $query->paginate($perPage);
 
         return $this->success([
             'items' => $paginator->items(),
@@ -40,52 +50,55 @@ class ReportController extends BaseController
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(GenerateReportRequest $request, AdminReportService $reportService): JsonResponse
     {
-        $validated = $request->validate([
-            'type' => ['required', 'string', 'in:orders,inventory,customers,affiliates'],
-            'format' => ['nullable', 'string', 'in:csv,json'],
-            'date_from' => ['nullable', 'date'],
-            'date_to' => ['nullable', 'date'],
-        ]);
+        $idempotencyKey = $request->header('Idempotency-Key') ?? $request->header('X-Idempotency-Key');
+        $user = $request->user('api');
 
-        $type = $validated['type'];
-        $format = $validated['format'] ?? 'csv';
+        $report = $reportService->requestReport(
+            user: $user,
+            validated: $request->validated(),
+            idempotencyKey: $idempotencyKey ? (string) $idempotencyKey : null,
+            request: $request,
+        );
 
-        $rowCount = match ($type) {
-            'orders' => Order::query()
-                ->when(! empty($validated['date_from']), fn ($q) => $q->where('created_at', '>=', $validated['date_from']))
-                ->when(! empty($validated['date_to']), fn ($q) => $q->where('created_at', '<=', $validated['date_to']))
-                ->count(),
-            'inventory' => Product::query()->count(),
-            'customers' => User::query()->where('role', 'user')->count(),
-            'affiliates' => Affiliate::query()->count(),
-            default => 0,
-        };
+        $status = $report->wasRecentlyCreated ? 201 : 200;
+        $message = $report->wasRecentlyCreated ? 'Report queued for generation.' : 'Report request replayed.';
 
-        $fileName = "report-{$type}-".now()->format('YmdHis').".{$format}";
-        $filePath = "reports/{$fileName}";
-
-        $report = AdminReport::create([
-            'user_id' => $request->user('api')?->id,
-            'type' => $type,
-            'format' => $format,
-            'status' => 'completed',
-            'parameters' => $validated,
-            'file_name' => $fileName,
-            'file_path' => $filePath,
-            'row_count' => $rowCount,
-            'completed_at' => now(),
-        ]);
-
-        return $this->success($report, 'Report generated successfully.', 201);
+        return $this->success($report, $message, $status);
     }
 
     public function show(AdminReport $report): JsonResponse
     {
+        $downloadUrl = null;
+
+        if ($report->isCompleted() && ! $report->isExpired()) {
+            $downloadUrl = URL::temporarySignedRoute(
+                'admin.reports.download',
+                now()->addMinutes(15),
+                ['report' => $report->id],
+            );
+        }
+
         return $this->success([
             'report' => $report->load('user:id,email,username'),
-            'download_url' => config('app.url', 'https://limitra.test')."/api/v1/admin/reports/{$report->id}/download",
+            'download_url' => $downloadUrl,
         ]);
+    }
+
+    public function retry(AdminReport $report, AdminReportService $reportService, Request $request): JsonResponse
+    {
+        $retriedReport = $reportService->retry($report, $request->user('api'), $request);
+
+        return $this->success($retriedReport, 'Report queued for retry.');
+    }
+
+    public function download(Request $request, AdminReport $report, AdminReportService $reportService): Response
+    {
+        return $reportService->download(
+            report: $report,
+            user: $request->user('api') ?? $report->user,
+            request: $request,
+        );
     }
 }

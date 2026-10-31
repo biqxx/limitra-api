@@ -81,7 +81,7 @@ class AdminDashboardAndReportsTest extends TestCase
         $repRes->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.type', 'orders')
-            ->assertJsonPath('data.status', 'completed');
+            ->assertJsonPath('data.status', 'queued');
 
         $reportId = $repRes->json('data.id');
 

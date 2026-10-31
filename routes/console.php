@@ -85,3 +85,9 @@ Schedule::command('wallet:reconcile-deposits')
     ->withoutOverlapping()
     ->onOneServer()
     ->name('maintenance:wallet-deposits-prune');
+
+Schedule::command('reports:prune')
+    ->dailyAt('02:30')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:reports-prune');

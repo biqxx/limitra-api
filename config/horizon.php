@@ -23,6 +23,7 @@ return [
         'redis:ai' => (int) env('HORIZON_AI_LONG_WAIT_SECONDS', 120),
         'redis:analytics' => (int) env('HORIZON_ANALYTICS_LONG_WAIT_SECONDS', 300),
         'redis:maintenance' => (int) env('HORIZON_MAINTENANCE_LONG_WAIT_SECONDS', 300),
+        'redis:reports' => (int) env('HORIZON_REPORTS_LONG_WAIT_SECONDS', 300),
         'redis:default' => (int) env('HORIZON_LONG_WAIT_SECONDS', 60),
     ],
     'trim' => [
@@ -106,7 +107,7 @@ return [
         ],
         'supervisor-maintenance' => [
             'connection' => 'redis',
-            'queue' => ['maintenance'],
+            'queue' => ['maintenance', 'reports'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,

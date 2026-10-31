@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Jobs\Privacy\ProcessAccountDataExportJob;
 use App\Models\Privacy\AccountDataExport;
-use App\Models\Privacy\PrivacyConsent;
 use App\Models\User;
 use App\Models\User\Role;
 use App\Services\Admin\AuditEventService;
@@ -11,122 +11,69 @@ use App\Services\Auth\AuthSessionManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AccountComplianceController extends BaseController
 {
     public function exportData(Request $request, AuditEventService $audits): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'password' => ['required', 'string'],
+            'async' => ['sometimes', 'boolean'],
         ]);
 
         /** @var User $user */
         $user = $request->user('api');
 
-        if (! Hash::check($request->password, $user->password)) {
+        if (! Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['The provided password does not match our records.'],
             ]);
         }
 
-        $user->loadMissing(['profile', 'preference', 'addresses', 'orders', 'reviews', 'supportTickets', 'account']);
-
-        $exportData = [
-            'user' => [
-                'id' => $user->id,
-                'username' => $user->username,
-                'email' => $user->email,
-                'role' => $user->role,
-                'status' => $user->status?->value ?? (string) $user->status,
-                'created_at' => $user->created_at?->toIso8601String(),
-            ],
-            'profile' => $user->profile ? [
-                'first_name' => $user->profile->first_name,
-                'middle_name' => $user->profile->middle_name,
-                'last_name' => $user->profile->last_name,
-                'phone' => $user->profile->phone,
-                'birthday' => $user->profile->birthday?->toDateString(),
-                'gender' => $user->profile->gender,
-                'subscribe_to_newsletter' => $user->profile->subscribe_to_newsletter,
-            ] : null,
-            'preferences' => $user->preference ? [
-                'theme' => $user->preference->theme,
-                'locale' => $user->preference->locale,
-                'currency' => $user->preference->currency,
-                'notifications_enabled' => $user->preference->notifications_enabled,
-                'email_notifications' => $user->preference->email_notifications,
-                'sms_notifications' => $user->preference->sms_notifications,
-                'push_notifications' => $user->preference->push_notifications,
-                'in_app_notifications' => $user->preference->in_app_notifications,
-                'marketing_emails' => $user->preference->marketing_emails,
-                'marketing_sms' => $user->preference->marketing_sms,
-            ] : null,
-            'addresses' => $user->addresses->map(fn ($addr) => [
-                'label' => $addr->label,
-                'recipient_name' => $addr->recipient_name,
-                'phone' => $addr->phone,
-                'line1' => $addr->line1,
-                'line2' => $addr->line2,
-                'city' => $addr->city,
-                'state' => $addr->state,
-                'postal_code' => $addr->postal_code,
-                'country' => $addr->country,
-                'is_default' => $addr->is_default,
-            ]),
-            'orders' => $user->orders->map(fn ($ord) => [
-                'id' => $ord->id,
-                'number' => $ord->number,
-                'status' => $ord->status,
-                'payment_status' => $ord->payment_status,
-                'currency' => $ord->currency,
-                'grand_total' => (string) $ord->grand_total,
-                'created_at' => $ord->created_at?->toIso8601String(),
-            ]),
-            'reviews' => $user->reviews->map(fn ($rev) => [
-                'product_id' => $rev->product_id,
-                'rating' => $rev->rating,
-                'comment' => $rev->comment,
-                'created_at' => $rev->created_at?->toIso8601String(),
-            ]),
-            'support_tickets' => $user->supportTickets->map(fn ($st) => [
-                'number' => $st->number,
-                'category' => $st->category,
-                'subject' => $st->subject,
-                'status' => $st->status,
-                'created_at' => $st->created_at?->toIso8601String(),
-            ]),
-            'wallet' => $user->account ? [
-                'currency' => $user->account->currency,
-                'balance' => (string) ($user->account->balance ?? '0.00'),
-            ] : null,
-            'privacy_consents' => PrivacyConsent::query()
-                ->where('user_id', $user->id)
-                ->latest('consented_at')
-                ->first(),
-            'generated_at' => now()->toIso8601String(),
-        ];
-
         $export = AccountDataExport::create([
             'user_id' => $user->id,
-            'status' => 'completed',
-            'data' => $exportData,
+            'status' => AccountDataExport::STATUS_PENDING,
             'expires_at' => now()->addDays(7),
         ]);
+
+        if ($request->boolean('async')) {
+            ProcessAccountDataExportJob::dispatch($export->id);
+
+            $audits->record(
+                action: 'account.data_export_requested',
+                actor: $user,
+                subject: $export,
+                metadata: ['export_id' => $export->id, 'async' => true],
+                request: $request,
+            );
+
+            return $this->success([
+                'export_id' => $export->id,
+                'status' => 'pending',
+                'expires_at' => $export->expires_at->toIso8601String(),
+            ], 'Account data export request queued successfully.', 202);
+        }
+
+        (new ProcessAccountDataExportJob($export->id))->handle();
+        $export->refresh();
 
         $audits->record(
             action: 'account.data_exported',
             actor: $user,
             subject: $export,
-            metadata: ['export_id' => $export->id],
+            metadata: ['export_id' => $export->id, 'async' => false],
             request: $request,
         );
 
         return $this->success([
             'export_id' => $export->id,
-            'status' => 'completed',
+            'status' => $export->status,
+            'download_url' => route('account.data-export.download', ['export' => $export->id]),
             'expires_at' => $export->expires_at->toIso8601String(),
-            'data' => $exportData,
+            'data' => $export->data,
         ], 'Account data export generated successfully.', 201);
     }
 
@@ -145,9 +92,33 @@ class AccountComplianceController extends BaseController
         return $this->success([
             'export_id' => $export->id,
             'status' => $export->status,
+            'download_url' => $export->file_path ? route('account.data-export.download', ['export' => $export->id]) : null,
             'expires_at' => $export->expires_at->toIso8601String(),
             'data' => $export->data,
         ], 'Account data export retrieved successfully.');
+    }
+
+    public function downloadExport(Request $request, AccountDataExport $export): StreamedResponse|JsonResponse
+    {
+        $user = $request->user('api');
+
+        if ($export->user_id !== $user->id) {
+            return $this->error('You are not authorized to download this export.', 403);
+        }
+
+        if ($export->expires_at->isPast()) {
+            return $this->error('The data export download link has expired.', 410);
+        }
+
+        if (! $export->file_path || ! Storage::disk('local')->exists($export->file_path)) {
+            return $this->error('The export file is not available.', 404);
+        }
+
+        return Storage::disk('local')->download(
+            $export->file_path,
+            "limitra_data_export_{$user->id}.json",
+            ['Content-Type' => 'application/json']
+        );
     }
 
     public function requestDeletion(

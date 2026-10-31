@@ -2,6 +2,7 @@
 
 use App\Enums\ApiErrorCode;
 use App\Http\Middleware\EnsureActiveSession;
+use App\Http\Middleware\EnsureAgeVerified;
 use App\Http\Middleware\PermissionMiddleware;
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\TrackAnalytics;
@@ -40,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'track.analytics' => TrackAnalytics::class,
             'active.session' => EnsureActiveSession::class,
+            'age.verified' => EnsureAgeVerified::class,
         ]);
 
         // Append analytics tracking to all API routes.

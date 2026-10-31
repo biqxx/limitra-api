@@ -14,6 +14,7 @@ Route::post('age-verification', [AgeVerificationController::class, 'verify'])->n
 Route::middleware(['auth:api', 'active.session'])->group(function (): void {
     Route::post('account/data-export', [AccountComplianceController::class, 'exportData'])->name('account.data-export.store');
     Route::get('account/data-export/{export}', [AccountComplianceController::class, 'getExport'])->name('account.data-export.show');
+    Route::get('account/data-export/{export}/download', [AccountComplianceController::class, 'downloadExport'])->name('account.data-export.download');
     Route::post('account/deletion-request', [AccountComplianceController::class, 'requestDeletion'])->name('account.deletion-request.store');
     Route::delete('account/deletion-request', [AccountComplianceController::class, 'cancelDeletion'])->name('account.deletion-request.destroy');
 });

@@ -91,3 +91,9 @@ Schedule::command('reports:prune')
     ->withoutOverlapping()
     ->onOneServer()
     ->name('maintenance:reports-prune');
+
+Schedule::command('account:anonymize-expired')
+    ->dailyAt('03:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:account-anonymize-expired');

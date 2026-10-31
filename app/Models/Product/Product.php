@@ -36,6 +36,7 @@ class Product extends Model
         'status',
         'is_featured',
         'is_bestseller',
+        'is_age_gated',
         'average_rating',
         'review_count',
         'images',
@@ -58,6 +59,7 @@ class Product extends Model
             'review_count' => 'integer',
             'is_featured' => 'boolean',
             'is_bestseller' => 'boolean',
+            'is_age_gated' => 'boolean',
         ];
     }
 

@@ -20,6 +20,7 @@ Route::prefix('blog')->name('blog.')->group(function (): void {
 // Videos
 Route::prefix('videos')->name('videos.')->group(function (): void {
     Route::get('/', [VideoController::class, 'index'])->name('index');
+    Route::post('events/batch', [VideoController::class, 'eventsBatch'])->name('events.batch');
     Route::get('{video}', [VideoController::class, 'show'])->name('show');
     Route::post('{video}/events', [VideoController::class, 'event'])->name('events');
 });
@@ -28,6 +29,7 @@ Route::prefix('videos')->name('videos.')->group(function (): void {
 Route::prefix('newsletter')->name('newsletter.')->group(function (): void {
     Route::post('subscriptions', [NewsletterController::class, 'subscribe'])->name('subscribe');
     Route::post('unsubscribe', [NewsletterController::class, 'unsubscribe'])->name('unsubscribe');
+    Route::get('unsubscribe/verify', [NewsletterController::class, 'verify'])->name('unsubscribe.verify');
 });
 
 // Careers

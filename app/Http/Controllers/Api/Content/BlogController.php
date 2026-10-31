@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Content;
 
 use App\Http\Controllers\Api\BaseController;
 use App\Models\Content\BlogPost;
+use App\Models\Content\ContentRevision;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -12,9 +13,13 @@ class BlogController extends BaseController
 {
     public function index(Request $request): JsonResponse
     {
+        $now = now();
         $query = BlogPost::query()
             ->with('author:id,username,email')
             ->where('status', 'published')
+            ->where(function ($q) use ($now): void {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', $now);
+            })
             ->latest('published_at');
 
         if ($request->filled('category')) {
@@ -38,10 +43,14 @@ class BlogController extends BaseController
 
     public function show(string $slug): JsonResponse
     {
+        $now = now();
         $post = BlogPost::query()
             ->with('author:id,username,email')
             ->where('slug', $slug)
             ->where('status', 'published')
+            ->where(function ($q) use ($now): void {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', $now);
+            })
             ->firstOrFail();
 
         return $this->success($post);
@@ -81,11 +90,19 @@ class BlogController extends BaseController
             'category' => ['nullable', 'string', 'max:100'],
             'tags' => ['nullable', 'array'],
             'tags.*' => ['string', 'max:50'],
-            'status' => ['nullable', 'in:draft,published'],
+            'status' => ['nullable', 'in:draft,published,scheduled'],
+            'scheduled_at' => ['nullable', 'date'],
         ]);
 
         $slug = ! empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['title']);
         $status = $validated['status'] ?? 'draft';
+
+        $publishedAt = null;
+        if ($status === 'published') {
+            $publishedAt = now();
+        } elseif ($status === 'scheduled') {
+            $publishedAt = ! empty($validated['scheduled_at']) ? $validated['scheduled_at'] : now();
+        }
 
         $post = BlogPost::create([
             'title' => $validated['title'],
@@ -97,7 +114,24 @@ class BlogController extends BaseController
             'category' => $validated['category'] ?? null,
             'tags' => $validated['tags'] ?? [],
             'status' => $status,
-            'published_at' => $status === 'published' ? now() : null,
+            'scheduled_at' => $validated['scheduled_at'] ?? null,
+            'published_at' => $publishedAt,
+        ]);
+
+        // Record initial revision
+        ContentRevision::create([
+            'revisionable_type' => BlogPost::class,
+            'revisionable_id' => $post->id,
+            'author_id' => $request->user('api')?->id,
+            'title' => $post->title,
+            'body' => $post->content,
+            'summary' => 'Initial version',
+            'metadata' => [
+                'excerpt' => $post->excerpt,
+                'category' => $post->category,
+                'tags' => $post->tags,
+                'cover_image_url' => $post->cover_image_url,
+            ],
         ]);
 
         return $this->success($post, 'Blog post created.', 201);
@@ -112,13 +146,32 @@ class BlogController extends BaseController
             'cover_image_url' => ['nullable', 'url', 'max:500'],
             'category' => ['nullable', 'string', 'max:100'],
             'tags' => ['nullable', 'array'],
-            'status' => ['nullable', 'in:draft,published'],
+            'status' => ['nullable', 'in:draft,published,scheduled'],
+            'scheduled_at' => ['nullable', 'date'],
+            'change_summary' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        // Save pre-update revision snapshot
+        ContentRevision::create([
+            'revisionable_type' => BlogPost::class,
+            'revisionable_id' => $post->id,
+            'author_id' => $request->user('api')?->id,
+            'title' => $post->title,
+            'body' => $post->content,
+            'summary' => $validated['change_summary'] ?? 'Updated blog post',
+            'metadata' => [
+                'excerpt' => $post->excerpt,
+                'category' => $post->category,
+                'tags' => $post->tags,
+                'cover_image_url' => $post->cover_image_url,
+            ],
         ]);
 
         if (isset($validated['status']) && $validated['status'] === 'published' && ! $post->published_at) {
             $validated['published_at'] = now();
         }
 
+        unset($validated['change_summary']);
         $post->update($validated);
 
         return $this->success($post->fresh(), 'Blog post updated.');
@@ -139,5 +192,56 @@ class BlogController extends BaseController
         $post->delete();
 
         return $this->success(null, 'Blog post deleted.');
+    }
+
+    public function revisions(BlogPost $post): JsonResponse
+    {
+        $revisions = $post->revisions()->with('author:id,username,email')->paginate(20);
+
+        return $this->success([
+            'items' => $revisions->items(),
+            'pagination' => [
+                'current_page' => $revisions->currentPage(),
+                'per_page' => $revisions->perPage(),
+                'total' => $revisions->total(),
+                'last_page' => $revisions->lastPage(),
+                'from' => $revisions->firstItem(),
+                'to' => $revisions->lastItem(),
+            ],
+        ]);
+    }
+
+    public function restoreRevision(Request $request, BlogPost $post, ContentRevision $revision): JsonResponse
+    {
+        if ($revision->revisionable_id !== $post->id || $revision->revisionable_type !== BlogPost::class) {
+            return $this->error('Revision does not belong to this blog post.', 404);
+        }
+
+        // Snapshot current state
+        ContentRevision::create([
+            'revisionable_type' => BlogPost::class,
+            'revisionable_id' => $post->id,
+            'author_id' => $request->user('api')?->id,
+            'title' => $post->title,
+            'body' => $post->content,
+            'summary' => "Pre-restore snapshot before restoring revision #{$revision->id}",
+            'metadata' => [
+                'excerpt' => $post->excerpt,
+                'category' => $post->category,
+                'tags' => $post->tags,
+                'cover_image_url' => $post->cover_image_url,
+            ],
+        ]);
+
+        $post->update([
+            'title' => $revision->title,
+            'content' => $revision->body ?? $post->content,
+            'excerpt' => $revision->metadata['excerpt'] ?? $post->excerpt,
+            'category' => $revision->metadata['category'] ?? $post->category,
+            'tags' => $revision->metadata['tags'] ?? $post->tags,
+            'cover_image_url' => $revision->metadata['cover_image_url'] ?? $post->cover_image_url,
+        ]);
+
+        return $this->success($post->fresh(), 'Blog post restored from revision.');
     }
 }

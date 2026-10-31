@@ -7,7 +7,9 @@ use App\Models\Content\CareerApplication;
 use App\Models\Content\CareerJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class CareerController extends BaseController
 {
@@ -53,17 +55,30 @@ class CareerController extends BaseController
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:150'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'cv_url' => ['required', 'string', 'max:500'],
+            'cv_file' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'cv_url' => ['required_without:cv_file', 'nullable', 'string', 'max:500'],
             'cover_letter' => ['nullable', 'string'],
             'portfolio_url' => ['nullable', 'url', 'max:500'],
         ]);
+
+        $cvPath = null;
+        $cvUrl = $validated['cv_url'] ?? null;
+
+        if ($request->hasFile('cv_file')) {
+            $stored = $request->file('cv_file')->store('resumes', 'private');
+            $cvPath = $stored;
+            if (empty($cvUrl)) {
+                $cvUrl = $stored;
+            }
+        }
 
         $application = CareerApplication::create([
             'career_job_id' => $job?->id,
             'name' => $validated['name'],
             'email' => $validated['email'],
             'phone' => $validated['phone'] ?? null,
-            'cv_url' => $validated['cv_url'],
+            'cv_url' => $cvUrl ?? '',
+            'cv_path' => $cvPath,
             'cover_letter' => $validated['cover_letter'] ?? null,
             'portfolio_url' => $validated['portfolio_url'] ?? null,
             'status' => 'pending',
@@ -172,5 +187,24 @@ class CareerController extends BaseController
         $application->update(['status' => $validated['status']]);
 
         return $this->success($application->fresh(), 'Application status updated.');
+    }
+
+    public function downloadCv(CareerApplication $application): Response
+    {
+        $path = $application->cv_path ?: $application->cv_url;
+
+        if ($path && Storage::disk('private')->exists($path)) {
+            return Storage::disk('private')->download($path, basename($path));
+        }
+
+        if ($path && Storage::disk('local')->exists($path)) {
+            return Storage::disk('local')->download($path, basename($path));
+        }
+
+        if (filter_var($application->cv_url, FILTER_VALIDATE_URL)) {
+            return redirect()->away($application->cv_url);
+        }
+
+        return $this->error('Resume file not found.', 404);
     }
 }

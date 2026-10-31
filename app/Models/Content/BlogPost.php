@@ -5,6 +5,7 @@ namespace App\Models\Content;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class BlogPost extends Model
 {
@@ -18,6 +19,7 @@ class BlogPost extends Model
         'tags',
         'category',
         'status',
+        'scheduled_at',
         'published_at',
     ];
 
@@ -25,6 +27,7 @@ class BlogPost extends Model
     {
         return [
             'tags' => 'array',
+            'scheduled_at' => 'datetime',
             'published_at' => 'datetime',
         ];
     }
@@ -32,5 +35,10 @@ class BlogPost extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    public function revisions(): MorphMany
+    {
+        return $this->morphMany(ContentRevision::class, 'revisionable')->latest('id');
     }
 }

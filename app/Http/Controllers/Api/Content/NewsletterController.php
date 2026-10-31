@@ -71,4 +71,31 @@ class NewsletterController extends BaseController
 
         return $this->success(null, 'You have been successfully unsubscribed from the newsletter.');
     }
+
+    public function verify(Request $request): JsonResponse
+    {
+        $token = (string) $request->input('token', $request->query('token', ''));
+
+        if ($token === '') {
+            return $this->error('Unsubscribe token is required.', 422);
+        }
+
+        $subscription = NewsletterSubscription::query()
+            ->where('token', $token)
+            ->first();
+
+        if (! $subscription) {
+            return $this->error('Subscription not found.', 404);
+        }
+
+        $subscription->update([
+            'status' => 'unsubscribed',
+            'unsubscribed_at' => now(),
+        ]);
+
+        return $this->success([
+            'email' => $subscription->email,
+            'status' => 'unsubscribed',
+        ], 'You have been successfully unsubscribed from the newsletter.');
+    }
 }

@@ -13,6 +13,7 @@ class CareerApplication extends Model
         'email',
         'phone',
         'cv_url',
+        'cv_path',
         'cover_letter',
         'portfolio_url',
         'status',

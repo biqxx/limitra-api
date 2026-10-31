@@ -3,6 +3,7 @@
 namespace App\Models\Content;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Video extends Model
 {
@@ -27,5 +28,10 @@ class Video extends Model
             'is_featured' => 'boolean',
             'tagged_product_ids' => 'array',
         ];
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(VideoEvent::class);
     }
 }

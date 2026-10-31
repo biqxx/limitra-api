@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Content;
 use App\Http\Controllers\Api\BaseController;
 use App\Models\Commerce\Promotion;
 use App\Models\Content\ContentEntry;
+use App\Models\Content\ContentRevision;
 use App\Models\Content\Video;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
@@ -16,9 +17,13 @@ class ContentController extends BaseController
 {
     public function show(string $page): JsonResponse
     {
+        $now = now();
         $entry = ContentEntry::query()
             ->where('slug', $page)
             ->where('status', 'published')
+            ->where(function ($q) use ($now): void {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', $now);
+            })
             ->firstOrFail();
 
         return $this->success($entry);
@@ -46,7 +51,13 @@ class ContentController extends BaseController
 
     public function index(Request $request): JsonResponse
     {
-        $paginator = ContentEntry::query()->latest('id')->paginate($request->integer('per_page', 20));
+        $query = ContentEntry::query()->latest('id');
+
+        if ($request->filled('status')) {
+            $query->where('status', (string) $request->input('status'));
+        }
+
+        $paginator = $query->paginate($request->integer('per_page', 20));
 
         return $this->success([
             'items' => $paginator->items(),
@@ -76,11 +87,19 @@ class ContentController extends BaseController
             'body' => ['nullable', 'string'],
             'seo_title' => ['nullable', 'string', 'max:255'],
             'seo_description' => ['nullable', 'string', 'max:500'],
-            'status' => ['nullable', 'in:draft,published'],
+            'status' => ['nullable', 'in:draft,published,scheduled'],
+            'scheduled_at' => ['nullable', 'date'],
         ]);
 
         $slug = ! empty($validated['slug']) ? Str::slug($validated['slug']) : Str::slug($validated['title']);
         $status = $validated['status'] ?? 'draft';
+
+        $publishedAt = null;
+        if ($status === 'published') {
+            $publishedAt = now();
+        } elseif ($status === 'scheduled') {
+            $publishedAt = ! empty($validated['scheduled_at']) ? $validated['scheduled_at'] : now();
+        }
 
         $entry = ContentEntry::create([
             'title' => $validated['title'],
@@ -91,7 +110,24 @@ class ContentController extends BaseController
             'seo_title' => $validated['seo_title'] ?? null,
             'seo_description' => $validated['seo_description'] ?? null,
             'status' => $status,
-            'published_at' => $status === 'published' ? now() : null,
+            'scheduled_at' => $validated['scheduled_at'] ?? null,
+            'published_at' => $publishedAt,
+        ]);
+
+        // Record initial revision
+        ContentRevision::create([
+            'revisionable_type' => ContentEntry::class,
+            'revisionable_id' => $entry->id,
+            'author_id' => $request->user('api')?->id,
+            'title' => $entry->title,
+            'body' => $entry->body,
+            'summary' => 'Initial version',
+            'metadata' => [
+                'slug' => $entry->slug,
+                'channel' => $entry->channel,
+                'seo_title' => $entry->seo_title,
+                'seo_description' => $entry->seo_description,
+            ],
         ]);
 
         return $this->success($entry, 'Content entry created.', 201);
@@ -104,13 +140,32 @@ class ContentController extends BaseController
             'body' => ['nullable', 'string'],
             'seo_title' => ['nullable', 'string', 'max:255'],
             'seo_description' => ['nullable', 'string', 'max:500'],
-            'status' => ['nullable', 'in:draft,published'],
+            'status' => ['nullable', 'in:draft,published,scheduled'],
+            'scheduled_at' => ['nullable', 'date'],
+            'change_summary' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        // Save pre-update revision snapshot
+        ContentRevision::create([
+            'revisionable_type' => ContentEntry::class,
+            'revisionable_id' => $entry->id,
+            'author_id' => $request->user('api')?->id,
+            'title' => $entry->title,
+            'body' => $entry->body,
+            'summary' => $validated['change_summary'] ?? 'Updated content entry',
+            'metadata' => [
+                'slug' => $entry->slug,
+                'channel' => $entry->channel,
+                'seo_title' => $entry->seo_title,
+                'seo_description' => $entry->seo_description,
+            ],
         ]);
 
         if (isset($validated['status']) && $validated['status'] === 'published' && ! $entry->published_at) {
             $validated['published_at'] = now();
         }
 
+        unset($validated['change_summary']);
         $entry->update($validated);
 
         return $this->success($entry->fresh(), 'Content entry updated.');
@@ -124,5 +179,53 @@ class ContentController extends BaseController
         ]);
 
         return $this->success($entry->fresh(), 'Content entry published.');
+    }
+
+    public function revisions(ContentEntry $entry): JsonResponse
+    {
+        $revisions = $entry->revisions()->with('author:id,username,email')->paginate(20);
+
+        return $this->success([
+            'items' => $revisions->items(),
+            'pagination' => [
+                'current_page' => $revisions->currentPage(),
+                'per_page' => $revisions->perPage(),
+                'total' => $revisions->total(),
+                'last_page' => $revisions->lastPage(),
+                'from' => $revisions->firstItem(),
+                'to' => $revisions->lastItem(),
+            ],
+        ]);
+    }
+
+    public function restoreRevision(Request $request, ContentEntry $entry, ContentRevision $revision): JsonResponse
+    {
+        if ($revision->revisionable_id !== $entry->id || $revision->revisionable_type !== ContentEntry::class) {
+            return $this->error('Revision does not belong to this content entry.', 404);
+        }
+
+        // Snapshot current state
+        ContentRevision::create([
+            'revisionable_type' => ContentEntry::class,
+            'revisionable_id' => $entry->id,
+            'author_id' => $request->user('api')?->id,
+            'title' => $entry->title,
+            'body' => $entry->body,
+            'summary' => "Pre-restore snapshot before restoring revision #{$revision->id}",
+            'metadata' => [
+                'slug' => $entry->slug,
+                'seo_title' => $entry->seo_title,
+                'seo_description' => $entry->seo_description,
+            ],
+        ]);
+
+        $entry->update([
+            'title' => $revision->title,
+            'body' => $revision->body,
+            'seo_title' => $revision->metadata['seo_title'] ?? $entry->seo_title,
+            'seo_description' => $revision->metadata['seo_description'] ?? $entry->seo_description,
+        ]);
+
+        return $this->success($entry->fresh(), 'Content entry restored from revision.');
     }
 }

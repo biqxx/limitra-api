@@ -97,3 +97,9 @@ Schedule::command('account:anonymize-expired')
     ->withoutOverlapping()
     ->onOneServer()
     ->name('maintenance:account-anonymize-expired');
+
+Schedule::command('content:publish-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('content:publish-scheduled');

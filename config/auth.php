@@ -119,4 +119,11 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    'passwordless' => [
+        'allow_signup' => (bool) env('AUTH_PASSWORDLESS_ALLOW_SIGNUP', false),
+        'ttl_minutes' => (int) env('AUTH_PASSWORDLESS_TTL_MINUTES', 10),
+        'max_attempts' => (int) env('AUTH_PASSWORDLESS_MAX_ATTEMPTS', 5),
+        'cooldown_seconds' => (int) env('AUTH_PASSWORDLESS_COOLDOWN_SECONDS', 60),
+    ],
+
 ];

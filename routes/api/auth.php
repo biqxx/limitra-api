@@ -22,15 +22,22 @@ Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('a
 
 // Passwordless OTP login
 Route::prefix('auth/otp')->name('auth.otp.')->group(function (): void {
-    Route::post('request', [PasswordlessOtpController::class, 'requestOtp'])->name('request');
-    Route::post('verify', [PasswordlessOtpController::class, 'verifyOtp'])->name('verify');
+    Route::post('request', [PasswordlessOtpController::class, 'requestOtp'])
+        ->middleware('throttle:passwordless-otp-request')
+        ->name('request');
+    Route::post('verify', [PasswordlessOtpController::class, 'verifyOtp'])
+        ->middleware('throttle:passwordless-otp-verify')
+        ->name('verify');
 });
 
 // Social authentication
-Route::prefix('auth/social/{provider}')->name('auth.social.')->group(function (): void {
-    Route::get('redirect', [SocialAuthController::class, 'redirect'])->name('redirect');
-    Route::post('callback', [SocialAuthController::class, 'callback'])->name('callback');
-});
+Route::prefix('auth/social/{provider}')
+    ->middleware('throttle:social-auth')
+    ->name('auth.social.')
+    ->group(function (): void {
+        Route::get('redirect', [SocialAuthController::class, 'redirect'])->name('redirect');
+        Route::post('callback', [SocialAuthController::class, 'callback'])->name('callback');
+    });
 
 // ── Protected auth routes ───────────────────────────────────────────────────
 Route::middleware(['auth:api', 'active.session'])->group(function () {

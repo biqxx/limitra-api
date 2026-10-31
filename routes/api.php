@@ -26,6 +26,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/inventory_admin.php';
         require __DIR__.'/api/ai_admin.php';
         require __DIR__.'/api/content_admin.php';
+        require __DIR__.'/api/microstore_admin.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────
@@ -50,6 +51,7 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api/public_settings.php';
     require __DIR__.'/api/privacy.php';
     require __DIR__.'/api/content.php';
+    require __DIR__.'/api/microstore.php';
 
     // ── User-scoped resources (all require JWT) ───────────────────────────────
     Route::middleware(['auth:api', 'active.session'])->group(function () {

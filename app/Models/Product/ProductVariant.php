@@ -13,6 +13,7 @@ class ProductVariant extends Model
         'attributes',
         'price',
         'stock',
+        'low_stock_threshold',
         'status',
     ];
 
@@ -22,6 +23,7 @@ class ProductVariant extends Model
             'attributes' => 'array',
             'price' => 'decimal:2',
             'stock' => 'integer',
+            'low_stock_threshold' => 'integer',
         ];
     }
 

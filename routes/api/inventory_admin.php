@@ -9,11 +9,14 @@ Route::middleware(['auth:api', 'active.session', 'permission:inventory.read'])
     ->name('admin.inventory.')
     ->group(function (): void {
         Route::get('/', [InventoryController::class, 'index'])->name('index');
+        Route::get('adjustments', [InventoryController::class, 'adjustments'])->name('adjustments');
     });
 
 Route::middleware(['auth:api', 'active.session', 'permission:inventory.adjust'])
     ->prefix('inventory')
     ->name('admin.inventory.')
     ->group(function (): void {
+        Route::post('adjustments', [InventoryController::class, 'storeAdjustment'])->name('adjustments.store');
         Route::post('{product}/adjust', [InventoryController::class, 'adjust'])->name('adjust');
+        Route::patch('{product}/threshold', [InventoryController::class, 'updateThreshold'])->name('threshold.update');
     });

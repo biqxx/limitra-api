@@ -28,12 +28,19 @@ class InventoryLedgerService
             ]);
         }
 
+        if ($variant && (int) $variant->product_id !== (int) $product->id) {
+            throw ValidationException::withMessages([
+                'variant_id' => ['Specified variant does not belong to this product.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($product, $variant, $delta, $reason, $notes, $actor): InventoryAdjustment {
             if ($variant) {
                 /** @var ProductVariant $target */
                 $target = ProductVariant::whereKey($variant->id)->lockForUpdate()->firstOrFail();
                 $before = (int) $target->stock;
                 $after = $before + $delta;
+                $threshold = (int) ($target->low_stock_threshold ?? $product->low_stock_threshold ?? 5);
 
                 if ($after < 0) {
                     throw ValidationException::withMessages([
@@ -47,6 +54,7 @@ class InventoryLedgerService
                 $target = Product::whereKey($product->id)->lockForUpdate()->firstOrFail();
                 $before = (int) $target->stock;
                 $after = $before + $delta;
+                $threshold = (int) ($target->low_stock_threshold ?? 10);
 
                 if ($after < 0) {
                     throw ValidationException::withMessages([
@@ -83,6 +91,23 @@ class InventoryLedgerService
                     'notes' => $notes,
                 ],
             );
+
+            if ($after <= $threshold && $before > $threshold) {
+                $this->auditEvents->record(
+                    action: 'inventory.low_stock',
+                    actor: $actor,
+                    subject: $target,
+                    reason: 'stock_threshold_breached',
+                    before: ['stock' => $before, 'threshold' => $threshold],
+                    after: ['stock' => $after, 'threshold' => $threshold],
+                    metadata: [
+                        'product_id' => $product->id,
+                        'variant_id' => $variant?->id,
+                        'current_stock' => $after,
+                        'threshold' => $threshold,
+                    ],
+                );
+            }
 
             return $adjustment;
         });

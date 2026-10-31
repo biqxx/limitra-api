@@ -113,8 +113,9 @@ class AffiliateOperationsAdminTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'approved');
 
-        // Mark paid
-        $paidRes = $this->actingAs($admin, 'api')
+        // Mark paid by a second administrator (enforcing separation of duties)
+        $payerAdmin = User::factory()->create(['role' => 'admin']);
+        $paidRes = $this->actingAs($payerAdmin, 'api')
             ->postJson("/api/v1/admin/withdrawals/{$withdrawal->id}/mark-paid", [
                 'provider_reference' => 'TRF-PAYSTACK-998877',
             ]);
@@ -128,7 +129,7 @@ class AffiliateOperationsAdminTest extends TestCase
 
         $this->assertDatabaseHas('audit_events', [
             'action' => 'affiliate_withdrawal.paid',
-            'actor_id' => $admin->id,
+            'actor_id' => $payerAdmin->id,
             'subject_id' => $withdrawal->id,
         ]);
     }

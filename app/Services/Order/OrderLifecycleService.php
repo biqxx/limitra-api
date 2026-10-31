@@ -9,6 +9,7 @@ use App\Models\Order\Order;
 use App\Models\Order\Shipment;
 use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
+use App\Services\AffiliateService;
 use App\Services\Cart\CartService;
 use App\Services\Commerce\DeliveryService;
 use App\Services\Payment\WalletCheckoutService;
@@ -23,6 +24,7 @@ class OrderLifecycleService
         private readonly CartService $carts,
         private readonly ReferralRewardService $referralRewards,
         private readonly WalletCheckoutService $walletCheckout,
+        private readonly AffiliateService $affiliates,
     ) {}
 
     public function cancel(Order $order, int $userId, string $reason): Order
@@ -72,6 +74,7 @@ class OrderLifecycleService
                 'payment_status' => $walletOnlyPayment ? 'refunded' : $order->payment_status,
             ]);
             $this->walletCheckout->refundForOrder($order, 'customer_cancelled');
+            $this->affiliates->reverseCommissionsForOrder($order, 'customer_cancelled');
             $order->statusEvents()->create([
                 'from_status' => $fromStatus,
                 'to_status' => 'cancelled',

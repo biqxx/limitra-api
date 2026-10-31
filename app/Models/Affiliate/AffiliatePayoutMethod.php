@@ -4,6 +4,7 @@ namespace App\Models\Affiliate;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AffiliatePayoutMethod extends Model
 {
@@ -14,12 +15,25 @@ class AffiliatePayoutMethod extends Model
         'account_number',
         'account_name',
         'is_default',
+        'is_verified',
+        'verified_at',
+    ];
+
+    protected $hidden = [
+        'account_number',
+    ];
+
+    protected $appends = [
+        'masked_account_number',
     ];
 
     protected function casts(): array
     {
         return [
+            'account_number' => 'encrypted',
             'is_default' => 'boolean',
+            'is_verified' => 'boolean',
+            'verified_at' => 'datetime',
         ];
     }
 
@@ -28,13 +42,19 @@ class AffiliatePayoutMethod extends Model
         return $this->belongsTo(Affiliate::class);
     }
 
+    public function withdrawals(): HasMany
+    {
+        return $this->hasMany(AffiliateWithdrawal::class, 'payout_method_id');
+    }
+
     public function getMaskedAccountNumberAttribute(): string
     {
-        $len = strlen($this->account_number);
+        $raw = (string) $this->account_number;
+        $len = strlen($raw);
         if ($len <= 4) {
-            return $this->account_number;
+            return $raw;
         }
 
-        return str_repeat('*', $len - 4).substr($this->account_number, -4);
+        return str_repeat('*', max(0, $len - 4)).substr($raw, -4);
     }
 }

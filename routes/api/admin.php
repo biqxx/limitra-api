@@ -80,8 +80,21 @@ Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('w
 
 Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
     Route::post('{withdrawal}/approve', [AffiliateOperationsAdminController::class, 'approveWithdrawal'])->name('approve');
+    Route::post('{withdrawal}/start-processing', [AffiliateOperationsAdminController::class, 'startProcessingWithdrawal'])->name('start-processing');
     Route::post('{withdrawal}/reject', [AffiliateOperationsAdminController::class, 'rejectWithdrawal'])->name('reject');
     Route::post('{withdrawal}/mark-paid', [AffiliateOperationsAdminController::class, 'markPaidWithdrawal'])->name('mark-paid');
+});
+
+// ── Affiliate Program Rules & Resources ─────────────────────────────────────
+Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(function (): void {
+    Route::get('affiliate-rules', [AffiliateOperationsAdminController::class, 'rules'])->name('admin.affiliate-rules.index');
+    Route::get('affiliate-resources', [AffiliateOperationsAdminController::class, 'resources'])->name('admin.affiliate-resources.index');
+});
+
+Route::middleware(['auth:api', 'active.session', 'role:admin'])->group(function (): void {
+    Route::patch('affiliate-rules', [AffiliateOperationsAdminController::class, 'updateRules'])->name('admin.affiliate-rules.update');
+    Route::post('affiliate-resources', [AffiliateOperationsAdminController::class, 'storeResource'])->name('admin.affiliate-resources.store');
+    Route::delete('affiliate-resources/{resource}', [AffiliateOperationsAdminController::class, 'destroyResource'])->name('admin.affiliate-resources.destroy');
 });
 
 // ── Dashboard & Health ──────────────────────────────────────────────────────

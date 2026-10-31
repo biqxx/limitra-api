@@ -3,6 +3,7 @@
 namespace App\Models\Affiliate;
 
 use App\Models\User;
+use App\Services\Affiliate\AffiliateLedgerService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,6 +16,7 @@ class Affiliate extends Model
         'slug',
         'code',
         'commission_rate',
+        'current_tier',
         'status',
         'payout_details',
         'total_earnings',
@@ -76,12 +78,48 @@ class Affiliate extends Model
         return $this->hasMany(AffiliatePromoCode::class);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(AffiliateLedgerEntry::class);
+    }
 
-    /** Balance not yet paid out: total_earnings minus total_paid. */
+    public function clicks(): HasMany
+    {
+        return $this->hasMany(AffiliateClick::class);
+    }
+
+    public function tierHistories(): HasMany
+    {
+        return $this->hasMany(AffiliateTierHistory::class);
+    }
+
+    // ── Authoritative Financial Balances ──────────────────────────────────────
+
+    /**
+     * Authoritative available balance:
+     * Settled earnings minus pending holds minus paid withdrawals.
+     */
+    public function getAuthoritativeAvailableBalance(?int $excludeWithdrawalId = null): float
+    {
+        return app(AffiliateLedgerService::class)->calculateAuthoritativeAvailableBalance($this, $excludeWithdrawalId);
+    }
+
+    /** Total currently reserved in active withdrawals (pending, approved, processing). */
+    public function getAuthoritativeHeldBalance(): float
+    {
+        return (float) $this->withdrawals()->whereIn('status', ['pending', 'approved', 'processing'])->sum('amount');
+    }
+
+    /** Total authoritative paid out. */
+    public function getAuthoritativeTotalPaid(): float
+    {
+        return (float) $this->withdrawals()->where('status', 'paid')->sum('amount');
+    }
+
+    /** Backward compatibility helper for pending/available balance. */
     public function getPendingBalanceAttribute(): string
     {
-        return number_format((float) $this->total_earnings - (float) $this->total_paid, 2, '.', '');
+        return number_format($this->getAuthoritativeAvailableBalance(), 2, '.', '');
     }
 
     public function isActive(): bool

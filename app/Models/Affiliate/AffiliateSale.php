@@ -20,6 +20,8 @@ class AffiliateSale extends Model
         'buyer_user_id',
         'sale_type',
         'sale_amount',
+        'affiliate_link_id',
+        'affiliate_promo_code_id',
     ];
 
     protected function casts(): array
@@ -57,5 +59,15 @@ class AffiliateSale extends Model
     public function commission(): HasOne
     {
         return $this->hasOne(AffiliateCommission::class);
+    }
+
+    public function link(): BelongsTo
+    {
+        return $this->belongsTo(AffiliateLink::class, 'affiliate_link_id');
+    }
+
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(AffiliatePromoCode::class, 'affiliate_promo_code_id');
     }
 }

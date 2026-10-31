@@ -4,6 +4,7 @@ namespace App\Services\Payment;
 
 use App\Exceptions\PaymentGatewayException;
 use App\Models\Payment\Refund;
+use App\Services\AffiliateService;
 use App\Services\Notification\RefundNotificationService;
 use App\Services\Order\InventoryReservationService;
 use App\Services\Referral\ReferralRewardService;
@@ -18,6 +19,7 @@ class RefundSettlementService
         private readonly BusinessSettingsService $settings,
         private readonly ReferralRewardService $referralRewards,
         private readonly WalletCheckoutService $walletCheckout,
+        private readonly AffiliateService $affiliates,
     ) {}
 
     public function apply(Refund $refund, array $providerData): Refund
@@ -87,6 +89,7 @@ class RefundSettlementService
                         $this->walletCheckout->refundForOrder($order, 'order_fully_refunded');
                     }
                     $this->referralRewards->reverseForFullyRefundedOrder($order);
+                    $this->affiliates->reverseCommissionsForOrder($order, 'order_fully_refunded');
                 }
 
                 $returnRefundedMinor = $returnRequest

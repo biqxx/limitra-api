@@ -3,6 +3,7 @@
 namespace App\Models\Order;
 
 use App\Models\Address\Address;
+use App\Models\Affiliate\AffiliateSale;
 use App\Models\Commerce\CheckoutQuote;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
@@ -109,6 +110,11 @@ class Order extends Model
     public function returnRequests(): HasMany
     {
         return $this->hasMany(ReturnRequest::class);
+    }
+
+    public function affiliateSales(): HasMany
+    {
+        return $this->hasMany(AffiliateSale::class);
     }
 
     public function supportTickets(): HasMany

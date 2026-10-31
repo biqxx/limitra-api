@@ -4,7 +4,7 @@ use App\Http\Controllers\Api\Admin\ProductPricingController;
 use App\Http\Controllers\Api\Admin\SourcingController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:api', 'role:admin'])
+Route::middleware(['auth:api', 'active.session', 'role:admin'])
     ->prefix('sourcing')
     ->name('admin.sourcing.')
     ->group(function () {

@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\Admin\AdminActivityController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AffiliateController as AdminAffiliateController;
 use App\Http\Controllers\Api\Admin\AffiliateOperationsAdminController;
@@ -34,26 +33,26 @@ Route::middleware(['auth:api', 'active.session', 'role:admin'])
     });
 
 // ── Order management ──────────────────────────────────────────────────────────
-Route::middleware(['auth:api', 'role:admin,staff'])->prefix('orders')->name('admin.orders.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('orders')->name('admin.orders.')->group(function () {
     Route::get('/', [AdminOrderController::class, 'index'])->name('index');
     Route::get('{order}', [AdminOrderController::class, 'show'])->name('show');
 });
 
 // ── Affiliate management ──────────────────────────────────────────────────────
 // Read: admin + staff   Write: admin only
-Route::middleware(['auth:api', 'role:admin,staff'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
     Route::get('/', [AdminAffiliateController::class, 'index'])->name('index');
     Route::get('{affiliate}', [AdminAffiliateController::class, 'show'])->name('show');
     Route::get('{affiliate}/commissions', [AdminAffiliateController::class, 'commissions'])->name('commissions');
 });
 
-Route::middleware(['auth:api', 'role:admin'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
     Route::post('/', [AdminAffiliateController::class, 'store'])->name('store');
     Route::patch('{affiliate}', [AdminAffiliateController::class, 'update'])->name('update');
 });
 
 // ── Commission management ─────────────────────────────────────────────────────
-Route::middleware(['auth:api', 'role:admin,staff'])->prefix('commissions')->name('admin.commissions.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('commissions')->name('admin.commissions.')->group(function () {
     Route::get('/', [AdminCommissionController::class, 'index'])->name('index');
     Route::get('{commission}', [AdminCommissionController::class, 'show'])->name('show');
 });
@@ -110,11 +109,5 @@ Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(fun
         Route::get('{report}', [ReportController::class, 'show'])->middleware('permission:reports.read')->name('show');
         Route::post('{report}/retry', [ReportController::class, 'retry'])->middleware('permission:reports.retry')->name('retry');
         Route::get('{report}/download', [ReportController::class, 'download'])->middleware(['signed', 'permission:reports.download'])->name('download');
-    });
-
-    // ── Audit Activity Logs ──────────────────────────────────────────────────
-    Route::prefix('activity')->name('admin.activity.')->middleware('permission:audit_logs.read')->group(function (): void {
-        Route::get('/', [AdminActivityController::class, 'index'])->name('index');
-        Route::get('{event}', [AdminActivityController::class, 'show'])->name('show');
     });
 });

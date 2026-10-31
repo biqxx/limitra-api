@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('products/{product}/reviews', [ProductReviewController::class, 'index'])
     ->name('products.reviews.index');
 
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api', 'active.session'])->group(function () {
     Route::post('products/{product}/reviews', [ProductReviewController::class, 'store'])
         ->name('products.reviews.store');
     Route::patch('reviews/{review}', [ReviewController::class, 'update'])->name('reviews.update');

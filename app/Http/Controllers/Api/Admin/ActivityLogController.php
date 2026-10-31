@@ -34,14 +34,32 @@ class ActivityLogController extends BaseController
             'actor_id' => ['sometimes', 'integer', 'exists:users,id'],
             'from_date' => ['sometimes', 'date'],
             'to_date' => ['sometimes', 'date', 'after_or_equal:from_date'],
+            'from' => ['sometimes', 'date'],
+            'to' => ['sometimes', 'date'],
+            'subject_type' => ['sometimes', 'string', 'max:150'],
+            'subject_id' => ['sometimes', 'integer'],
+            'search' => ['sometimes', 'string', 'max:100'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
+
+        $fromDate = $request->input('from_date', $request->input('from'));
+        $toDate = $request->input('to_date', $request->input('to'));
 
         $query = AuditEvent::query()->with('actor')
             ->when($request->action, fn ($q) => $q->where('action', $request->action))
             ->when($request->actor_id, fn ($q) => $q->where('actor_id', $request->actor_id))
-            ->when($request->from_date, fn ($q) => $q->whereDate('created_at', '>=', $request->from_date))
-            ->when($request->to_date, fn ($q) => $q->whereDate('created_at', '<=', $request->to_date))
+            ->when($request->subject_type, fn ($q) => $q->where('subject_type', $request->subject_type))
+            ->when($request->subject_id, fn ($q) => $q->where('subject_id', $request->subject_id))
+            ->when($fromDate, fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($q) => $q->whereDate('created_at', '<=', $toDate))
+            ->when($request->search, function ($q, $search): void {
+                $term = '%'.$search.'%';
+                $q->where(function ($sq) use ($term): void {
+                    $sq->where('action', 'like', $term)
+                        ->orWhere('reason', 'like', $term)
+                        ->orWhere('request_id', 'like', $term);
+                });
+            })
             ->orderByDesc('id');
 
         $events = $query->paginate($request->integer('per_page', 20));

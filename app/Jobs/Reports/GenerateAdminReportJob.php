@@ -20,7 +20,7 @@ class GenerateAdminReportJob implements ShouldQueue
 
     public function __construct(public int $reportId)
     {
-        $this->onQueue('reports');
+        $this->onQueue('maintenance');
     }
 
     public function handle(AdminReportService $reportService): void

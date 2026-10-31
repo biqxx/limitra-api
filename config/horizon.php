@@ -107,7 +107,7 @@ return [
         ],
         'supervisor-maintenance' => [
             'connection' => 'redis',
-            'queue' => ['maintenance', 'reports'],
+            'queue' => ['maintenance'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,

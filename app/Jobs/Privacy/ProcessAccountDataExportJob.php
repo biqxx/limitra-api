@@ -24,7 +24,7 @@ class ProcessAccountDataExportJob implements ShouldQueue
 
     public function __construct(public int $exportId)
     {
-        $this->onQueue('reports');
+        $this->onQueue('maintenance');
     }
 
     public function handle(): void

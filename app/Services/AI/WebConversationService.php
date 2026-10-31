@@ -239,12 +239,24 @@ class WebConversationService
             }
 
             $storedAttachments = [];
+            $imageUrls = [];
             foreach ($images as $img) {
                 if ($img instanceof UploadedFile) {
                     $attData = $this->attachmentScanner->validateAndStore($img, $conversation->id);
                     $attData['download_url'] = url("/api/v1/ai/conversations/{$conversation->id}/attachments/{$attData['id']}");
                     $storedAttachments[] = $attData;
+
+                    $storedPath = $img->store('ai/conversations/'.$conversation->id, 'public');
+                    $imageUrls[] = '/storage/'.$storedPath;
                 }
+            }
+
+            $metadata = [];
+            if (! empty($storedAttachments)) {
+                $metadata['attachments'] = $storedAttachments;
+            }
+            if (! empty($imageUrls)) {
+                $metadata['images'] = $imageUrls;
             }
 
             return ConversationMessage::query()->create([
@@ -252,7 +264,7 @@ class WebConversationService
                 'client_message_id' => $data['client_message_id'],
                 'role' => 'user',
                 'content' => $data['text'],
-                'metadata' => ! empty($storedAttachments) ? ['attachments' => $storedAttachments] : null,
+                'metadata' => ! empty($metadata) ? $metadata : null,
             ]);
         }, 3);
     }

@@ -58,6 +58,7 @@ class AnalyticsTrackingService
                 'product_view' => $this->createProductView($event, $sessionId, $userId, $properties, $createdAt),
                 'cart_event' => $this->createCartEvent($event, $eventType, $sessionId, $userId, $properties, $createdAt),
                 'order_event' => $this->createOrderEvent($event, $eventType, $sessionId, $userId, $properties, $createdAt),
+                'client_event', 'custom_event' => null,
                 default => throw new \InvalidArgumentException("Unsupported analytics event kind [{$kind}]."),
             };
         });
@@ -110,6 +111,7 @@ class AnalyticsTrackingService
                 ['order_id' => $properties['orderId'] ?? null],
                 $properties['metadata'] ?? [],
             ),
+            'client_event', 'custom_event' => $properties,
             default => [],
         };
 

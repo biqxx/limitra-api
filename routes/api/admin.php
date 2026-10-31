@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminActivityController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AffiliateController as AdminAffiliateController;
 use App\Http\Controllers\Api\Admin\AffiliateOperationsAdminController;
@@ -109,5 +110,11 @@ Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(fun
         Route::get('{report}', [ReportController::class, 'show'])->middleware('permission:reports.read')->name('show');
         Route::post('{report}/retry', [ReportController::class, 'retry'])->middleware('permission:reports.retry')->name('retry');
         Route::get('{report}/download', [ReportController::class, 'download'])->middleware(['signed', 'permission:reports.download'])->name('download');
+    });
+
+    // ── Audit Activity Logs ──────────────────────────────────────────────────
+    Route::prefix('activity')->name('admin.activity.')->middleware('permission:audit_logs.read')->group(function (): void {
+        Route::get('/', [AdminActivityController::class, 'index'])->name('index');
+        Route::get('{event}', [AdminActivityController::class, 'show'])->name('show');
     });
 });

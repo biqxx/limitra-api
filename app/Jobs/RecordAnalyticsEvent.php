@@ -20,6 +20,8 @@ class RecordAnalyticsEvent implements ShouldQueue
 
     public const ORDER_EVENT = 'order_event';
 
+    public const CLIENT_EVENT = 'client_event';
+
     public int $tries = 3;
 
     public array $backoff = [1, 5, 30];
@@ -107,6 +109,27 @@ class RecordAnalyticsEvent implements ShouldQueue
             $userId,
             compact('orderId', 'amount', 'metadata'),
             self::requestContext($request),
+        );
+    }
+
+    public static function clientEvent(
+        Request $request,
+        string $eventType,
+        string $sessionId,
+        ?int $userId,
+        array $properties = [],
+        ?string $eventId = null,
+        ?string $occurredAt = null,
+    ): self {
+        return new self(
+            self::CLIENT_EVENT,
+            $eventType,
+            $sessionId,
+            $userId,
+            $properties,
+            self::requestContext($request),
+            $eventId,
+            $occurredAt,
         );
     }
 

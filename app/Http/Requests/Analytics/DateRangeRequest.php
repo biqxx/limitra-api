@@ -20,7 +20,7 @@ class DateRangeRequest extends FormRequest
         return [
             'from' => ['sometimes', 'date', 'before_or_equal:to'],
             'to' => ['sometimes', 'date', 'after_or_equal:from'],
-            'group_by' => ['sometimes', 'in:hourly,daily,monthly'],
+            'group_by' => ['sometimes', 'in:hourly,daily,monthly,hour,day,week,month'],
         ];
     }
 
@@ -36,6 +36,13 @@ class DateRangeRequest extends FormRequest
 
     public function groupBy(): string
     {
-        return $this->input('group_by', 'daily');
+        $groupBy = (string) $this->input('group_by', 'daily');
+
+        return match ($groupBy) {
+            'hour', 'hourly' => 'hourly',
+            'month', 'monthly' => 'monthly',
+            'day', 'daily', 'week', 'weekly' => 'daily',
+            default => 'daily',
+        };
     }
 }

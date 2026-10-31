@@ -122,7 +122,11 @@ class DashboardController extends BaseController
         path: '/affiliate/analytics',
         tags: ['Affiliate Portal'],
         summary: 'Time-series analytics for affiliate',
-        security: [['bearerAuth' => []]]
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Affiliate analytics series', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 404, description: 'No affiliate account found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
     )]
     public function analytics(Request $request): JsonResponse
     {
@@ -188,7 +192,11 @@ class DashboardController extends BaseController
         path: '/affiliate/tier-history',
         tags: ['Affiliate Portal'],
         summary: 'Affiliate tier progression history',
-        security: [['bearerAuth' => []]]
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Affiliate tier history list', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 404, description: 'No affiliate account found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
     )]
     public function tierHistory(Request $request): JsonResponse
     {

@@ -1471,8 +1471,74 @@
                 "tags": [
                     "Admin - Inventory"
                 ],
-                "summary": "List inventory adjustments",
+                "summary": "List inventory stock levels or adjustments",
                 "operationId": "15aba50ae4354127673d9753230e4376",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "in_stock",
+                                "low_stock",
+                                "out_of_stock"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "category_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated inventory stock status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/inventory/adjustments": {
+            "get": {
+                "tags": [
+                    "Admin - Inventory"
+                ],
+                "summary": "List immutable inventory adjustments ledger",
+                "operationId": "89b460f1ac1dec0350b95c37db7c49f0",
                 "parameters": [
                     {
                         "name": "product_id",
@@ -1637,11 +1703,83 @@
                     "Affiliate Portal"
                 ],
                 "summary": "Affiliate dashboard stats",
-                "description": "Returns summary stats: earnings, referrals, sales, pending commissions. Requires affiliate role.",
+                "description": "Returns summary stats: earnings, referrals, sales, pending commissions, tier progress, and date-filtered metrics.",
                 "operationId": "7c4d73b3993aa190284af0dc08d925a1",
                 "responses": {
                     "200": {
                         "description": "Affiliate dashboard",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No affiliate account found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/affiliate/analytics": {
+            "get": {
+                "tags": [
+                    "Affiliate Portal"
+                ],
+                "summary": "Time-series analytics for affiliate",
+                "operationId": "ef03191cce6ba6f34df42a3b7a150632",
+                "responses": {
+                    "200": {
+                        "description": "Affiliate analytics series",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No affiliate account found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/affiliate/tier-history": {
+            "get": {
+                "tags": [
+                    "Affiliate Portal"
+                ],
+                "summary": "Affiliate tier progression history",
+                "operationId": "1194e3963abbbd30607bc5bdc9258d08",
+                "responses": {
+                    "200": {
+                        "description": "Affiliate tier history list",
                         "content": {
                             "application/json": {
                                 "schema": {

@@ -128,8 +128,10 @@ class OpenRouterDriver implements AgentDriver
             }
 
             if ($message['role'] === 'user' && is_array($message['content'])) {
+                $hasToolResult = false;
                 foreach ($message['content'] as $block) {
                     if (($block['type'] ?? null) === 'tool_result') {
+                        $hasToolResult = true;
                         $normalized[] = [
                             'role' => 'tool',
                             'tool_call_id' => $block['tool_use_id'],
@@ -139,6 +141,15 @@ class OpenRouterDriver implements AgentDriver
                         ];
                     }
                 }
+
+                if ($hasToolResult) {
+                    continue;
+                }
+
+                $normalized[] = [
+                    'role' => 'user',
+                    'content' => $message['content'],
+                ];
 
                 continue;
             }

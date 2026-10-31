@@ -25,8 +25,11 @@ class StoreAIConversationMessageRequest extends FormRequest
         return [
             'text' => ['required', 'string', 'min:1', 'max:4000'],
             'client_message_id' => ['required', 'string', 'min:8', 'max:100'],
+            'async' => ['sometimes', 'boolean'],
             'images' => ['sometimes', 'array', 'max:3'],
             'images.*' => ['image', 'mimes:jpeg,png,webp,jpg', 'max:5120'],
+            'attachments' => ['sometimes', 'array', 'max:3'],
+            'attachments.*' => ['image', 'mimes:jpeg,png,webp,jpg', 'max:5120'],
         ];
     }
 }

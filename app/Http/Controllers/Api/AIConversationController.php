@@ -13,6 +13,8 @@ use App\Services\AI\WebConversationService;
 use App\Services\Support\SupportTicketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AIConversationController extends BaseController
 {
@@ -54,12 +56,25 @@ class AIConversationController extends BaseController
         Conversation $conversation,
         WebConversationService $conversations,
     ): JsonResponse {
+        $uploadedImages = $request->file('images', $request->file('attachments', []));
         $result = $conversations->send(
             $conversation,
             $request->user('api'),
             $request->validated(),
-            $request->file('images', []),
+            $uploadedImages,
         );
+
+        if (! empty($result['async'])) {
+            return $this->success(
+                [
+                    'status' => 'processing',
+                    'client_message_id' => $result['message']->client_message_id ?? $request->input('client_message_id'),
+                    'request_message' => new AIConversationMessageResource($result['message']),
+                ],
+                'AI response processing asynchronously.',
+                202,
+            );
+        }
 
         return $this->success(
             new AIConversationMessageResource($result['message']),
@@ -99,6 +114,21 @@ class AIConversationController extends BaseController
         return $this->success(
             new AIConversationResource($conversations->close($conversation, $request->user('api'))),
             'AI conversation closed.',
+        );
+    }
+
+    public function attachment(
+        Request $request,
+        Conversation $conversation,
+        string $attachment,
+        WebConversationService $conversations,
+    ): StreamedResponse {
+        $data = $conversations->getAttachment($conversation, $request->user('api'), $attachment);
+
+        return Storage::disk('local')->download(
+            $data['stored_path'],
+            $data['file_name'],
+            ['Content-Type' => $data['mime'] ?? 'application/octet-stream'],
         );
     }
 }

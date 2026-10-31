@@ -3,6 +3,7 @@
 namespace App\Services\AI;
 
 use App\AI\AgentService;
+use App\Jobs\AI\ProcessAIMessageJob;
 use App\Models\AI\Conversation;
 use App\Models\AI\ConversationMessage;
 use App\Models\Support\SupportTicket;
@@ -12,12 +13,14 @@ use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class WebConversationService
 {
-    public function __construct(private readonly AgentService $agent) {}
+    public function __construct(
+        private readonly AgentService $agent,
+        private readonly AttachmentSecurityScanner $attachmentScanner = new AttachmentSecurityScanner,
+    ) {}
 
     /** @return array{conversation: Conversation, greeting: ConversationMessage} */
     public function create(User $user, array $data): array
@@ -42,7 +45,7 @@ class WebConversationService
 
     public function messages(Conversation $conversation, User $user, int $perPage): CursorPaginator
     {
-        $this->assertOwner($conversation, $user);
+        $this->assertOwnerOrStaff($conversation, $user);
 
         return $conversation->messages()
             ->whereIn('role', ['user', 'assistant'])
@@ -54,7 +57,7 @@ class WebConversationService
     /**
      * @param  array<string, mixed>  $data
      * @param  array<int, UploadedFile>  $images
-     * @return array{message: ConversationMessage, replayed: bool}
+     * @return array{message: ConversationMessage, replayed: bool, async?: bool}
      */
     public function send(Conversation $conversation, User $user, array $data, array $images = []): array
     {
@@ -75,6 +78,12 @@ class WebConversationService
                 ->first();
             if ($existing) {
                 return ['message' => $existing, 'replayed' => true];
+            }
+
+            if (! empty($data['async'])) {
+                ProcessAIMessageJob::dispatch($conversation->id, $requestMessage->id);
+
+                return ['message' => $requestMessage, 'replayed' => false, 'async' => true];
             }
 
             $assistant = $this->agent->respondToMessage($conversation->fresh(), $requestMessage);
@@ -104,6 +113,17 @@ class WebConversationService
                 throw ValidationException::withMessages([
                     'conversation' => ['Cannot hand off a closed conversation.'],
                 ]);
+            }
+
+            // Idempotent handoff: return existing ticket if already handed off
+            if (! empty($conversation->context['support_ticket_id'])) {
+                $existingTicket = SupportTicket::query()->find($conversation->context['support_ticket_id']);
+                if ($existingTicket) {
+                    return [
+                        'conversation' => $conversation,
+                        'ticket' => $existingTicket,
+                    ];
+                }
             }
 
             $subject = "AI Support Transfer: Conversation #{$conversation->id}";
@@ -165,6 +185,29 @@ class WebConversationService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function getAttachment(Conversation $conversation, User $user, string $attachmentId): array
+    {
+        $this->assertOwnerOrStaff($conversation, $user);
+
+        $messages = $conversation->messages()
+            ->whereNotNull('metadata')
+            ->get();
+
+        foreach ($messages as $msg) {
+            $attachments = $msg->metadata['attachments'] ?? [];
+            foreach ($attachments as $att) {
+                if (($att['id'] ?? null) === $attachmentId) {
+                    return $att;
+                }
+            }
+        }
+
+        abort(404, 'Attachment not found.');
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      * @param  array<int, UploadedFile>  $images
      */
@@ -179,32 +222,38 @@ class WebConversationService
                 ]);
             }
 
-            $storedImageUrls = [];
+            // Check if client message ID was already used
+            $existing = ConversationMessage::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('client_message_id', $data['client_message_id'])
+                ->first();
+
+            if ($existing) {
+                if ($existing->role !== 'user' || ! hash_equals((string) $existing->content, (string) $data['text'])) {
+                    throw ValidationException::withMessages([
+                        'client_message_id' => ['This client message ID was already used for different content.'],
+                    ]);
+                }
+
+                return $existing;
+            }
+
+            $storedAttachments = [];
             foreach ($images as $img) {
                 if ($img instanceof UploadedFile) {
-                    $path = $img->store('ai/attachments', 'public');
-                    $storedImageUrls[] = Storage::disk('public')->url($path);
+                    $attData = $this->attachmentScanner->validateAndStore($img, $conversation->id);
+                    $attData['download_url'] = url("/api/v1/ai/conversations/{$conversation->id}/attachments/{$attData['id']}");
+                    $storedAttachments[] = $attData;
                 }
             }
 
-            $message = ConversationMessage::query()->firstOrCreate(
-                [
-                    'conversation_id' => $conversation->id,
-                    'client_message_id' => $data['client_message_id'],
-                ],
-                [
-                    'role' => 'user',
-                    'content' => $data['text'],
-                    'metadata' => ! empty($storedImageUrls) ? ['images' => $storedImageUrls] : null,
-                ],
-            );
-            if ($message->role !== 'user' || ! hash_equals((string) $message->content, $data['text'])) {
-                throw ValidationException::withMessages([
-                    'client_message_id' => ['This client message ID was already used for different content.'],
-                ]);
-            }
-
-            return $message;
+            return ConversationMessage::query()->create([
+                'conversation_id' => $conversation->id,
+                'client_message_id' => $data['client_message_id'],
+                'role' => 'user',
+                'content' => $data['text'],
+                'metadata' => ! empty($storedAttachments) ? ['attachments' => $storedAttachments] : null,
+            ]);
         }, 3);
     }
 
@@ -257,5 +306,18 @@ class WebConversationService
         if ($conversation->user_id !== $user->id || $conversation->platform !== 'web') {
             abort(403, 'Forbidden.');
         }
+    }
+
+    private function assertOwnerOrStaff(Conversation $conversation, User $user): void
+    {
+        if ($conversation->user_id === $user->id && $conversation->platform === 'web') {
+            return;
+        }
+
+        if (in_array($user->role, ['admin', 'staff'], true)) {
+            return;
+        }
+
+        abort(403, 'Forbidden.');
     }
 }

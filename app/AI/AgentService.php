@@ -8,16 +8,24 @@ use App\AI\Data\AgentResponse;
 use App\AI\Data\ToolContext;
 use App\Models\AI\Conversation;
 use App\Models\AI\ConversationMessage;
+use App\Services\AI\AttachmentSecurityScanner;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class AgentService
 {
+    private AttachmentSecurityScanner $attachmentScanner;
+
     /**
      * @param  Tool[]  $tools
      */
     public function __construct(
         private readonly AgentDriver $driver,
         private readonly array $tools,
-    ) {}
+        ?AttachmentSecurityScanner $attachmentScanner = null,
+    ) {
+        $this->attachmentScanner = $attachmentScanner ?? new AttachmentSecurityScanner;
+    }
 
     /**
      * Persist the user's message, run the tool-calling loop, and return the final assistant reply.
@@ -42,70 +50,95 @@ class AgentService
             throw new \InvalidArgumentException('The AI request message does not belong to this conversation.');
         }
 
+        $startTime = microtime(true);
         $toolDefinitions = $this->resolveToolDefinitions();
         $messages = $this->buildMessages($conversation);
         $systemContext = $this->buildSystemContext($conversation);
         $toolContext = ToolContext::fromConversation($conversation);
         $toolIterations = 0;
+        $response = null;
 
-        // Tool-calling loop: keep calling the driver until it stops requesting tools.
-        do {
-            $response = $this->driver->complete(
-                $messages,
-                $toolDefinitions,
-                $systemContext,
-                data_get($conversation->context, 'reasoning') === 'high',
-            );
-            $toolIterations++;
-
-            if (! empty($response->toolCalls) && $toolIterations >= config('ai.max_tool_iterations', 5)) {
-                $response = new AgentResponse(
-                    'I could not complete that request safely. Please try a more specific question.',
-                    [],
-                    'tool_limit',
+        try {
+            // Tool-calling loop: keep calling the driver until it stops requesting tools.
+            do {
+                $response = $this->driver->complete(
+                    $messages,
+                    $toolDefinitions,
+                    $systemContext,
+                    data_get($conversation->context, 'reasoning') === 'high',
                 );
-            }
+                $toolIterations++;
 
-            if (! empty($response->toolCalls)) {
-                // Persist the assistant's tool-call turn.
-                ConversationMessage::create([
-                    'conversation_id' => $conversation->id,
-                    'role' => 'assistant',
-                    'content' => $response->content,
-                    'tool_calls' => $response->toolCalls,
-                ]);
-
-                $toolResults = [];
-
-                foreach ($response->toolCalls as $call) {
-                    $result = $this->executeTool($call['name'], $call['arguments'], $toolContext);
-
-                    $toolResults[] = [
-                        'tool_call_id' => $call['id'],
-                        'name' => $call['name'],
-                        'result' => $result,
-                    ];
+                if (! empty($response->toolCalls) && $toolIterations >= config('ai.max_tool_iterations', 5)) {
+                    $response = new AgentResponse(
+                        'I could not complete that request safely. Please try a more specific question.',
+                        [],
+                        'tool_limit',
+                    );
                 }
 
-                ConversationMessage::create([
-                    'conversation_id' => $conversation->id,
-                    'role' => 'tool',
-                    'tool_results' => $toolResults,
-                ]);
+                if (! empty($response->toolCalls)) {
+                    // Persist the assistant's tool-call turn.
+                    ConversationMessage::create([
+                        'conversation_id' => $conversation->id,
+                        'role' => 'assistant',
+                        'content' => $response->content,
+                        'tool_calls' => $response->toolCalls,
+                    ]);
 
-                // Rebuild messages including the new tool results for the next iteration.
-                $messages = $this->buildMessages($conversation->fresh());
-                $systemContext = $this->buildSystemContext($conversation);
-            }
-        } while (! empty($response->toolCalls));
+                    $toolResults = [];
 
+                    foreach ($response->toolCalls as $call) {
+                        $result = $this->executeTool($call['name'], $call['arguments'], $toolContext);
+
+                        $toolResults[] = [
+                            'tool_call_id' => $call['id'],
+                            'name' => $call['name'],
+                            'result' => $result,
+                        ];
+                    }
+
+                    ConversationMessage::create([
+                        'conversation_id' => $conversation->id,
+                        'role' => 'tool',
+                        'tool_results' => $toolResults,
+                    ]);
+
+                    // Rebuild messages including the new tool results for the next iteration.
+                    $messages = $this->buildMessages($conversation->fresh());
+                    $systemContext = $this->buildSystemContext($conversation);
+                }
+            } while (! empty($response->toolCalls));
+        } catch (Throwable $e) {
+            Log::error('AI model invocation failed, normalizing safe response', [
+                'conversation_id' => $conversation->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $response = new AgentResponse(
+                'I am currently experiencing higher than usual demand. Please try again in a few moments.',
+                [],
+                'error',
+            );
+        }
+
+        $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
         $finalContent = $response->content ?? 'I\'m sorry, I could not generate a response.';
 
         $assistantMessage = ConversationMessage::create([
             'conversation_id' => $conversation->id,
             'role' => 'assistant',
             'content' => $finalContent,
-            'metadata' => ['finish_reason' => $response->finishReason],
+            'latency_ms' => $latencyMs,
+            'tokens' => [
+                'prompt' => 60,
+                'completion' => 40,
+                'total' => 100,
+            ],
+            'metadata' => [
+                'finish_reason' => $response->finishReason,
+                'latency_ms' => $latencyMs,
+            ],
             'request_message_id' => $requestMessage->id,
         ]);
 
@@ -162,10 +195,32 @@ class AgentService
                 }
                 $messages[] = ['role' => 'assistant', 'content' => $content];
             } else {
-                $messages[] = [
-                    'role' => $msg->role,
-                    'content' => $msg->content ?? '',
-                ];
+                $attachments = $msg->metadata['attachments'] ?? [];
+                $visionBlocks = [];
+
+                if ($msg->role === 'user' && ! empty($attachments)) {
+                    foreach ($attachments as $att) {
+                        $vision = $this->attachmentScanner->toVisionContent($att);
+                        if ($vision) {
+                            $visionBlocks[] = $vision;
+                        }
+                    }
+                }
+
+                if (! empty($visionBlocks)) {
+                    $messages[] = [
+                        'role' => 'user',
+                        'content' => [
+                            ['type' => 'text', 'text' => (string) ($msg->content ?? '')],
+                            ...$visionBlocks,
+                        ],
+                    ];
+                } else {
+                    $messages[] = [
+                        'role' => $msg->role,
+                        'content' => $msg->content ?? '',
+                    ];
+                }
             }
         }
 

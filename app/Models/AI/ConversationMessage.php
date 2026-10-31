@@ -16,6 +16,8 @@ class ConversationMessage extends Model
         'metadata',
         'client_message_id',
         'request_message_id',
+        'latency_ms',
+        'tokens',
     ];
 
     protected function casts(): array
@@ -24,6 +26,8 @@ class ConversationMessage extends Model
             'tool_calls' => 'array',
             'tool_results' => 'array',
             'metadata' => 'array',
+            'tokens' => 'array',
+            'latency_ms' => 'integer',
         ];
     }
 
@@ -35,5 +39,10 @@ class ConversationMessage extends Model
     public function requestMessage(): BelongsTo
     {
         return $this->belongsTo(self::class, 'request_message_id');
+    }
+
+    public function getAttachmentsAttribute(): ?array
+    {
+        return $this->metadata['attachments'] ?? $this->metadata['images'] ?? null;
     }
 }

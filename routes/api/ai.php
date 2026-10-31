@@ -14,5 +14,7 @@ Route::middleware(['auth:api', 'active.session'])
             ->middleware('throttle:20,1')->name('messages.store');
         Route::post('{conversation}/handoff', [AIConversationController::class, 'handoff'])
             ->name('handoff');
+        Route::get('{conversation}/attachments/{attachment}', [AIConversationController::class, 'attachment'])
+            ->name('attachments.download');
         Route::delete('{conversation}', [AIConversationController::class, 'destroy'])->name('destroy');
     });

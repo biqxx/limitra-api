@@ -41,6 +41,35 @@ class SupplierServiceClient
         return $this->send(fn (PendingRequest $http) => $http->get($endpoint));
     }
 
+    public function placeProcurementOrder(string $supplier, array $payload): array
+    {
+        $endpoint = sprintf('procurement/%s/orders', rawurlencode($supplier));
+
+        return $this->send(fn (PendingRequest $http) => $http->post($endpoint, $payload));
+    }
+
+    public function fetchProcurementStatus(string $supplier, string $externalOrderId): array
+    {
+        $endpoint = sprintf(
+            'procurement/%s/orders/%s',
+            rawurlencode($supplier),
+            rawurlencode($externalOrderId),
+        );
+
+        return $this->send(fn (PendingRequest $http) => $http->get($endpoint));
+    }
+
+    public function fetchTracking(string $supplier, string $externalTrackingId): array
+    {
+        $endpoint = sprintf(
+            'procurement/%s/tracking/%s',
+            rawurlencode($supplier),
+            rawurlencode($externalTrackingId),
+        );
+
+        return $this->send(fn (PendingRequest $http) => $http->get($endpoint));
+    }
+
     private function send(callable $request): array
     {
         try {

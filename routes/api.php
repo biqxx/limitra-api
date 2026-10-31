@@ -27,6 +27,7 @@ Route::prefix('v1')->group(function () {
         require __DIR__.'/api/ai_admin.php';
         require __DIR__.'/api/content_admin.php';
         require __DIR__.'/api/microstore_admin.php';
+        require __DIR__.'/api/procurement_admin.php';
     });
 
     // ── Analytics dashboard (auth + role:admin,staff enforced inside) ─────────

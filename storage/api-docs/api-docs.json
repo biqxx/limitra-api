@@ -4538,9 +4538,7 @@
                         "type": "string",
                         "example": "Success"
                     },
-                    "data": {
-                        "nullable": true
-                    }
+                    "data": {}
                 },
                 "type": "object"
             },
@@ -4554,9 +4552,7 @@
                         "type": "string",
                         "example": "Error message"
                     },
-                    "errors": {
-                        "nullable": true
-                    }
+                    "errors": {}
                 },
                 "type": "object"
             },

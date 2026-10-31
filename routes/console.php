@@ -103,9 +103,3 @@ Schedule::command('content:publish-scheduled')
     ->withoutOverlapping()
     ->onOneServer()
     ->name('content:publish-scheduled');
-
-Schedule::command('horizon:snapshot')
-    ->everyFiveMinutes()
-    ->withoutOverlapping()
-    ->onOneServer()
-    ->name('horizon:metrics-snapshot');

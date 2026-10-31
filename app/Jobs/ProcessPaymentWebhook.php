@@ -4,8 +4,10 @@ namespace App\Jobs;
 
 use App\Models\Payment\Payment;
 use App\Models\Payment\PaymentWebhook;
+use App\Models\Payment\WalletDeposit;
 use App\Services\Payment\PaymentSettlementService;
 use App\Services\Payment\RefundSettlementService;
+use App\Services\Wallet\WalletDepositSettlementService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Throwable;
@@ -23,8 +25,11 @@ class ProcessPaymentWebhook implements ShouldQueue
         $this->onQueue('payments');
     }
 
-    public function handle(PaymentSettlementService $settlement, RefundSettlementService $refunds): void
-    {
+    public function handle(
+        PaymentSettlementService $settlement,
+        RefundSettlementService $refunds,
+        WalletDepositSettlementService $walletSettlement,
+    ): void {
         $webhook = PaymentWebhook::findOrFail($this->webhookId);
         if (in_array($webhook->status, ['processed', 'ignored'], true)) {
             return;
@@ -45,20 +50,35 @@ class ProcessPaymentWebhook implements ShouldQueue
         $payment = Payment::where('provider', $webhook->provider)
             ->where('reference', $webhook->reference)
             ->first();
-        if (! $payment) {
-            $webhook->update(['status' => 'ignored', 'processed_at' => now(), 'error' => 'Payment reference not found.']);
+
+        if ($payment) {
+            try {
+                $settlement->apply($payment, $webhook->payload['data'] ?? []);
+                $webhook->update(['status' => 'processed', 'processed_at' => now(), 'error' => null]);
+            } catch (Throwable $exception) {
+                $webhook->update(['status' => 'failed', 'error' => $exception->getMessage()]);
+
+                throw $exception;
+            }
 
             return;
         }
 
-        try {
-            $settlement->apply($payment, $webhook->payload['data'] ?? []);
-            $webhook->update(['status' => 'processed', 'processed_at' => now(), 'error' => null]);
-        } catch (Throwable $exception) {
-            $webhook->update(['status' => 'failed', 'error' => $exception->getMessage()]);
+        $walletDeposit = WalletDeposit::where('reference', $webhook->reference)->first();
+        if ($walletDeposit) {
+            try {
+                $walletSettlement->settleFromWebhook($webhook, $webhook->payload['data'] ?? []);
+                $webhook->update(['status' => 'processed', 'processed_at' => now(), 'error' => null]);
+            } catch (Throwable $exception) {
+                $webhook->update(['status' => 'failed', 'error' => $exception->getMessage()]);
 
-            throw $exception;
+                throw $exception;
+            }
+
+            return;
         }
+
+        $webhook->update(['status' => 'ignored', 'processed_at' => now(), 'error' => 'Payment or deposit reference not found.']);
     }
 
     private function processRefund(PaymentWebhook $webhook, RefundSettlementService $refunds): void

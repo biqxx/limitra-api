@@ -21,6 +21,16 @@ class WalletDeposit extends Model
         'provider_reference',
         'paid_at',
         'metadata',
+        'idempotency_key',
+        'request_hash',
+        'expires_at',
+        'failure_reason',
+    ];
+
+    protected $hidden = [
+        'access_code',
+        'metadata',
+        'request_hash',
     ];
 
     protected function casts(): array
@@ -28,6 +38,7 @@ class WalletDeposit extends Model
         return [
             'amount_minor' => 'integer',
             'paid_at' => 'datetime',
+            'expires_at' => 'datetime',
             'metadata' => 'array',
         ];
     }
@@ -40,5 +51,20 @@ class WalletDeposit extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    public function isCompleted(): bool
+    {
+        return $this->status === 'completed';
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === 'pending';
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->status === 'expired' || ($this->expires_at && $this->expires_at->isPast() && $this->status === 'pending');
     }
 }

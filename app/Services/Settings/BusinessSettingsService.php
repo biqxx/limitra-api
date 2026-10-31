@@ -18,13 +18,17 @@ class BusinessSettingsService
 
     public function __construct(private readonly AuditEventService $auditEvents) {}
 
-    public function value(string $key): mixed
+    public function value(string $key, mixed $default = null): mixed
     {
         $values = Cache::rememberForever(self::CACHE_KEY, fn (): array => BusinessSetting::query()
             ->pluck('value', 'key')
             ->all());
 
         if (! array_key_exists($key, $values)) {
+            if (func_num_args() >= 2) {
+                return $default;
+            }
+
             throw new LogicException("Business setting [{$key}] is not defined.");
         }
 

@@ -7,16 +7,11 @@ use App\Http\Requests\Wallet\IndexWalletTransactionsRequest;
 use App\Http\Resources\WalletTransactionResource;
 use App\Models\Payment\Account;
 use App\Models\Payment\WalletDeposit;
-use App\Models\User;
-use App\Services\Payment\PaystackService;
 use App\Services\Payment\WalletBalanceService;
-use App\Services\Payment\WalletLedgerService;
 use App\Services\Settings\BusinessSettingsService;
+use App\Services\Wallet\WalletDepositSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class WalletController extends BaseController
 {
@@ -80,7 +75,7 @@ class WalletController extends BaseController
         Request $request,
         WalletBalanceService $balances,
         BusinessSettingsService $settings,
-        PaystackService $paystack,
+        WalletDepositSettlementService $settlement,
     ): JsonResponse {
         if (! $settings->value('wallet.deposits_enabled', true)) {
             return $this->error('Wallet deposits are currently disabled.', 403, null, 'WALLET_DEPOSITS_DISABLED');
@@ -97,137 +92,55 @@ class WalletController extends BaseController
             ? (int) round(((float) $validated['amount']) * 100)
             : (int) $validated['amount_minor'];
 
-        $minMinor = (int) ($settings->value('wallet.minimum_deposit_minor') ?? 10000);
-        $maxMinor = (int) ($settings->value('wallet.maximum_deposit_minor') ?? 50000000);
-
-        if ($amountMinor < $minMinor) {
-            throw ValidationException::withMessages([
-                'amount' => ["The minimum deposit amount is {$balances->money($minMinor)}."],
-            ]);
-        }
-
-        if ($amountMinor > $maxMinor) {
-            throw ValidationException::withMessages([
-                'amount' => ["The maximum deposit amount is {$balances->money($maxMinor)}."],
-            ]);
-        }
-
-        /** @var User $user */
-        $user = $request->user('api');
-        $account = Account::firstOrCreate(
-            ['user_id' => $user->id],
-            ['currency' => 'NGN', 'balance' => 0]
-        );
-
-        $reference = 'WLT-DEP-'.strtoupper(Str::random(16));
         $method = $validated['method'] ?? 'card';
+        $idempotencyKey = $request->header('Idempotency-Key');
 
         try {
-            $paystackResponse = $paystack->initializeTransaction([
-                'amount' => $amountMinor,
-                'email' => $user->email,
-                'reference' => $reference,
-                'callback_url' => $validated['callback_url'],
-                'metadata' => [
-                    'type' => 'wallet_deposit',
-                    'user_id' => $user->id,
-                    'account_id' => $account->id,
-                    'amount_minor' => $amountMinor,
-                ],
-            ]);
+            $result = $settlement->initialize(
+                user: $request->user('api'),
+                amountMinor: $amountMinor,
+                method: $method,
+                callbackUrl: $validated['callback_url'],
+                idempotencyKey: $idempotencyKey
+            );
         } catch (PaymentGatewayException $e) {
             return $this->error($e->getMessage(), 502);
         }
 
-        $deposit = WalletDeposit::create([
-            'user_id' => $user->id,
-            'account_id' => $account->id,
-            'reference' => $reference,
-            'amount_minor' => $amountMinor,
-            'currency' => $account->currency,
-            'status' => 'pending',
-            'method' => $method,
-            'authorization_url' => $paystackResponse['authorization_url'] ?? $paystackResponse['data']['authorization_url'] ?? null,
-            'access_code' => $paystackResponse['access_code'] ?? $paystackResponse['data']['access_code'] ?? null,
-            'metadata' => [
-                'callback_url' => $validated['callback_url'],
-            ],
-        ]);
+        $deposit = $result['deposit'];
+        $status = $result['replayed'] ? 200 : 201;
+        $message = $result['replayed'] ? 'Deposit initialization replayed.' : 'Deposit initialized successfully.';
 
         return $this->success([
             'deposit' => [
                 'id' => $deposit->id,
                 'reference' => $deposit->reference,
-                'amount' => $balances->money($amountMinor),
-                'amount_minor' => $amountMinor,
+                'amount' => $balances->money($deposit->amount_minor),
+                'amount_minor' => $deposit->amount_minor,
                 'currency' => $deposit->currency,
                 'status' => $deposit->status,
                 'authorization_url' => $deposit->authorization_url,
                 'access_code' => $deposit->access_code,
                 'created_at' => $deposit->created_at->toIso8601String(),
             ],
-        ], 'Deposit initialized successfully.', 201);
+        ], $message, $status);
     }
 
     public function verifyDeposit(
         string $reference,
-        PaystackService $paystack,
-        WalletLedgerService $ledger,
+        WalletDepositSettlementService $settlement,
         WalletBalanceService $balances,
     ): JsonResponse {
         $deposit = WalletDeposit::where('reference', $reference)
             ->where('user_id', auth('api')->id())
             ->firstOrFail();
 
-        if ($deposit->status === 'completed') {
-            return $this->success([
-                'deposit' => $deposit,
-                'balance' => $balances->forUser($deposit->user),
-            ], 'Deposit already verified.');
-        }
-
-        try {
-            $verified = $paystack->verifyTransaction($reference);
-        } catch (PaymentGatewayException $e) {
-            return $this->error($e->getMessage(), 502);
-        }
-
-        $status = $verified['status'] ?? $verified['data']['status'] ?? null;
-        if ($status !== 'success') {
-            return $this->error('The payment has not been confirmed by the gateway.', 400);
-        }
-
-        DB::transaction(function () use ($deposit, $verified, $ledger): void {
-            /** @var WalletDeposit $locked */
-            $locked = WalletDeposit::whereKey($deposit->id)->lockForUpdate()->firstOrFail();
-            if ($locked->status === 'completed') {
-                return;
-            }
-
-            $providerRef = (string) ($verified['id'] ?? $verified['data']['id'] ?? $verified['reference'] ?? '');
-
-            $locked->update([
-                'status' => 'completed',
-                'paid_at' => now(),
-                'provider_reference' => $providerRef,
-            ]);
-
-            $ledger->credit(
-                $locked->user,
-                $locked->amount_minor,
-                'cash',
-                'deposit',
-                "wallet_deposit:{$locked->id}",
-                "Wallet deposit via {$locked->method}",
-                'wallet_deposit',
-                $locked->id,
-                ['reference' => $locked->reference]
-            );
-        }, 3);
+        $result = $settlement->reconcileStatus($deposit);
+        $freshDeposit = $result['deposit'];
 
         return $this->success([
-            'deposit' => $deposit->fresh(),
+            'deposit' => $freshDeposit,
             'balance' => $balances->forUser($deposit->user),
-        ], 'Deposit verified and credited successfully.');
+        ], $result['message']);
     }
 }

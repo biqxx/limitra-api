@@ -3,10 +3,15 @@
 namespace Tests\Feature\Wallet;
 
 use App\Http\Middleware\TrackAnalytics;
+use App\Jobs\ProcessPaymentWebhook;
 use App\Models\Payment\Account;
+use App\Models\Payment\PaymentWebhook;
 use App\Models\User;
+use App\Services\Payment\PaymentSettlementService;
 use App\Services\Payment\PaystackService;
+use App\Services\Payment\RefundSettlementService;
 use App\Services\Settings\BusinessSettingsService;
+use App\Services\Wallet\WalletDepositSettlementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -59,7 +64,7 @@ class WalletDepositApiTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // 2. Verify deposit
+        // 2. Client verification queries gateway status, but cannot be source of truth for crediting
         $paystack->shouldReceive('verifyTransaction')
             ->with($reference)
             ->once()
@@ -72,7 +77,51 @@ class WalletDepositApiTest extends TestCase
         $verifyResponse = $this->actingAs($user, 'api')
             ->postJson("/api/v1/wallet/deposits/{$reference}/verify")
             ->assertOk()
-            ->assertJsonPath('data.deposit.status', 'completed');
+            ->assertJsonPath('data.deposit.status', 'pending')
+            ->assertJsonPath('message', 'Payment confirmed by gateway; awaiting webhook settlement.');
+
+        // Wallet was NOT yet credited by client verification
+        $account->refresh();
+        $this->assertSame(0, (int) $account->cash_balance_minor);
+
+        // 3. Paystack verified webhook arrives authoritatively
+        $webhookPayload = [
+            'event' => 'charge.success',
+            'data' => [
+                'id' => 998877,
+                'reference' => $reference,
+                'amount' => 500000,
+                'currency' => 'NGN',
+                'status' => 'success',
+                'metadata' => [
+                    'type' => 'wallet_deposit',
+                    'user_id' => $user->id,
+                    'account_id' => $account->id,
+                    'amount_minor' => 500000,
+                ],
+            ],
+        ];
+
+        $rawPayload = json_encode($webhookPayload, JSON_THROW_ON_ERROR);
+        $signature = hash_hmac('sha512', $rawPayload, (string) config('services.paystack.secret_key'));
+
+        $paystack->shouldReceive('hasValidWebhookSignature')
+            ->andReturn(true);
+
+        $this->call('POST', '/api/v1/webhooks/payments/paystack', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+            'HTTP_X_PAYSTACK_SIGNATURE' => $signature,
+        ], $rawPayload)
+            ->assertOk();
+
+        // Process webhook job
+        $webhook = PaymentWebhook::where('reference', $reference)->firstOrFail();
+        (new ProcessPaymentWebhook($webhook->id))->handle(
+            app(PaymentSettlementService::class),
+            app(RefundSettlementService::class),
+            app(WalletDepositSettlementService::class),
+        );
 
         $this->assertDatabaseHas('wallet_deposits', [
             'reference' => $reference,
@@ -90,11 +139,12 @@ class WalletDepositApiTest extends TestCase
         $account->refresh();
         $this->assertSame(500000, (int) $account->cash_balance_minor);
 
-        // 3. Re-verify is idempotent
+        // 4. Client verify now returns completed
         $this->actingAs($user, 'api')
             ->postJson("/api/v1/wallet/deposits/{$reference}/verify")
             ->assertOk()
-            ->assertJsonPath('message', 'Deposit already verified.');
+            ->assertJsonPath('data.deposit.status', 'completed')
+            ->assertJsonPath('message', 'Deposit verified and credited.');
 
         // Account balance was not double-credited
         $account->refresh();

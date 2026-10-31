@@ -79,3 +79,9 @@ Schedule::job(new DispatchPendingRefundReconciliations)
     ->withoutOverlapping()
     ->onOneServer()
     ->name('maintenance:pending-refund-reconciliation');
+
+Schedule::command('wallet:reconcile-deposits')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('maintenance:wallet-deposits-prune');

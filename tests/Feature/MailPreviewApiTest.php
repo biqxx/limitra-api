@@ -6,6 +6,7 @@ use App\Http\Middleware\TrackAnalytics;
 use App\Models\User;
 use App\Models\User\Permission;
 use App\Models\User\Role;
+use App\Services\Mail\MailPreviewReader;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -50,6 +51,19 @@ class MailPreviewApiTest extends TestCase
         Mail::mailer('log')->raw('One-time code: 123456', function ($message): void {
             $message->to('tester@example.com')->subject('Verification code');
         });
+
+        $logged = file_get_contents($this->mailLogPath);
+        $this->assertStringContainsString('Verification code', $logged);
+        $this->assertStringContainsString('To:', $logged);
+        $this->assertStringContainsString('Subject:', $logged);
+        $lines = explode("\n", trim($logged));
+        $this->assertCount(2, $lines);
+        $entry = json_decode($lines[1], true);
+        $this->assertIsArray($entry);
+        $this->assertStringContainsString('To:', $entry['message']);
+        $this->assertStringContainsString('Subject:', $entry['message']);
+        $this->assertSame($this->mailLogPath, config('logging.channels.mail_preview.path'));
+        $this->assertCount(1, app(MailPreviewReader::class)->recent());
 
         $response = $this->actingAs($admin, 'api')
             ->getJson('/api/v1/admin/mail-preview')

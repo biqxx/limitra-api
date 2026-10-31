@@ -17,6 +17,7 @@ class MailPreviewReader
             return [];
         }
 
+        clearstatcache(true, $path);
         $size = filesize($path);
 
         if ($size === false || $size === 0) {

@@ -149,4 +149,14 @@ class OrderController extends BaseController
             $result['replayed'] ? 200 : 201,
         );
     }
+
+    public function update(Request $request, Order $order): JsonResponse
+    {
+        return $this->error('Use the explicit order status or shipping action.', 405);
+    }
+
+    public function destroy(Order $order): JsonResponse
+    {
+        return $this->error('Placed orders cannot be deleted.', 405);
+    }
 }

@@ -28,6 +28,10 @@ else
     php artisan config:clear
 fi
 
+if [ "${ENABLE_SWAGGER_DOCS:-false}" = "true" ]; then
+    php artisan l5-swagger:generate
+fi
+
 touch /tmp/limitra-ready
 
 exec "$@"

@@ -2,143 +2,79 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Product\Category;
+use App\Http\Requests\Admin\ProductImportRequest;
 use App\Models\Product\Product;
 use App\Models\Product\ProductImportJob;
+use App\Services\Products\ProductImportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
+use Symfony\Component\HttpFoundation\Response;
 
 class ProductImportController extends BaseController
 {
-    public function store(Request $request): JsonResponse
+    public function store(ProductImportRequest $request, ProductImportService $importService): JsonResponse
     {
-        $this->authorize('create', Product::class);
+        $idempotencyKey = $request->header('Idempotency-Key') ?? $request->header('X-Idempotency-Key');
+        $user = $request->user('api');
 
-        $dryRun = $request->boolean('dry_run', false);
+        $job = $importService->initiate(
+            user: $user,
+            validated: $request->validated(),
+            file: $request->file('file'),
+            inlineRows: $request->input('rows'),
+            idempotencyKey: $idempotencyKey ? (string) $idempotencyKey : null,
+            request: $request,
+        );
 
-        $rows = [];
-        $fileName = null;
+        $status = $job->wasRecentlyCreated ? 201 : 200;
+        $message = $job->wasRecentlyCreated ? 'Product import queued for processing.' : 'Product import replayed.';
 
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
-            $fileName = $file->getClientOriginalName();
-            $path = $file->getRealPath();
-
-            if (($handle = fopen($path, 'r')) !== false) {
-                $header = fgetcsv($handle);
-                if ($header !== false) {
-                    $header = array_map(fn ($h) => strtolower(trim((string) $h)), $header);
-                    while (($row = fgetcsv($handle)) !== false) {
-                        if (count($row) === count($header)) {
-                            $rows[] = array_combine($header, $row);
-                        }
-                    }
-                }
-                fclose($handle);
-            }
-        } elseif ($request->filled('rows') && is_array($request->input('rows'))) {
-            $rows = $request->input('rows');
-            $fileName = 'payload_import.json';
-        } else {
-            return $this->error('Please upload a CSV file or provide a rows array.', 422);
-        }
-
-        $job = ProductImportJob::create([
-            'user_id' => $request->user('api')?->id,
-            'file_name' => $fileName,
-            'status' => 'processing',
-            'dry_run' => $dryRun,
-            'total_rows' => count($rows),
-            'processed_rows' => 0,
-            'successful_rows' => 0,
-            'failed_rows' => 0,
-            'errors' => [],
-        ]);
-
-        $successful = 0;
-        $failed = 0;
-        $errors = [];
-
-        foreach ($rows as $index => $row) {
-            $rowNum = $index + 2; // header is row 1
-
-            $validator = Validator::make($row, [
-                'name' => ['required', 'string', 'max:255'],
-                'price' => ['required', 'numeric', 'min:0'],
-                'stock' => ['nullable', 'integer', 'min:0'],
-                'sku' => ['nullable', 'string', 'max:100'],
-                'category_id' => ['nullable', 'exists:categories,id'],
-                'brand' => ['nullable', 'string', 'max:100'],
-                'description' => ['nullable', 'string'],
-            ]);
-
-            if ($validator->fails()) {
-                $failed++;
-                $errors[] = [
-                    'row' => $rowNum,
-                    'errors' => $validator->errors()->all(),
-                ];
-
-                continue;
-            }
-
-            if (! $dryRun) {
-                try {
-                    DB::transaction(function () use ($row): void {
-                        $sku = ! empty($row['sku']) ? $row['sku'] : 'SKU-'.strtoupper(Str::random(8));
-                        $slug = Str::slug($row['name']);
-                        if (Product::where('slug', $slug)->exists()) {
-                            $slug .= '-'.strtolower(Str::random(4));
-                        }
-
-                        $categoryId = ! empty($row['category_id'])
-                            ? (int) $row['category_id']
-                            : (Category::first()?->id ?? Category::create(['name' => 'General', 'slug' => 'general'])->id);
-
-                        Product::updateOrCreate(
-                            ['sku' => $sku],
-                            [
-                                'category_id' => $categoryId,
-                                'name' => $row['name'],
-                                'slug' => $slug,
-                                'price' => (float) $row['price'],
-                                'stock' => (int) ($row['stock'] ?? 0),
-                                'brand' => $row['brand'] ?? null,
-                                'description' => $row['description'] ?? null,
-                                'status' => 'active',
-                            ]
-                        );
-                    });
-                    $successful++;
-                } catch (\Throwable $e) {
-                    $failed++;
-                    $errors[] = [
-                        'row' => $rowNum,
-                        'errors' => [$e->getMessage()],
-                    ];
-                }
-            } else {
-                $successful++;
-            }
-        }
-
-        $job->update([
-            'status' => $failed > 0 && $successful === 0 ? 'failed' : 'completed',
-            'processed_rows' => count($rows),
-            'successful_rows' => $successful,
-            'failed_rows' => $failed,
-            'errors' => $errors,
-        ]);
-
-        return $this->success($job->fresh(), 'Product import processed.', 201);
+        return $this->success($job->fresh(), $message, $status);
     }
 
-    public function show(ProductImportJob $job): JsonResponse
+    public function show(Request $request, ProductImportJob $job): JsonResponse
     {
-        return $this->success($job);
+        $this->authorizeView($request, $job);
+
+        $errorReportUrl = null;
+        if (! empty($job->error_report_path)) {
+            $errorReportUrl = URL::temporarySignedRoute(
+                'products.imports.errors',
+                now()->addMinutes(30),
+                ['job' => $job->id],
+            );
+        }
+
+        return $this->success([
+            'job' => $job->load('user:id,username,email'),
+            'error_report_url' => $errorReportUrl,
+        ]);
+    }
+
+    public function cancel(Request $request, ProductImportJob $job, ProductImportService $importService): JsonResponse
+    {
+        $this->authorizeManage($request, $job);
+
+        $cancelledJob = $importService->cancel($job, $request->user('api'), $request);
+
+        return $this->success($cancelledJob, 'Import job cancelled.');
+    }
+
+    public function retry(Request $request, ProductImportJob $job, ProductImportService $importService): JsonResponse
+    {
+        $this->authorizeManage($request, $job);
+
+        $retriedJob = $importService->retry($job, $request->user('api'), $request);
+
+        return $this->success($retriedJob, 'Import job queued for retry.');
+    }
+
+    public function downloadErrors(Request $request, ProductImportJob $job, ProductImportService $importService): Response
+    {
+        $this->authorizeView($request, $job);
+
+        return $importService->downloadErrorReport($job, $request->user('api') ?? $job->user, $request);
     }
 
     public function template(): JsonResponse
@@ -155,5 +91,33 @@ class ProductImportController extends BaseController
                 'description' => 'High quality noise cancelling headphones.',
             ],
         ], 'Import template columns retrieved.');
+    }
+
+    private function authorizeView(Request $request, ProductImportJob $job): void
+    {
+        $user = $request->user('api');
+        if (! $user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        if ($user->can('create', Product::class) || $job->user_id === $user->id) {
+            return;
+        }
+
+        abort(403, 'Unauthorized to view this import job.');
+    }
+
+    private function authorizeManage(Request $request, ProductImportJob $job): void
+    {
+        $user = $request->user('api');
+        if (! $user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        if ($user->can('create', Product::class) || $job->user_id === $user->id) {
+            return;
+        }
+
+        abort(403, 'Unauthorized to modify this import job.');
     }
 }

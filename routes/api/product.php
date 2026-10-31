@@ -21,9 +21,12 @@ Route::apiResource('products', ProductController::class)->only(['index', 'show']
 
 // ── Auth required for writes ─────────────────────────────────────────────────
 // The ProductPolicy / CategoryPolicy before() allows only admins to write.
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api', 'active.session'])->group(function () {
     Route::post('products/imports', [ProductImportController::class, 'store'])->name('products.imports.store');
     Route::get('products/imports/{job}', [ProductImportController::class, 'show'])->name('products.imports.show');
+    Route::post('products/imports/{job}/cancel', [ProductImportController::class, 'cancel'])->name('products.imports.cancel');
+    Route::post('products/imports/{job}/retry', [ProductImportController::class, 'retry'])->name('products.imports.retry');
+    Route::get('products/imports/{job}/errors', [ProductImportController::class, 'downloadErrors'])->name('products.imports.errors');
     Route::apiResource('categories', CategoryController::class)->except(['index', 'show']);
     Route::apiResource('products', ProductController::class)->except(['index', 'show']);
 });

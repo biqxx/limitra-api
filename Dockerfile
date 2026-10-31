@@ -19,7 +19,10 @@ RUN composer dump-autoload \
     --classmap-authoritative \
     --no-interaction \
     --no-scripts \
-    && php artisan package:discover --ansi
+    && php artisan package:discover --ansi \
+    && php artisan l5-swagger:generate \
+    && test -s storage/api-docs/api-docs.json \
+    && php artisan route:list --path=api/documentation | grep -q 'api/documentation'
 
 FROM php:8.4-fpm-alpine AS app
 

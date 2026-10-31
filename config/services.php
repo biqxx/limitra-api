@@ -40,4 +40,22 @@ return [
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
     ],
 
+    'supplier' => [
+        'base_url' => env('SUPPLIER_SERVICE_URL'),
+        'secret' => env('SUPPLIER_SERVICE_SECRET'),
+        'timeout' => (int) env('SUPPLIER_SERVICE_TIMEOUT', 20),
+        'retries' => (int) env('SUPPLIER_SERVICE_RETRIES', 2),
+    ],
+
+    'exchange_rates' => [
+        'base_url' => env('EXCHANGE_RATE_API_URL', 'https://open.er-api.com/v6'),
+        'naira_markup' => (float) env('EXCHANGE_RATE_NAIRA_MARKUP', 100),
+        'currencies' => array_values(array_filter(array_map(
+            static fn (string $currency): string => strtoupper(trim($currency)),
+            explode(',', (string) env('EXCHANGE_RATE_CURRENCIES', 'USD,GBP,EUR,CNY')),
+        ))),
+        'timeout' => (int) env('EXCHANGE_RATE_TIMEOUT', 10),
+        'retries' => (int) env('EXCHANGE_RATE_RETRIES', 2),
+    ],
+
 ];

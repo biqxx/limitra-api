@@ -4,6 +4,7 @@ use App\Jobs\AggregateDailyStats;
 use App\Jobs\AggregateHourlyStats;
 use App\Jobs\AggregateMonthlyStats;
 use App\Jobs\DispatchPendingRefundReconciliations;
+use App\Jobs\DispatchProductRepricing;
 use App\Jobs\PruneExpiredAuthSessions;
 use App\Jobs\PruneExpiredCheckoutQuotes;
 use App\Jobs\PruneRawAnalytics;
@@ -29,6 +30,18 @@ Schedule::job(new AggregateDailyStats)
     ->withoutOverlapping()
     ->onOneServer()
     ->name('analytics:daily');
+
+Schedule::command('currency:refresh-rates')
+    ->dailyAt('00:10')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('currency:daily-rate-refresh');
+
+Schedule::job(new DispatchProductRepricing)
+    ->dailyAt('00:20')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('pricing:daily-product-repricing');
 
 // Roll daily summaries into a monthly summary — runs at 00:15 on the 1st of each month.
 Schedule::job(new AggregateMonthlyStats)

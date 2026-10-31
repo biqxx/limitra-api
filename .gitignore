@@ -6,7 +6,9 @@
 .phpactor.json
 .phpunit.result.cache
 /.agents
-/.codex
+/.codex*
+/.rnd
+/.trunk
 /docs/
 progress_report.txt
 schema.txt

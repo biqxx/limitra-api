@@ -2,6 +2,7 @@
 
 namespace App\Services\Sourcing;
 
+use App\Exceptions\SupplierProductDataException;
 use App\Models\Image;
 use App\Models\Product\Product;
 use App\Models\Product\ProductSource;
@@ -38,6 +39,8 @@ class SupplierProductImportService
         User $admin,
         array $supplierProduct,
     ): ProductSource {
+        $this->assertSupplierProductCanBeImported($supplierProduct);
+
         $supplier = $attributes['source'];
         $externalProductId = $attributes['external_product_id'];
         $name = trim((string) ($attributes['name'] ?? $supplierProduct['title'] ?? ''));
@@ -137,6 +140,31 @@ class SupplierProductImportService
         }
 
         return str_starts_with($value, 'http://') ? 'https://'.substr($value, 7) : $value;
+    }
+
+    /** @param array<string, mixed> $supplierProduct */
+    private function assertSupplierProductCanBeImported(array $supplierProduct): void
+    {
+        $price = $supplierProduct['price'] ?? null;
+        $currency = strtoupper(trim((string) ($supplierProduct['currency'] ?? '')));
+        $missingFields = [];
+
+        if (! is_numeric($price) || (float) $price <= 0) {
+            $missingFields[] = 'price';
+        }
+
+        if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+            $missingFields[] = 'currency';
+        }
+
+        $dataQuality = $supplierProduct['data_quality'] ?? null;
+        if (is_array($dataQuality) && ($dataQuality['price_verified'] ?? null) === false) {
+            $missingFields[] = 'price';
+        }
+
+        if ($missingFields !== []) {
+            throw SupplierProductDataException::priceUnavailable(array_values(array_unique($missingFields)));
+        }
     }
 
     private function alreadyImported(string $supplier, string $externalProductId): bool

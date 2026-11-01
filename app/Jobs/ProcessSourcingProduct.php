@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\SupplierProductDataException;
 use App\Models\Product\ProductSource;
 use App\Models\Product\SourcingJob;
 use App\Services\Sourcing\ProductContentEnhancer;
@@ -102,6 +103,14 @@ class ProcessSourcingProduct implements ShouldQueue
                 $enhanced,
                 $warnings !== [] ? implode(' ', $warnings) : null,
             );
+        } catch (SupplierProductDataException $exception) {
+            $job->update([
+                'status' => 'failed',
+                'error' => Str::limit($exception->getMessage(), 2000),
+                'completed_at' => now(),
+            ]);
+
+            return;
         } catch (Throwable $exception) {
             $job->update([
                 'status' => 'queued',

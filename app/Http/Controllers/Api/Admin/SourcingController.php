@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Exceptions\SupplierProductDataException;
 use App\Exceptions\SupplierServiceException;
 use App\Http\Controllers\Api\BaseController;
 use App\Http\Requests\Admin\EnhanceSupplierProductRequest;
@@ -175,6 +176,13 @@ class SourcingController extends BaseController
             $source = $importer->import($request->validated(), $request->user());
         } catch (SupplierServiceException $exception) {
             return $this->error($exception->getMessage(), $exception->httpStatus);
+        } catch (SupplierProductDataException $exception) {
+            return $this->error(
+                $exception->getMessage(),
+                422,
+                ['missing_fields' => $exception->missingFields],
+                $exception->errorCode,
+            );
         } catch (DomainException $exception) {
             return $this->error($exception->getMessage(), 409);
         } catch (UnexpectedValueException $exception) {

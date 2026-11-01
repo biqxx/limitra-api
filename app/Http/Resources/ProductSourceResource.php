@@ -29,6 +29,8 @@ class ProductSourceResource extends JsonResource
             'validation_status' => $this->validation_status,
             'final_price_ngn' => $this->final_price_ngn,
             'variants' => $this->variants ?? [],
+            'data_quality' => data_get($this->source_snapshot, 'data_quality', []),
+            'supplier_warnings' => data_get($this->source_snapshot, 'warnings', []),
             'cost_breakdown' => $this->cost_breakdown ?? [],
             'sync_status' => $this->sync_status,
             'last_synced_at' => $this->last_synced_at,

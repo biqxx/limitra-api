@@ -3640,4 +3640,391 @@ class AdminOpenApi
         ]
     )]
     public function op163_admin_promotions__promotion_(): void {}
+
+    #[OA\Get(
+        path: '/admin/delivery-zones/{zone}',
+        tags: ['Admin - Delivery & Shipping'],
+        summary: 'Get Delivery Zone',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'zone', in: 'path', required: true, description: 'Zone identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op164_admin_delivery_zones_show(): void {}
+
+    #[OA\Delete(
+        path: '/admin/delivery-zones/{zone}',
+        tags: ['Admin - Delivery & Shipping'],
+        summary: 'Delete Delivery Zone',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'zone', in: 'path', required: true, description: 'Zone identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op165_admin_delivery_zones_destroy(): void {}
+
+    #[OA\Get(
+        path: '/admin/delivery-methods/{method}',
+        tags: ['Admin - Delivery & Shipping'],
+        summary: 'Get Delivery Method',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'method', in: 'path', required: true, description: 'Method identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op166_admin_delivery_methods_show(): void {}
+
+    #[OA\Delete(
+        path: '/admin/delivery-methods/{method}',
+        tags: ['Admin - Delivery & Shipping'],
+        summary: 'Delete Delivery Method',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'method', in: 'path', required: true, description: 'Method identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 422, description: 'In use', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op167_admin_delivery_methods_destroy(): void {}
+
+    #[OA\Delete(
+        path: '/admin/delivery-zones/{zone}/methods/{method}',
+        tags: ['Admin - Delivery & Shipping'],
+        summary: 'Detach Method from Zone',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'zone', in: 'path', required: true, description: 'Zone identifier', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'method', in: 'path', required: true, description: 'Method identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op168_admin_delivery_zones_detach_method(): void {}
+
+    #[OA\Get(
+        path: '/admin/pickup-locations/{pickup}',
+        tags: ['Admin - Delivery & Shipping'],
+        summary: 'Get Pickup Location',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'pickup', in: 'path', required: true, description: 'Pickup identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op169_admin_pickup_locations_show(): void {}
+
+    #[OA\Delete(
+        path: '/admin/pickup-locations/{pickup}',
+        tags: ['Admin - Delivery & Shipping'],
+        summary: 'Delete Pickup Location',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'pickup', in: 'path', required: true, description: 'Pickup identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op170_admin_pickup_locations_destroy(): void {}
+
+    #[OA\Post(
+        path: '/admin/categories',
+        tags: ['Admin - Products & Catalog'],
+        summary: 'Create Category',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['name'],
+                properties: [
+                    new OA\Property(property: 'name', type: 'string'),
+                    new OA\Property(property: 'slug', type: 'string', nullable: true),
+                    new OA\Property(property: 'description', type: 'string', nullable: true),
+                    new OA\Property(property: 'parent_id', type: 'integer', nullable: true),
+                    new OA\Property(property: 'icon', type: 'string', nullable: true),
+                    new OA\Property(property: 'sort_order', type: 'integer', nullable: true),
+                    new OA\Property(property: 'active', type: 'boolean', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 422, description: 'Validation failed', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op171_admin_categories_store(): void {}
+
+    #[OA\Get(
+        path: '/admin/categories/{category}',
+        tags: ['Admin - Products & Catalog'],
+        summary: 'Get Category Details',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'category', in: 'path', required: true, description: 'Category identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op172_admin_categories_show(): void {}
+
+    #[OA\Patch(
+        path: '/admin/categories/{category}',
+        tags: ['Admin - Products & Catalog'],
+        summary: 'Update Category',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'category', in: 'path', required: true, description: 'Category identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 422, description: 'Validation failed', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op173_admin_categories_update(): void {}
+
+    #[OA\Delete(
+        path: '/admin/categories/{category}',
+        tags: ['Admin - Products & Catalog'],
+        summary: 'Delete Category',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'category', in: 'path', required: true, description: 'Category identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 409, description: 'Conflict', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op174_admin_categories_destroy(): void {}
+
+    #[OA\Get(
+        path: '/admin/reviews',
+        tags: ['Admin - Reviews & Moderation'],
+        summary: 'List Reviews',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['pending', 'approved', 'rejected', 'flagged'])),
+            new OA\Parameter(name: 'product_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'rating', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op175_admin_reviews_index(): void {}
+
+    #[OA\Get(
+        path: '/admin/reviews/{review}',
+        tags: ['Admin - Reviews & Moderation'],
+        summary: 'Get Review Details',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'review', in: 'path', required: true, description: 'Review identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op176_admin_reviews_show(): void {}
+
+    #[OA\Delete(
+        path: '/admin/reviews/{review}',
+        tags: ['Admin - Reviews & Moderation'],
+        summary: 'Delete Review',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'review', in: 'path', required: true, description: 'Review identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op177_admin_reviews_destroy(): void {}
+
+    #[OA\Get(
+        path: '/admin/support/tickets/{supportTicket}',
+        tags: ['Admin - Support & Tickets'],
+        summary: 'Get Support Ticket Details',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'supportTicket', in: 'path', required: true, description: 'Ticket identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op178_admin_support_tickets_show(): void {}
+
+    #[OA\Post(
+        path: '/admin/support/tickets/{supportTicket}/messages',
+        tags: ['Admin - Support & Tickets'],
+        summary: 'Staff Reply to Ticket',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'supportTicket', in: 'path', required: true, description: 'Ticket identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['message'],
+                properties: [
+                    new OA\Property(property: 'message', type: 'string'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 422, description: 'Validation failed', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op179_admin_support_tickets_reply(): void {}
+
+    #[OA\Get(
+        path: '/admin/jobs/{job}',
+        tags: ['Admin - Content & CMS'],
+        summary: 'Get Career Job Posting',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'job', in: 'path', required: true, description: 'Job identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op180_admin_jobs_show(): void {}
+
+    #[OA\Delete(
+        path: '/admin/jobs/{job}',
+        tags: ['Admin - Content & CMS'],
+        summary: 'Delete Career Job Posting',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'job', in: 'path', required: true, description: 'Job identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op181_admin_jobs_destroy(): void {}
+
+    #[OA\Get(
+        path: '/admin/newsletter/subscribers',
+        tags: ['Admin - Content & CMS'],
+        summary: 'List Newsletter Subscribers',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['subscribed', 'unsubscribed'])),
+            new OA\Parameter(name: 'q', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op182_admin_newsletter_index(): void {}
+
+    #[OA\Delete(
+        path: '/admin/newsletter/subscribers/{subscription}',
+        tags: ['Admin - Content & CMS'],
+        summary: 'Delete Newsletter Subscription',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'subscription', in: 'path', required: true, description: 'Subscription identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op183_admin_newsletter_destroy(): void {}
+
+    #[OA\Get(
+        path: '/admin/reward-campaigns/{campaign}',
+        tags: ['Admin - Promotions & Rewards'],
+        summary: 'Get Reward Campaign Details',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'campaign', in: 'path', required: true, description: 'Campaign identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op184_admin_reward_campaigns_show(): void {}
+
+    #[OA\Delete(
+        path: '/admin/reward-campaigns/{campaign}',
+        tags: ['Admin - Promotions & Rewards'],
+        summary: 'Delete Reward Campaign',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'campaign', in: 'path', required: true, description: 'Campaign identifier', schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Operation successful', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
+            new OA\Response(response: 401, description: 'Unauthenticated', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 404, description: 'Resource not found', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+            new OA\Response(response: 422, description: 'Has spins', content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')),
+        ]
+    )]
+    public function op185_admin_reward_campaigns_destroy(): void {}
 }

@@ -98,4 +98,45 @@ class NewsletterController extends BaseController
             'status' => 'unsubscribed',
         ], 'You have been successfully unsubscribed from the newsletter.');
     }
+
+    public function adminIndex(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', 'in:subscribed,unsubscribed'],
+            'q' => ['sometimes', 'string', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $query = NewsletterSubscription::query()->latest('id');
+
+        if (! empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        if (! empty($validated['q'])) {
+            $term = $validated['q'];
+            $query->where('email', 'like', "%{$term}%");
+        }
+
+        $paginator = $query->paginate($validated['per_page'] ?? 20);
+
+        return $this->success([
+            'items' => $paginator->items(),
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ]);
+    }
+
+    public function destroy(NewsletterSubscription $subscription): JsonResponse
+    {
+        $subscription->delete();
+
+        return $this->success(null, 'Newsletter subscription deleted.');
+    }
 }

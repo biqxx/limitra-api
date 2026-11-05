@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\BaseController;
 use App\Http\Requests\Support\IndexAdminSupportTicketsRequest;
+use App\Http\Requests\Support\StoreSupportTicketMessageRequest;
 use App\Http\Requests\Support\UpdateSupportTicketRequest;
 use App\Http\Resources\SupportTicketResource;
 use App\Models\Support\SupportTicket;
@@ -13,6 +14,32 @@ use Illuminate\Http\JsonResponse;
 
 class SupportTicketController extends BaseController
 {
+    public function show(SupportTicket $supportTicket): JsonResponse
+    {
+        $relations = ['order', 'assignee', 'messages.sender', 'messages.attachments', 'events.actor'];
+
+        return $this->success(new SupportTicketResource(
+            $supportTicket->load($relations)->loadCount('messages'),
+        ));
+    }
+
+    public function reply(
+        StoreSupportTicketMessageRequest $request,
+        SupportTicket $supportTicket,
+        SupportTicketOperationsService $operations,
+    ): JsonResponse {
+        return $this->success(
+            new SupportTicketResource($operations->addMessage(
+                $supportTicket,
+                $request->validated(),
+                $request->user('api'),
+                $request->file('attachments', []),
+            )),
+            'Support message sent.',
+            201,
+        );
+    }
+
     public function index(
         IndexAdminSupportTicketsRequest $request,
         BusinessSettingsService $settings,

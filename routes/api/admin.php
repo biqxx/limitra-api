@@ -13,8 +13,15 @@ use Illuminate\Support\Facades\Route;
 
 // ── Categories & Catalog Products ───────────────────────────────────────────
 Route::middleware(['auth:api', 'active.session', 'role:admin'])
-    ->get('categories', [AdminCategoryController::class, 'index'])
-    ->name('admin.categories.index');
+    ->prefix('categories')
+    ->name('admin.categories.')
+    ->group(function (): void {
+        Route::get('/', [AdminCategoryController::class, 'index'])->name('index');
+        Route::post('/', [AdminCategoryController::class, 'store'])->name('store');
+        Route::get('{category}', [AdminCategoryController::class, 'show'])->name('show');
+        Route::match(['put', 'patch'], '{category}', [AdminCategoryController::class, 'update'])->name('update');
+        Route::delete('{category}', [AdminCategoryController::class, 'destroy'])->name('destroy');
+    });
 
 Route::middleware(['auth:api', 'active.session', 'role:admin'])
     ->prefix('products')

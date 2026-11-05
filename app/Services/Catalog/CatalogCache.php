@@ -54,9 +54,13 @@ class CatalogCache
             hash('xxh128', json_encode($this->normalize($parameters), JSON_THROW_ON_ERROR)),
         ]);
 
+        $ttl = $domain === 'categories'
+            ? (int) config('catalog.categories_cache_ttl', 3600)
+            : (int) config('catalog.cache_ttl', 3600);
+
         return Cache::remember(
             $key,
-            (int) config('catalog.cache_ttl', 300),
+            $ttl,
             fn (): array => json_decode(
                 json_encode($resolver(), JSON_THROW_ON_ERROR),
                 true,

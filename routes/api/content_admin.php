@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\MediaController;
 use App\Http\Controllers\Api\Content\BlogController;
 use App\Http\Controllers\Api\Content\CareerController;
 use App\Http\Controllers\Api\Content\ContentController;
+use App\Http\Controllers\Api\Content\NewsletterController;
 use App\Http\Controllers\Api\Content\VideoController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,8 +46,14 @@ Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(fun
     // Careers
     Route::get('jobs', [CareerController::class, 'adminJobs'])->name('admin.jobs.index');
     Route::post('jobs', [CareerController::class, 'storeJob'])->name('admin.jobs.store');
+    Route::get('jobs/{job}', [CareerController::class, 'adminShowJob'])->name('admin.jobs.show');
     Route::patch('jobs/{job}', [CareerController::class, 'updateJob'])->name('admin.jobs.update');
+    Route::delete('jobs/{job}', [CareerController::class, 'destroyJob'])->name('admin.jobs.destroy');
     Route::get('job-applications', [CareerController::class, 'applications'])->name('admin.jobs.applications');
     Route::patch('job-applications/{application}', [CareerController::class, 'updateApplicationStatus'])->name('admin.jobs.applications.update');
     Route::get('job-applications/{application}/cv', [CareerController::class, 'downloadCv'])->name('admin.jobs.applications.cv');
+
+    // Newsletter Subscribers
+    Route::get('newsletter/subscribers', [NewsletterController::class, 'adminIndex'])->name('admin.newsletter.index');
+    Route::delete('newsletter/subscribers/{subscription}', [NewsletterController::class, 'destroy'])->name('admin.newsletter.destroy');
 });

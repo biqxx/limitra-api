@@ -7,6 +7,7 @@ use App\Models\Content\CareerApplication;
 use App\Models\Content\CareerJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,29 +18,37 @@ class CareerController extends BaseController
 
     public function jobs(Request $request): JsonResponse
     {
-        $query = CareerJob::query()->where('status', 'open')->latest('id');
+        $version = (string) Cache::get('careers:jobs:version', '1');
+        $params = $request->only(['department', 'type', 'per_page', 'page']);
+        $cacheKey = 'careers:jobs:v'.$version.':'.hash('xxh128', json_encode($params));
 
-        if ($request->filled('department')) {
-            $query->where('department', (string) $request->input('department'));
-        }
+        $data = Cache::remember($cacheKey, 3600, function () use ($request): array {
+            $query = CareerJob::query()->where('status', 'open')->latest('id');
 
-        if ($request->filled('type')) {
-            $query->where('type', (string) $request->input('type'));
-        }
+            if ($request->filled('department')) {
+                $query->where('department', (string) $request->input('department'));
+            }
 
-        $paginator = $query->paginate($request->integer('per_page', 20));
+            if ($request->filled('type')) {
+                $query->where('type', (string) $request->input('type'));
+            }
 
-        return $this->success([
-            'items' => $paginator->items(),
-            'pagination' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-                'from' => $paginator->firstItem(),
-                'to' => $paginator->lastItem(),
-            ],
-        ]);
+            $paginator = $query->paginate($request->integer('per_page', 20));
+
+            return [
+                'items' => $paginator->items(),
+                'pagination' => [
+                    'current_page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'last_page' => $paginator->lastPage(),
+                    'from' => $paginator->firstItem(),
+                    'to' => $paginator->lastItem(),
+                ],
+            ];
+        });
+
+        return $this->success($data);
     }
 
     public function showJob(string $slug): JsonResponse
@@ -131,7 +140,14 @@ class CareerController extends BaseController
             'status' => $validated['status'] ?? 'open',
         ]);
 
+        $this->invalidateJobsCache();
+
         return $this->success($job, 'Career job posting created.', 201);
+    }
+
+    public function adminShowJob(CareerJob $job): JsonResponse
+    {
+        return $this->success($job->loadCount('applications'));
     }
 
     public function updateJob(Request $request, CareerJob $job): JsonResponse
@@ -147,8 +163,22 @@ class CareerController extends BaseController
         ]);
 
         $job->update($validated);
+        $this->invalidateJobsCache();
 
         return $this->success($job->fresh(), 'Career job posting updated.');
+    }
+
+    public function destroyJob(CareerJob $job): JsonResponse
+    {
+        $job->delete();
+        $this->invalidateJobsCache();
+
+        return $this->success(null, 'Career job posting deleted.');
+    }
+
+    private function invalidateJobsCache(): void
+    {
+        Cache::forever('careers:jobs:version', (string) Str::uuid());
     }
 
     public function applications(Request $request): JsonResponse

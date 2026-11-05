@@ -9,6 +9,7 @@ use App\Models\Commerce\PickupLocation;
 use App\Models\Commerce\Promotion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CommerceRuleController extends BaseController
@@ -32,9 +33,26 @@ class CommerceRuleController extends BaseController
         return $this->success($zone->fresh('methods'), 'Delivery zone updated.');
     }
 
+    public function showZone(DeliveryZone $zone): JsonResponse
+    {
+        return $this->success($zone->load('methods'));
+    }
+
+    public function destroyZone(DeliveryZone $zone): JsonResponse
+    {
+        $zone->delete();
+
+        return $this->success(null, 'Delivery zone deleted.');
+    }
+
     public function methods(): JsonResponse
     {
         return $this->success(DeliveryMethod::orderBy('name')->get());
+    }
+
+    public function showMethod(DeliveryMethod $method): JsonResponse
+    {
+        return $this->success($method->load('zones'));
     }
 
     public function storeMethod(Request $request): JsonResponse
@@ -49,6 +67,17 @@ class CommerceRuleController extends BaseController
         $method->update($request->validate($this->methodRules(true, $method)));
 
         return $this->success($method, 'Delivery method updated.');
+    }
+
+    public function destroyMethod(DeliveryMethod $method): JsonResponse
+    {
+        if (DB::table('checkout_quotes')->where('delivery_method_id', $method->id)->exists()) {
+            return $this->error('Cannot delete delivery method in use by checkout quotes.', 422);
+        }
+
+        $method->delete();
+
+        return $this->success(null, 'Delivery method deleted.');
     }
 
     public function setZoneMethod(Request $request, DeliveryZone $zone, DeliveryMethod $method): JsonResponse
@@ -66,9 +95,21 @@ class CommerceRuleController extends BaseController
         return $this->success($zone->fresh('methods'), 'Delivery pricing updated.');
     }
 
+    public function destroyZoneMethod(DeliveryZone $zone, DeliveryMethod $method): JsonResponse
+    {
+        $zone->methods()->detach($method->id);
+
+        return $this->success($zone->fresh('methods'), 'Delivery method detached from zone.');
+    }
+
     public function pickups(): JsonResponse
     {
         return $this->success(PickupLocation::orderBy('name')->get());
+    }
+
+    public function showPickup(PickupLocation $pickup): JsonResponse
+    {
+        return $this->success($pickup->load('zone'));
     }
 
     public function storePickup(Request $request): JsonResponse
@@ -83,6 +124,13 @@ class CommerceRuleController extends BaseController
         $pickup->update($request->validate($this->pickupRules(true, $pickup)));
 
         return $this->success($pickup, 'Pickup location updated.');
+    }
+
+    public function destroyPickup(PickupLocation $pickup): JsonResponse
+    {
+        $pickup->delete();
+
+        return $this->success(null, 'Pickup location deleted.');
     }
 
     public function promotions(Request $request): JsonResponse

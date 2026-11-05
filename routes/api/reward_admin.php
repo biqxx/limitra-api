@@ -8,6 +8,7 @@ Route::middleware(['auth:api', 'active.session', 'permission:rewards.read'])
     ->name('admin.reward-campaigns.')
     ->group(function (): void {
         Route::get('/', [RewardCampaignController::class, 'index'])->name('index');
+        Route::get('{campaign}', [RewardCampaignController::class, 'show'])->name('show');
         Route::get('{campaign}/wins', [RewardCampaignController::class, 'wins'])->name('wins');
     });
 
@@ -17,4 +18,5 @@ Route::middleware(['auth:api', 'active.session', 'permission:rewards.manage'])
     ->group(function (): void {
         Route::post('/', [RewardCampaignController::class, 'store'])->name('store');
         Route::patch('{campaign}', [RewardCampaignController::class, 'update'])->name('update');
+        Route::delete('{campaign}', [RewardCampaignController::class, 'destroy'])->name('destroy');
     });

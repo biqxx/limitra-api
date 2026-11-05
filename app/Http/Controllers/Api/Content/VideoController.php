@@ -186,6 +186,8 @@ class VideoController extends BaseController
             'status' => $validated['status'] ?? 'published',
         ]);
 
+        ContentController::invalidateHomeCache();
+
         return $this->success($video, 'Video created.', 201);
     }
 
@@ -203,6 +205,7 @@ class VideoController extends BaseController
         ]);
 
         $video->update($validated);
+        ContentController::invalidateHomeCache();
 
         return $this->success($video->fresh(), 'Video updated.');
     }
@@ -210,6 +213,7 @@ class VideoController extends BaseController
     public function destroy(Video $video): JsonResponse
     {
         $video->delete();
+        ContentController::invalidateHomeCache();
 
         return $this->success(null, 'Video deleted.');
     }

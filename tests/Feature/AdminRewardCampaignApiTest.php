@@ -61,6 +61,14 @@ class AdminRewardCampaignApiTest extends TestCase
             ->assertJsonPath('data.name', 'Updated Spin')
             ->assertJsonPath('data.version', 2)
             ->assertJsonCount(2, 'data.prizes');
+
+        $this->actingAs($admin, 'api')->getJson("/api/v1/admin/reward-campaigns/{$campaignId}")
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Updated Spin');
+
+        $this->actingAs($admin, 'api')->deleteJson("/api/v1/admin/reward-campaigns/{$campaignId}")
+            ->assertOk();
+        $this->assertDatabaseMissing('reward_campaigns', ['public_id' => $campaignId]);
     }
 
     public function test_only_admin_can_manage_reward_campaigns(): void

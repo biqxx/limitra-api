@@ -11,6 +11,7 @@ use App\Models\Product\Category;
 use App\Models\Product\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class ContentController extends BaseController
@@ -31,22 +32,35 @@ class ContentController extends BaseController
 
     public function home(Request $request): JsonResponse
     {
-        $featuredCategories = Category::query()->limit(6)->get(['id', 'name', 'slug']);
-        $featuredProducts = Product::query()->where('status', 'active')->where('is_featured', true)->limit(8)->get();
-        if ($featuredProducts->isEmpty()) {
-            $featuredProducts = Product::query()->where('status', 'active')->latest('id')->limit(8)->get();
-        }
+        $channel = (string) $request->input('channel', 'web');
+        $version = (string) Cache::get('storefront:home:version', '1');
+        $cacheKey = "storefront:home:v{$version}:{$channel}";
 
-        $activePromotions = Promotion::query()->where('active', true)->limit(3)->get(['id', 'code', 'name', 'type', 'value']);
-        $featuredVideos = Video::query()->where('status', 'published')->where('is_featured', true)->limit(4)->get();
+        $payload = Cache::remember($cacheKey, 1800, function () use ($channel): array {
+            $featuredCategories = Category::query()->limit(6)->get(['id', 'name', 'slug']);
+            $featuredProducts = Product::query()->where('status', 'active')->where('is_featured', true)->limit(8)->get();
+            if ($featuredProducts->isEmpty()) {
+                $featuredProducts = Product::query()->where('status', 'active')->latest('id')->limit(8)->get();
+            }
 
-        return $this->success([
-            'channel' => $request->input('channel', 'web'),
-            'categories' => $featuredCategories,
-            'featured_products' => $featuredProducts,
-            'promotions' => $activePromotions,
-            'featured_videos' => $featuredVideos,
-        ], 'Storefront homepage payload retrieved.');
+            $activePromotions = Promotion::query()->where('active', true)->limit(3)->get(['id', 'code', 'name', 'type', 'value']);
+            $featuredVideos = Video::query()->where('status', 'published')->where('is_featured', true)->limit(4)->get();
+
+            return [
+                'channel' => $channel,
+                'categories' => $featuredCategories,
+                'featured_products' => $featuredProducts,
+                'promotions' => $activePromotions,
+                'featured_videos' => $featuredVideos,
+            ];
+        });
+
+        return $this->success($payload, 'Storefront homepage payload retrieved.');
+    }
+
+    public static function invalidateHomeCache(): void
+    {
+        Cache::forever('storefront:home:version', (string) Str::uuid());
     }
 
     public function index(Request $request): JsonResponse
@@ -130,6 +144,8 @@ class ContentController extends BaseController
             ],
         ]);
 
+        self::invalidateHomeCache();
+
         return $this->success($entry, 'Content entry created.', 201);
     }
 
@@ -167,6 +183,7 @@ class ContentController extends BaseController
 
         unset($validated['change_summary']);
         $entry->update($validated);
+        self::invalidateHomeCache();
 
         return $this->success($entry->fresh(), 'Content entry updated.');
     }
@@ -177,6 +194,7 @@ class ContentController extends BaseController
             'status' => 'published',
             'published_at' => now(),
         ]);
+        self::invalidateHomeCache();
 
         return $this->success($entry->fresh(), 'Content entry published.');
     }
@@ -225,6 +243,7 @@ class ContentController extends BaseController
             'seo_title' => $revision->metadata['seo_title'] ?? $entry->seo_title,
             'seo_description' => $revision->metadata['seo_description'] ?? $entry->seo_description,
         ]);
+        self::invalidateHomeCache();
 
         return $this->success($entry->fresh(), 'Content entry restored from revision.');
     }

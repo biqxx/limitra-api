@@ -82,4 +82,20 @@ class RewardCampaignController extends BaseController
             ],
         ]);
     }
+
+    public function show(RewardCampaign $campaign): JsonResponse
+    {
+        return $this->success(new RewardCampaignResource($campaign->load('prizes')->loadCount('spins')));
+    }
+
+    public function destroy(RewardCampaign $campaign): JsonResponse
+    {
+        if ($campaign->spins()->exists()) {
+            return $this->error('Cannot delete a campaign that has active spins recorded. Please set its status to ended.', 422);
+        }
+
+        $campaign->delete();
+
+        return $this->success(null, 'Reward campaign deleted.');
+    }
 }

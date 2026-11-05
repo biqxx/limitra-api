@@ -14,18 +14,25 @@ Route::middleware('active.session')->group(function () {
 
 Route::middleware(['auth:api', 'active.session', 'permission:delivery.read'])->prefix('admin')->group(function () {
     Route::get('delivery-zones', [CommerceRuleController::class, 'zones']);
+    Route::get('delivery-zones/{zone}', [CommerceRuleController::class, 'showZone']);
     Route::get('delivery-methods', [CommerceRuleController::class, 'methods']);
+    Route::get('delivery-methods/{method}', [CommerceRuleController::class, 'showMethod']);
     Route::get('pickup-locations', [CommerceRuleController::class, 'pickups']);
+    Route::get('pickup-locations/{pickup}', [CommerceRuleController::class, 'showPickup']);
 });
 
 Route::middleware(['auth:api', 'active.session', 'permission:delivery.manage'])->prefix('admin')->group(function () {
     Route::post('delivery-zones', [CommerceRuleController::class, 'storeZone']);
     Route::patch('delivery-zones/{zone}', [CommerceRuleController::class, 'updateZone']);
+    Route::delete('delivery-zones/{zone}', [CommerceRuleController::class, 'destroyZone']);
     Route::post('delivery-methods', [CommerceRuleController::class, 'storeMethod']);
     Route::patch('delivery-methods/{method}', [CommerceRuleController::class, 'updateMethod']);
+    Route::delete('delivery-methods/{method}', [CommerceRuleController::class, 'destroyMethod']);
     Route::put('delivery-zones/{zone}/methods/{method}', [CommerceRuleController::class, 'setZoneMethod']);
+    Route::delete('delivery-zones/{zone}/methods/{method}', [CommerceRuleController::class, 'destroyZoneMethod']);
     Route::post('pickup-locations', [CommerceRuleController::class, 'storePickup']);
     Route::patch('pickup-locations/{pickup}', [CommerceRuleController::class, 'updatePickup']);
+    Route::delete('pickup-locations/{pickup}', [CommerceRuleController::class, 'destroyPickup']);
 });
 
 Route::middleware(['auth:api', 'active.session', 'permission:promotions.read'])->prefix('admin')->group(function () {

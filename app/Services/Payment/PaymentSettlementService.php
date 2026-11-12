@@ -3,6 +3,7 @@
 namespace App\Services\Payment;
 
 use App\Exceptions\PaymentGatewayException;
+use App\Models\Commerce\PromotionRedemption;
 use App\Models\Payment\Payment;
 use App\Services\AffiliateService;
 use App\Services\Order\InventoryReservationService;
@@ -73,6 +74,15 @@ class PaymentSettlementService
 
                 $order->update($attributes);
                 $this->reservations->removeExpiry($order);
+                $quote = $order->checkoutQuote;
+                if ($quote?->promotion_id && ! PromotionRedemption::query()->where('order_id', $order->id)->exists()) {
+                    PromotionRedemption::query()->create([
+                        'promotion_id' => $quote->promotion_id,
+                        'user_id' => $order->user_id,
+                        'order_id' => $order->id,
+                        'discount_amount' => $order->discount_total,
+                    ]);
+                }
                 $this->affiliates->recordSales($order);
 
                 if ($fromStatus !== $order->status || $order->cancellation_code === InventoryReservationService::LATE_PAYMENT_CANCELLATION_CODE) {
@@ -87,6 +97,7 @@ class PaymentSettlementService
                 }
             } elseif (in_array($status, ['failed', 'abandoned'], true) && ! in_array($order->payment_status, ['paid', 'partially_refunded', 'refunded'], true)) {
                 $order->update(['payment_status' => 'failed']);
+                PromotionRedemption::query()->where('order_id', $order->id)->delete();
             }
 
             if ($status === 'succeeded'

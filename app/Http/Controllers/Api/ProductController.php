@@ -97,7 +97,7 @@ class ProductController extends BaseController
                 ->when($maxPrice !== null, fn ($q) => $q->where('price', '<=', $maxPrice))
                 ->when($request->filled('min_rating'), fn ($q) => $q->where('average_rating', '>=', $request->input('min_rating')))
                 ->when($request->boolean('in_stock'), fn ($q) => $q->where('stock', '>', 0))
-                ->when($request->boolean('on_sale'), fn ($q) => $q->whereNotNull('compare_at_price')->whereColumn('compare_at_price', '>', 'price'))
+                ->when($request->boolean('on_sale'), fn ($q) => $q->onSale())
                 ->when($request->boolean('featured'), fn ($q) => $q->where('is_featured', true))
                 ->when($request->boolean('bestseller'), fn ($q) => $q->where('is_bestseller', true))
                 ->orderBy($sortBy, $sortDir)
@@ -160,6 +160,17 @@ class ProductController extends BaseController
             'description' => ['nullable', 'string'],
             'price' => ['required', 'numeric', 'min:0'],
             'compare_at_price' => ['nullable', 'numeric', 'gt:price'],
+            'discount_starts_at' => ['nullable', 'date'],
+            'discount_ends_at' => [
+                'nullable',
+                'date',
+                function (string $attribute, mixed $value, $fail) use ($request): void {
+                    $startsAt = $request->input('discount_starts_at');
+                    if ($value !== null && $startsAt !== null && strtotime((string) $value) <= strtotime((string) $startsAt)) {
+                        $fail('The discount ends at must be a date after discount starts at.');
+                    }
+                },
+            ],
             'currency' => ['nullable', 'string', 'size:3'],
             'stock' => ['required', 'integer', 'min:0'],
             'low_stock_threshold' => ['nullable', 'integer', 'min:0'],
@@ -301,6 +312,20 @@ class ProductController extends BaseController
 
                     if ($value !== null && (float) $value <= $price) {
                         $fail('The compare at price must be greater than the price.');
+                    }
+                },
+            ],
+            'discount_starts_at' => ['nullable', 'date'],
+            'discount_ends_at' => [
+                'nullable',
+                'date',
+                function (string $attribute, mixed $value, $fail) use ($request, $product): void {
+                    $startsAt = $request->has('discount_starts_at')
+                        ? $request->input('discount_starts_at')
+                        : $product->discount_starts_at;
+
+                    if ($value !== null && $startsAt !== null && strtotime((string) $value) <= strtotime((string) $startsAt)) {
+                        $fail('The discount ends at must be a date after discount starts at.');
                     }
                 },
             ],

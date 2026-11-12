@@ -373,6 +373,23 @@ class DeliveryAndAdminCrudTest extends TestCase
 
         $newJobVersion = Cache::get('careers:jobs:version');
         $this->assertNotEquals($vJobs, $newJobVersion);
+
+        // 3. Closed job posting rejects applications
+        $closedJob = CareerJob::create([
+            'title' => 'Closed Role',
+            'slug' => 'closed-role',
+            'department' => 'Engineering',
+            'location' => 'Remote',
+            'type' => 'full-time',
+            'description' => 'Closed role',
+            'status' => 'closed',
+        ]);
+
+        $this->postJson("/api/v1/jobs/{$closedJob->id}/applications", [
+            'name' => 'Applicant',
+            'email' => 'applicant@example.com',
+            'cv_url' => 'https://example.com/cv.pdf',
+        ])->assertStatus(422);
     }
 
     private function createAdmin(): User

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\BaseController;
+use App\Http\Controllers\Api\Content\ContentController;
 use App\Models\Commerce\DeliveryMethod;
 use App\Models\Commerce\DeliveryZone;
 use App\Models\Commerce\PickupLocation;
@@ -40,6 +41,10 @@ class CommerceRuleController extends BaseController
 
     public function destroyZone(DeliveryZone $zone): JsonResponse
     {
+        if (PickupLocation::query()->where('delivery_zone_id', $zone->id)->exists()) {
+            return $this->error('Cannot delete delivery zone linked to pickup locations.', 422);
+        }
+
         $zone->delete();
 
         return $this->success(null, 'Delivery zone deleted.');
@@ -198,6 +203,7 @@ class CommerceRuleController extends BaseController
     public function destroyPromotion(Promotion $promotion): JsonResponse
     {
         $promotion->update(['active' => false]);
+        ContentController::invalidateHomeCache();
 
         return $this->success($promotion->fresh(), 'Promotion disabled successfully.');
     }
@@ -232,6 +238,7 @@ class CommerceRuleController extends BaseController
         $promotion = Promotion::create($data);
         $promotion->products()->sync($productIds);
         $promotion->categories()->sync($categoryIds);
+        ContentController::invalidateHomeCache();
 
         return $this->success($promotion->load('products:id', 'categories:id'), 'Promotion created.', 201);
     }
@@ -250,6 +257,7 @@ class CommerceRuleController extends BaseController
         }
         unset($data['product_ids'], $data['category_ids']);
         $promotion->update($data);
+        ContentController::invalidateHomeCache();
 
         return $this->success($promotion->fresh()->load('products:id', 'categories:id'), 'Promotion updated.');
     }

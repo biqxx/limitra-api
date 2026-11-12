@@ -218,7 +218,13 @@ class ProductPricingService
         ])->save();
 
         if ($prepared['proposed_price_ngn'] !== null && $source->product?->status === 'draft') {
-            $source->product->update(['price' => $prepared['proposed_price_ngn']]);
+            $productUpdates = ['price' => $prepared['proposed_price_ngn']];
+            if ($source->product->compare_at_price !== null && (float) $source->product->compare_at_price <= (float) $prepared['proposed_price_ngn']) {
+                $productUpdates['compare_at_price'] = null;
+                $productUpdates['discount_starts_at'] = null;
+                $productUpdates['discount_ends_at'] = null;
+            }
+            $source->product->update($productUpdates);
         }
 
         $this->auditEvents->record(
@@ -332,7 +338,13 @@ class ProductPricingService
                 'validation_status' => 'approved',
                 'sync_status' => 'imported',
             ])->save();
-            $lockedSource->product->update(['price' => $quote->approved_price_ngn, 'currency' => 'NGN']);
+            $productUpdates = ['price' => $quote->approved_price_ngn, 'currency' => 'NGN'];
+            if ($lockedSource->product->compare_at_price !== null && (float) $lockedSource->product->compare_at_price <= (float) $quote->approved_price_ngn) {
+                $productUpdates['compare_at_price'] = null;
+                $productUpdates['discount_starts_at'] = null;
+                $productUpdates['discount_ends_at'] = null;
+            }
+            $lockedSource->product->update($productUpdates);
 
             $this->auditEvents->record(
                 action: 'product_price.quote_approved',

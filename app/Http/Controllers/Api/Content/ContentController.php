@@ -37,13 +37,31 @@ class ContentController extends BaseController
         $cacheKey = "storefront:home:v{$version}:{$channel}";
 
         $payload = Cache::remember($cacheKey, 1800, function () use ($channel): array {
-            $featuredCategories = Category::query()->limit(6)->get(['id', 'name', 'slug']);
+            $now = now();
+            $featuredCategories = Category::query()
+                ->whereNull('parent_id')
+                ->where('active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->limit(6)
+                ->get(['id', 'name', 'slug']);
+
             $featuredProducts = Product::query()->where('status', 'active')->where('is_featured', true)->limit(8)->get();
             if ($featuredProducts->isEmpty()) {
                 $featuredProducts = Product::query()->where('status', 'active')->latest('id')->limit(8)->get();
             }
 
-            $activePromotions = Promotion::query()->where('active', true)->limit(3)->get(['id', 'code', 'name', 'type', 'value']);
+            $activePromotions = Promotion::query()
+                ->where('active', true)
+                ->where(function ($q) use ($now): void {
+                    $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
+                })
+                ->where(function ($q) use ($now): void {
+                    $q->whereNull('ends_at')->orWhere('ends_at', '>', $now);
+                })
+                ->limit(3)
+                ->get(['id', 'code', 'name', 'type', 'value', 'starts_at', 'ends_at']);
+
             $featuredVideos = Video::query()->where('status', 'published')->where('is_featured', true)->limit(4)->get();
 
             return [

@@ -41,6 +41,10 @@ class VideoController extends BaseController
 
     public function show(Video $video): JsonResponse
     {
+        if ($video->status !== 'published') {
+            return $this->error('Video not found.', 404);
+        }
+
         return $this->success($video);
     }
 

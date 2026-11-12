@@ -57,7 +57,70 @@ class CatalogApiTest extends TestCase
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.items.0.slug', 'apex-14-pro')
             ->assertJsonPath('data.items.0.discount_percentage', 13)
+            ->assertJsonPath('data.items.0.discount_active', true)
             ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    public function test_product_discount_schedule_controls_sale_visibility_and_expiry_command(): void
+    {
+        [$phones, $smartphones] = $this->categoryTree();
+
+        $activeDiscount = $this->product($phones, $smartphones, [
+            'name' => 'Active Flash Sale Phone',
+            'slug' => 'active-flash-sale-phone',
+            'price' => 400000,
+            'compare_at_price' => 500000,
+            'discount_starts_at' => now()->subHour(),
+            'discount_ends_at' => now()->addHours(2),
+            'stock' => 5,
+        ]);
+
+        $expiredDiscount = $this->product($phones, $smartphones, [
+            'name' => 'Expired Sale Phone',
+            'slug' => 'expired-sale-phone',
+            'price' => 300000,
+            'compare_at_price' => 400000,
+            'discount_starts_at' => now()->subDays(2),
+            'discount_ends_at' => now()->subMinute(),
+            'stock' => 5,
+        ]);
+
+        $futureDiscount = $this->product($phones, $smartphones, [
+            'name' => 'Upcoming Sale Phone',
+            'slug' => 'upcoming-sale-phone',
+            'price' => 350000,
+            'compare_at_price' => 450000,
+            'discount_starts_at' => now()->addHour(),
+            'discount_ends_at' => now()->addHours(5),
+            'stock' => 5,
+        ]);
+
+        $saleResponse = $this->getJson('/api/v1/products?on_sale=1')->assertOk();
+        $saleResponse->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $activeDiscount->id)
+            ->assertJsonPath('data.items.0.discount_active', true)
+            ->assertJsonPath('data.items.0.discount_percentage', 20);
+
+        $this->assertGreaterThan(0, $saleResponse->json('data.items.0.discount_remaining_seconds'));
+
+        $this->getJson("/api/v1/products/{$expiredDiscount->slug}")
+            ->assertOk()
+            ->assertJsonPath('data.discount_active', false)
+            ->assertJsonPath('data.discount_percentage', 0)
+            ->assertJsonPath('data.discount_remaining_seconds', null);
+
+        $this->getJson("/api/v1/products/{$futureDiscount->slug}")
+            ->assertOk()
+            ->assertJsonPath('data.discount_active', false)
+            ->assertJsonPath('data.discount_percentage', 0);
+
+        $this->artisan('products:expire-discounts')->assertExitCode(0);
+
+        $expiredDiscount->refresh();
+        $this->assertSame('400000.00', $expiredDiscount->price);
+        $this->assertNull($expiredDiscount->compare_at_price);
+        $this->assertNull($expiredDiscount->discount_starts_at);
+        $this->assertNull($expiredDiscount->discount_ends_at);
     }
 
     public function test_product_detail_supports_slug_and_returns_variants_specs_and_images(): void

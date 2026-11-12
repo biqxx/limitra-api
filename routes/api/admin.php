@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\CommissionController as AdminCommissionContro
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\CategoryController as CatalogCategoryController;
 use App\Http\Controllers\Api\ProductController as CatalogProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,10 +18,10 @@ Route::middleware(['auth:api', 'active.session', 'role:admin'])
     ->name('admin.categories.')
     ->group(function (): void {
         Route::get('/', [AdminCategoryController::class, 'index'])->name('index');
-        Route::post('/', [AdminCategoryController::class, 'store'])->name('store');
+        Route::post('/', [CatalogCategoryController::class, 'store'])->name('store');
         Route::get('{category}', [AdminCategoryController::class, 'show'])->name('show');
-        Route::match(['put', 'patch'], '{category}', [AdminCategoryController::class, 'update'])->name('update');
-        Route::delete('{category}', [AdminCategoryController::class, 'destroy'])->name('destroy');
+        Route::match(['put', 'patch'], '{category}', [CatalogCategoryController::class, 'update'])->name('update');
+        Route::delete('{category}', [CatalogCategoryController::class, 'destroy'])->name('destroy');
     });
 
 Route::middleware(['auth:api', 'active.session', 'role:admin'])

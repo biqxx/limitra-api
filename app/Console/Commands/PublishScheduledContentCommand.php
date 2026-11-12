@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Http\Controllers\Api\Content\ContentController;
 use App\Models\Content\BlogPost;
 use App\Models\Content\ContentEntry;
 use Illuminate\Console\Command;
@@ -68,6 +69,10 @@ class PublishScheduledContentCommand extends Command
                     $entriesCount++;
                 }
             });
+
+        if ($entriesCount > 0) {
+            ContentController::invalidateHomeCache();
+        }
 
         $this->info("Published {$postsCount} scheduled blog posts and {$entriesCount} scheduled content entries.");
 

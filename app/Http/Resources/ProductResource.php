@@ -9,6 +9,8 @@ class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $discountActive = $this->resource->hasActiveDiscount();
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -18,9 +20,13 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'price' => $this->price,
             'compare_at_price' => $this->compare_at_price,
-            'discount_percentage' => $this->compare_at_price && $this->compare_at_price > $this->price
-                ? (int) round((1 - ((float) $this->price / (float) $this->compare_at_price)) * 100)
-                : 0,
+            'discount_starts_at' => $this->discount_starts_at,
+            'discount_ends_at' => $this->discount_ends_at,
+            'discount_active' => $discountActive,
+            'discount_remaining_seconds' => $discountActive && $this->discount_ends_at
+                ? max(0, (int) now()->diffInSeconds($this->discount_ends_at, false))
+                : null,
+            'discount_percentage' => $this->resource->discountPercentage(),
             'currency' => $this->currency,
             'stock' => $this->stock,
             'low_stock_threshold' => $this->low_stock_threshold,

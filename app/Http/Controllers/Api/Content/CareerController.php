@@ -60,6 +60,10 @@ class CareerController extends BaseController
 
     public function apply(Request $request, ?CareerJob $job = null): JsonResponse
     {
+        if ($job !== null && $job->status !== 'open') {
+            return $this->error('This job posting is no longer accepting applications.', 422);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:150'],

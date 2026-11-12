@@ -8,6 +8,7 @@ use App\Models\Image;
 use App\Models\Order\OrderItem;
 use App\Models\User;
 use Database\Factories\Product\ProductFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,8 @@ class Product extends Model
         'description',
         'price',
         'compare_at_price',
+        'discount_starts_at',
+        'discount_ends_at',
         'currency',
         'stock',
         'low_stock_threshold',
@@ -53,6 +56,8 @@ class Product extends Model
             'seo_meta' => 'array',
             'price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
+            'discount_starts_at' => 'datetime',
+            'discount_ends_at' => 'datetime',
             'average_rating' => 'decimal:2',
             'stock' => 'integer',
             'low_stock_threshold' => 'integer',
@@ -61,6 +66,48 @@ class Product extends Model
             'is_bestseller' => 'boolean',
             'is_age_gated' => 'boolean',
         ];
+    }
+
+    public function scopeOnSale(Builder $query): Builder
+    {
+        $now = now();
+
+        return $query->whereNotNull('compare_at_price')
+            ->whereColumn('compare_at_price', '>', 'price')
+            ->where(function (Builder $q) use ($now): void {
+                $q->whereNull('discount_starts_at')->orWhere('discount_starts_at', '<=', $now);
+            })
+            ->where(function (Builder $q) use ($now): void {
+                $q->whereNull('discount_ends_at')->orWhere('discount_ends_at', '>', $now);
+            });
+    }
+
+    public function hasActiveDiscount(): bool
+    {
+        if (! $this->compare_at_price || (float) $this->compare_at_price <= (float) $this->price) {
+            return false;
+        }
+
+        $now = now();
+
+        if ($this->discount_starts_at && $now->isBefore($this->discount_starts_at)) {
+            return false;
+        }
+
+        if ($this->discount_ends_at && ! $now->isBefore($this->discount_ends_at)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function discountPercentage(): int
+    {
+        if (! $this->hasActiveDiscount()) {
+            return 0;
+        }
+
+        return (int) round((1 - ((float) $this->price / (float) $this->compare_at_price)) * 100);
     }
 
     // ── Relationships ─────────────────────────────────────────────────────────

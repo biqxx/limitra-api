@@ -103,3 +103,9 @@ Schedule::command('content:publish-scheduled')
     ->withoutOverlapping()
     ->onOneServer()
     ->name('content:publish-scheduled');
+
+Schedule::command('products:expire-discounts')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('products:expire-discounts');

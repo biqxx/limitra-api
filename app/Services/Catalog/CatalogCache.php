@@ -26,11 +26,13 @@ class CatalogCache
     public function invalidateProducts(): void
     {
         $this->invalidate(self::PRODUCTS_VERSION_KEY);
+        $this->invalidate('storefront:home:version');
     }
 
     public function invalidateCategories(): void
     {
         $this->invalidate(self::CATEGORIES_VERSION_KEY);
+        $this->invalidate('storefront:home:version');
     }
 
     public function productsVersion(): string

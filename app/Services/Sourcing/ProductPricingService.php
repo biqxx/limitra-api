@@ -2,6 +2,7 @@
 
 namespace App\Services\Sourcing;
 
+use App\Models\Product\Category;
 use App\Models\Product\ProductPriceQuote;
 use App\Models\Product\ProductSource;
 use App\Models\Settings\BusinessSetting;
@@ -44,6 +45,16 @@ class ProductPricingService
     public function prepareQuote(array $supplierProduct, array $catalogContent = []): array
     {
         [$rules, $rulesVersion] = $this->rules();
+        [$profitMarkupBasisPoints, $profitMarkupSource, $categorySnapshot] = $this->resolveProfitMarkup(
+            $catalogContent['category_id'] ?? null,
+            $catalogContent['subcategory_id'] ?? null,
+            (int) $rules['pricing.profit_markup_basis_points'],
+        );
+
+        if ($categorySnapshot !== []) {
+            $rules['category_pricing'] = $categorySnapshot;
+            $rulesVersion = hash('sha256', $rulesVersion.':'.json_encode($categorySnapshot, JSON_THROW_ON_ERROR));
+        }
         $supplierPrice = $this->positiveFloat($supplierProduct['price'] ?? null);
         $supplierCurrency = strtoupper(trim((string) ($supplierProduct['currency'] ?? '')));
         $weightLb = $this->positiveFloat($supplierProduct['weight_lb'] ?? null);
@@ -52,7 +63,6 @@ class ProductPricingService
         $missingInputs = array_values(array_filter([
             $supplierPrice === null ? 'supplier_price' : null,
             preg_match('/^[A-Z]{3}$/', $supplierCurrency) === 1 ? null : 'supplier_currency',
-            $deliveryDaysMax === null ? 'delivery_days_max' : null,
         ]));
         $blockedReasons = [];
         $maxWeightLb = ((int) $rules['pricing.max_weight_ounces']) / 16;
@@ -111,7 +121,7 @@ class ProductPricingService
         $usdEffectiveRate = $usdMarketRate + $fxBuffer;
         $salesTaxRate = ((int) $rules['pricing.sales_tax_basis_points']) / 10000;
         $customsRate = ((int) $rules['pricing.customs_basis_points']) / 10000;
-        $profitMarkupRate = ((int) $rules['pricing.profit_markup_basis_points']) / 10000;
+        $profitMarkupRate = $profitMarkupBasisPoints / 10000;
         // Supplier feeds frequently omit weight. Until a reliable weight
         // enrichment step is available, calculate without air cargo instead
         // of leaving the product at a zero price. Supplied weights still use
@@ -159,6 +169,8 @@ class ProductPricingService
                 'customs_ngn' => round($customsNgn, 2),
                 'processing_fee_ngn' => round($processingFeeNgn, 2),
                 'total_cost_ngn' => round($totalCostNgn, 2),
+                'profit_markup_basis_points' => $profitMarkupBasisPoints,
+                'profit_markup_source' => $profitMarkupSource,
                 'profit_markup_rate' => $profitMarkupRate,
                 'profit_ngn' => round($profitNgn, 2),
                 'local_shipping_included' => (bool) $rules['pricing.include_local_shipping'],
@@ -255,6 +267,10 @@ class ProductPricingService
         $prepared = $this->prepareQuote($supplierProduct, [
             'name' => $source->product?->name,
             'description' => $source->product?->description,
+            'category_id' => $overrides['category_id'] ?? $source->product?->category_id,
+            'subcategory_id' => array_key_exists('subcategory_id', $overrides)
+                ? $overrides['subcategory_id']
+                : $source->product?->subcategory_id,
         ]);
 
         return DB::transaction(function () use ($source, $supplierProduct, $prepared, $actor): ProductSource {
@@ -359,6 +375,57 @@ class ProductPricingService
 
             return $lockedSource->fresh(['product', 'currentPriceQuote', 'approvedPriceQuote']);
         });
+    }
+
+    /**
+     * @return array{0: int, 1: string, 2: array<string, mixed>}
+     */
+    private function resolveProfitMarkup(mixed $categoryId, mixed $subcategoryId, int $defaultMarkupBasisPoints): array
+    {
+        $categoryIds = array_values(array_filter([
+            is_numeric($categoryId) ? (int) $categoryId : null,
+            is_numeric($subcategoryId) ? (int) $subcategoryId : null,
+        ]));
+
+        if ($categoryIds === []) {
+            return [$defaultMarkupBasisPoints, 'global', []];
+        }
+
+        $categories = Category::query()
+            ->whereIn('id', $categoryIds)
+            ->get(['id', 'parent_id', 'name', 'slug', 'profit_markup_basis_points'])
+            ->keyBy('id');
+
+        $category = is_numeric($categoryId) ? $categories->get((int) $categoryId) : null;
+        $subcategory = is_numeric($subcategoryId) ? $categories->get((int) $subcategoryId) : null;
+
+        if ($subcategory && $subcategory->profit_markup_basis_points !== null) {
+            return [
+                (int) $subcategory->profit_markup_basis_points,
+                'subcategory',
+                [
+                    'category_id' => $category?->id,
+                    'subcategory_id' => $subcategory->id,
+                    'profit_markup_basis_points' => (int) $subcategory->profit_markup_basis_points,
+                    'profit_markup_source' => 'subcategory',
+                ],
+            ];
+        }
+
+        if ($category && $category->profit_markup_basis_points !== null) {
+            return [
+                (int) $category->profit_markup_basis_points,
+                'category',
+                [
+                    'category_id' => $category->id,
+                    'subcategory_id' => $subcategory?->id,
+                    'profit_markup_basis_points' => (int) $category->profit_markup_basis_points,
+                    'profit_markup_source' => 'category',
+                ],
+            ];
+        }
+
+        return [$defaultMarkupBasisPoints, 'global', []];
     }
 
     /** @return array{0: array<string, mixed>, 1: string} */

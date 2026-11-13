@@ -17,6 +17,10 @@ class CategoryResource extends JsonResource
             'description' => $this->description,
             'icon' => $this->icon,
             'sort_order' => $this->sort_order,
+            'profit_markup_basis_points' => $this->profit_markup_basis_points,
+            'profit_markup_percentage' => $this->profit_markup_basis_points !== null
+                ? round($this->profit_markup_basis_points / 100, 2)
+                : null,
             'age_gated' => $this->age_gated,
             'active' => $this->active,
             'image' => $this->whenLoaded('image', fn () => $this->image ? [

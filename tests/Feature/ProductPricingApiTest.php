@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\TrackAnalytics;
 use App\Jobs\DispatchProductRepricing;
+use App\Jobs\RepriceProductSource;
+use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\Product\ProductSource;
 use App\Models\User;
@@ -231,5 +233,79 @@ class ProductPricingApiTest extends TestCase
             ->assertJsonPath('data.0.value', 12000);
 
         Queue::assertPushed(DispatchProductRepricing::class);
+    }
+
+    public function test_category_and_subcategory_profit_markup_override_global_profit_markup(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $category = Category::factory()->create([
+            'name' => 'Electronics',
+            'slug' => 'electronics',
+            'profit_markup_basis_points' => 10000, // 100% markup
+        ]);
+        $subcategory = Category::factory()->create([
+            'parent_id' => $category->id,
+            'name' => 'Smartwatches',
+            'slug' => 'smartwatches',
+            'profit_markup_basis_points' => 5000, // 50% markup
+        ]);
+
+        $product = Product::factory()->create([
+            'category_id' => $category->id,
+            'subcategory_id' => null,
+            'price' => 0,
+        ]);
+        $source = ProductSource::factory()->create([
+            'product_id' => $product->id,
+            'supplier_price' => 100,
+            'supplier_currency' => 'USD',
+            'weight_lb' => 1.0,
+            'delivery_days_min' => 2,
+            'delivery_days_max' => 5,
+        ]);
+
+        Http::fake([
+            'https://rates.test/v6/latest/USD' => Http::response([
+                'result' => 'success',
+                'rates' => ['NGN' => 1500],
+            ]),
+        ]);
+
+        // 1. Category markup (100% -> 10000 bps):
+        // Landed cost = (100 * 1600) + (10 * 1600) + (5 * 1600) = 184,000 NGN
+        // Profit (100%) = 184,000 NGN -> Total = 368,000 NGN
+        $this->actingAs($admin, 'api')
+            ->postJson("/api/v1/admin/sourcing/imports/{$source->id}/pricing/recalculate")
+            ->assertOk()
+            ->assertJsonPath('data.current_price_quote.cost_breakdown.profit_markup_basis_points', 10000)
+            ->assertJsonPath('data.current_price_quote.cost_breakdown.profit_markup_source', 'category')
+            ->assertJsonPath('data.current_price_quote.cost_breakdown.profit_ngn', 184000)
+            ->assertJsonPath('data.current_price_quote.proposed_price_ngn', '368000.00');
+
+        // 2. Assign subcategory with 50% markup (5000 bps):
+        // Landed cost = 184,000 NGN, Profit (50%) = 92,000 NGN -> Total = 276,000 NGN
+        $this->actingAs($admin, 'api')
+            ->patchJson("/api/v1/admin/products/{$product->id}", [
+                'subcategory_id' => $subcategory->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.price', '276000.00');
+
+        $source->refresh();
+        $this->assertSame('276000.00', $source->currentPriceQuote->proposed_price_ngn);
+        $this->assertSame('subcategory', $source->currentPriceQuote->cost_breakdown['profit_markup_source']);
+        $this->assertSame(5000, $source->currentPriceQuote->cost_breakdown['profit_markup_basis_points']);
+
+        // 3. Updating category profit markup dispatches repricing job for products in that category
+        Queue::fake();
+        $this->actingAs($admin, 'api')
+            ->patchJson("/api/v1/admin/categories/{$subcategory->id}", [
+                'profit_markup_basis_points' => 7500,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.profit_markup_basis_points', 7500)
+            ->assertJsonPath('data.profit_markup_percentage', 75);
+
+        Queue::assertPushed(RepriceProductSource::class, fn (RepriceProductSource $job) => $job->productSourceId === $source->id);
     }
 }

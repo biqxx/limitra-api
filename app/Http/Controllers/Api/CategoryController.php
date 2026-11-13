@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\CategoryResource;
+use App\Jobs\RepriceProductSource;
 use App\Models\Product\Category;
+use App\Models\Product\ProductSource;
 use App\Services\Catalog\CatalogCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -111,6 +113,7 @@ class CategoryController extends BaseController
             'description' => ['nullable', 'string'],
             'icon' => ['nullable', 'string', 'max:100'],
             'sort_order' => ['nullable', 'integer', 'between:0,32767'],
+            'profit_markup_basis_points' => ['nullable', 'integer', 'between:0,100000'],
             'age_gated' => ['nullable', 'boolean'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -191,6 +194,7 @@ class CategoryController extends BaseController
             'description' => ['nullable', 'string'],
             'icon' => ['nullable', 'string', 'max:100'],
             'sort_order' => ['sometimes', 'required', 'integer', 'between:0,32767'],
+            'profit_markup_basis_points' => ['nullable', 'integer', 'between:0,100000'],
             'age_gated' => ['sometimes', 'required', 'boolean'],
             'active' => ['sometimes', 'required', 'boolean'],
         ]);
@@ -199,7 +203,23 @@ class CategoryController extends BaseController
             return $this->error('A category with subcategories cannot become a subcategory.', 422);
         }
 
+        $oldMarkup = $category->profit_markup_basis_points;
         $category->update($data);
+
+        if (array_key_exists('profit_markup_basis_points', $data) && $oldMarkup !== $category->profit_markup_basis_points) {
+            ProductSource::query()
+                ->whereHas('product', function ($query) use ($category): void {
+                    $query->where('category_id', $category->id)
+                        ->orWhere('subcategory_id', $category->id);
+                })
+                ->select('id')
+                ->orderBy('id')
+                ->chunkById(100, function ($sources): void {
+                    foreach ($sources as $source) {
+                        RepriceProductSource::dispatch($source->id);
+                    }
+                });
+        }
 
         return $this->success(new CategoryResource($category), 'Category updated.');
     }

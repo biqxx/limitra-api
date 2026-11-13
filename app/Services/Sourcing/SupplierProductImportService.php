@@ -55,6 +55,8 @@ class SupplierProductImportService
         $preparedQuote = $this->pricing->prepareQuote($supplierProduct, [
             'name' => $name,
             'description' => $description,
+            'category_id' => $attributes['category_id'] ?? null,
+            'subcategory_id' => $attributes['subcategory_id'] ?? null,
         ]);
 
         return DB::transaction(function () use ($attributes, $admin, $supplier, $externalProductId, $supplierProduct, $preparedQuote, $name, $description) {

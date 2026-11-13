@@ -23,6 +23,7 @@ class Category extends Model
         'description',
         'icon',
         'sort_order',
+        'profit_markup_basis_points',
         'age_gated',
         'active',
     ];
@@ -31,6 +32,7 @@ class Category extends Model
     {
         return [
             'sort_order' => 'integer',
+            'profit_markup_basis_points' => 'integer',
             'age_gated' => 'boolean',
             'active' => 'boolean',
         ];

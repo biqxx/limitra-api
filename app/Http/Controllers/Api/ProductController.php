@@ -9,6 +9,7 @@ use App\Models\Product\Product;
 use App\Models\Product\ProductVariant;
 use App\Services\Analytics\AnalyticsTrackingService;
 use App\Services\Catalog\CatalogCache;
+use App\Services\Sourcing\ProductPricingService;
 use App\Services\Sourcing\ProductPublicationGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,7 @@ class ProductController extends BaseController
     public function __construct(
         private readonly CatalogCache $catalogCache,
         private readonly ProductPublicationGuard $publicationGuard,
+        private readonly ProductPricingService $pricing,
     ) {}
 
     #[OA\Get(
@@ -377,11 +379,23 @@ class ProductController extends BaseController
             $data['currency'] = strtoupper($data['currency']);
         }
 
-        $product->recordEditor(auth('api')->id());
+        $actor = auth('api')->user();
+        $product->recordEditor($actor?->id);
         $data['updated_by'] = $product->updated_by;
+        $categoryChanged = (array_key_exists('category_id', $data) && (int) $data['category_id'] !== (int) $product->category_id)
+            || (array_key_exists('subcategory_id', $data) && (int) ($data['subcategory_id'] ?? 0) !== (int) ($product->subcategory_id ?? 0));
 
-        DB::transaction(function () use ($product, $data, $variants, $specifications): void {
+        DB::transaction(function () use ($product, $data, $variants, $specifications, $categoryChanged, $actor): void {
             $product->update($data);
+
+            if ($categoryChanged) {
+                foreach ($product->sources as $source) {
+                    $this->pricing->recalculate($source, [
+                        'category_id' => $product->category_id,
+                        'subcategory_id' => $product->subcategory_id,
+                    ], $actor);
+                }
+            }
 
             if ($variants !== null) {
                 $product->variants()->delete();

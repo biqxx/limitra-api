@@ -102,7 +102,10 @@ class ProductContentEnhancer
      */
     private function prompt(array $supplierProduct, array $categories): string
     {
-        $sourceJson = mb_substr(json_encode($supplierProduct, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 0, 18000);
+        $structured = $supplierProduct;
+        unset($structured['raw_html']);
+
+        $sourceJson = mb_substr(json_encode($structured, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 0, 18000);
         $categoryJson = json_encode($categories, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
         return <<<PROMPT

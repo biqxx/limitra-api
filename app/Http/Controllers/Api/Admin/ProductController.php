@@ -45,17 +45,17 @@ class ProductController extends BaseController
             'per_page' => ['sometimes', 'integer', 'between:1,100'],
         ]);
 
-        $search = isset($data['q']) ? '%'.$data['q'].'%' : null;
+        $search = isset($data['q']) ? '%'.strtolower((string) $data['q']).'%' : null;
         $products = Product::query()
             ->with(self::LIST_RELATIONS)
             ->withCount(['variants', 'sources'])
             ->when(($data['trashed'] ?? 'without') === 'with', fn ($query) => $query->withTrashed())
             ->when(($data['trashed'] ?? 'without') === 'only', fn ($query) => $query->onlyTrashed())
             ->when($search, fn ($query) => $query->where(function ($query) use ($search) {
-                $query->where('name', 'like', $search)
-                    ->orWhere('slug', 'like', $search)
-                    ->orWhere('brand', 'like', $search)
-                    ->orWhere('sku', 'like', $search);
+                $query->whereRaw('LOWER(name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(COALESCE(slug, \'\')) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(COALESCE(brand, \'\')) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', [$search]);
             }))
             ->when($data['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($data['category_id'] ?? null, fn ($query, $categoryId) => $query->where('category_id', $categoryId))

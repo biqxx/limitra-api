@@ -27,7 +27,7 @@ class SupplierServiceClient
             rawurlencode($externalProductId),
         );
 
-        return $this->send(fn (PendingRequest $http) => $http->post($endpoint));
+        return $this->send(fn (PendingRequest $http) => $http->post($endpoint), longRunning: true);
     }
 
     public function details(string $supplier, string $externalProductId): array
@@ -38,7 +38,7 @@ class SupplierServiceClient
             rawurlencode($externalProductId),
         );
 
-        return $this->send(fn (PendingRequest $http) => $http->get($endpoint));
+        return $this->send(fn (PendingRequest $http) => $http->get($endpoint), longRunning: true);
     }
 
     public function placeProcurementOrder(string $supplier, array $payload): array
@@ -70,10 +70,10 @@ class SupplierServiceClient
         return $this->send(fn (PendingRequest $http) => $http->get($endpoint));
     }
 
-    private function send(callable $request): array
+    private function send(callable $request, bool $longRunning = false): array
     {
         try {
-            $response = $request($this->http());
+            $response = $request($this->http($longRunning));
         } catch (ConnectionException) {
             throw new SupplierServiceException('The supplier service is unavailable.', 503);
         }
@@ -93,7 +93,7 @@ class SupplierServiceClient
         );
     }
 
-    private function http(): PendingRequest
+    private function http(bool $longRunning = false): PendingRequest
     {
         $baseUrl = rtrim((string) config('services.supplier.base_url'), '/');
         $secret = (string) config('services.supplier.secret');
@@ -102,11 +102,21 @@ class SupplierServiceClient
             throw new SupplierServiceException('The supplier service is not configured.', 503);
         }
 
-        return Http::baseUrl($baseUrl)
+        $timeout = (int) config('services.supplier.timeout', 20);
+        if ($longRunning) {
+            $timeout = max($timeout, 120);
+        }
+
+        $http = Http::baseUrl($baseUrl)
             ->acceptJson()
             ->withHeaders(['X-Internal-Service-Secret' => $secret])
-            ->timeout((int) config('services.supplier.timeout', 20))
-            ->retry((int) config('services.supplier.retries', 2), 200, throw: false);
+            ->timeout($timeout);
+
+        if ($longRunning) {
+            return $http;
+        }
+
+        return $http->retry((int) config('services.supplier.retries', 2), 200, throw: false);
     }
 
     private function failedResponse(Response $response): SupplierServiceException
@@ -121,6 +131,15 @@ class SupplierServiceClient
     /** @return array<string, mixed> */
     private function secureImageUrls(array $payload): array
     {
+        if (isset($payload['images']) && is_array($payload['images'])) {
+            $payload['images'] = array_values(array_map(
+                fn (mixed $url): mixed => is_string($url) && str_starts_with($url, 'http://')
+                    ? 'https://'.substr($url, 7)
+                    : $url,
+                $payload['images'],
+            ));
+        }
+
         array_walk_recursive($payload, function (mixed &$value, string|int $key): void {
             if (! is_string($value)
                 || ! in_array((string) $key, ['image_url', 'image', 'thumbnail'], true)

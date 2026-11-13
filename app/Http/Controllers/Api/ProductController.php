@@ -87,11 +87,12 @@ class ProductController extends BaseController
                 ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
                 ->when($request->filled('category_slug'), fn ($q) => $q->whereHas('category', fn ($categoryQuery) => $categoryQuery->where('slug', $request->input('category_slug'))))
                 ->when($search, function ($query) use ($search) {
-                    $query->where(function ($searchQuery) use ($search) {
-                        $searchQuery->where('name', 'like', "%{$search}%")
-                            ->orWhere('brand', 'like', "%{$search}%")
-                            ->orWhere('description', 'like', "%{$search}%")
-                            ->orWhere('sku', 'like', "%{$search}%");
+                    $needle = '%'.Str::lower((string) $search).'%';
+                    $query->where(function ($searchQuery) use ($needle) {
+                        $searchQuery->whereRaw('LOWER(name) LIKE ?', [$needle])
+                            ->orWhereRaw('LOWER(COALESCE(brand, \'\')) LIKE ?', [$needle])
+                            ->orWhereRaw('LOWER(COALESCE(description, \'\')) LIKE ?', [$needle])
+                            ->orWhereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', [$needle]);
                     });
                 })
                 ->when($brands, fn ($q) => $q->whereIn('brand', $brands))
@@ -452,23 +453,25 @@ class ProductController extends BaseController
             ]);
         }
 
+        $needle = '%'.Str::lower($query).'%';
+
         $categories = Category::query()
-            ->where('name', 'like', "%{$query}%")
+            ->whereRaw('LOWER(name) LIKE ?', [$needle])
             ->limit(4)
             ->get(['id', 'name', 'slug']);
 
         $products = Product::query()
             ->where('status', 'active')
-            ->where(function ($q) use ($query): void {
-                $q->where('name', 'like', "%{$query}%")
-                    ->orWhere('brand', 'like', "%{$query}%");
+            ->where(function ($q) use ($needle): void {
+                $q->whereRaw('LOWER(name) LIKE ?', [$needle])
+                    ->orWhereRaw('LOWER(COALESCE(brand, \'\')) LIKE ?', [$needle]);
             })
             ->limit(6)
             ->get(['id', 'name', 'slug', 'price', 'brand', 'average_rating']);
 
         $terms = Product::query()
             ->where('status', 'active')
-            ->where('name', 'like', "%{$query}%")
+            ->whereRaw('LOWER(name) LIKE ?', [$needle])
             ->pluck('name')
             ->map(fn ($n) => Str::limit($n, 40))
             ->unique()

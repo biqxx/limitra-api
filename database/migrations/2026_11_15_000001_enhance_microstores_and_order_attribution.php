@@ -80,3 +80,4 @@ return new class extends Migration
         Cache::forget('business_settings.public.v1');
     }
 };
+

@@ -58,16 +58,10 @@ return new class extends Migration
         if ($adminRoleId && Schema::hasTable('permission_role')) {
             $allPermissionIds = DB::table('permissions')->pluck('id');
             foreach ($allPermissionIds as $permissionId) {
-                DB::table('permission_role')->updateOrInsert(
-                    [
-                        'role_id' => $adminRoleId,
-                        'permission_id' => $permissionId,
-                    ],
-                    [
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ]
-                );
+                DB::table('permission_role')->insertOrIgnore([
+                    'role_id' => $adminRoleId,
+                    'permission_id' => $permissionId,
+                ]);
             }
         }
     }

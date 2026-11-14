@@ -7,6 +7,7 @@ use App\Models\Microstore\Microstore;
 use App\Models\Microstore\MicrostoreEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class MicrostorePublicController extends BaseController
 {
@@ -50,7 +51,12 @@ class MicrostorePublicController extends BaseController
     public function show(string $slug, Request $request): JsonResponse
     {
         $microstore = Microstore::query()
-            ->with(['user:id,username,email', 'curatedProducts.product'])
+            ->with([
+                'user:id,username,email',
+                'curatedProducts' => fn ($query) => $query
+                    ->whereHas('product', fn ($productQuery) => $productQuery->where('status', 'active'))
+                    ->with('product'),
+            ])
             ->where('slug', $slug)
             ->where('status', 'active')
             ->where('moderation_status', 'approved')
@@ -78,6 +84,7 @@ class MicrostorePublicController extends BaseController
             ->firstOrFail();
 
         $paginator = $microstore->curatedProducts()
+            ->whereHas('product', fn ($query) => $query->where('status', 'active'))
             ->with('product')
             ->paginate($request->integer('per_page', 20));
 
@@ -99,10 +106,15 @@ class MicrostorePublicController extends BaseController
         $microstore = Microstore::query()
             ->where('slug', $slug)
             ->where('status', 'active')
+            ->where('moderation_status', 'approved')
             ->firstOrFail();
 
         $validated = $request->validate([
-            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'product_id' => [
+                'required',
+                'integer',
+                Rule::exists('products', 'id')->where('status', 'active')->whereNull('deleted_at'),
+            ],
             'session_id' => ['nullable', 'string', 'max:100'],
         ]);
 

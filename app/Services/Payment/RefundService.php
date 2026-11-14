@@ -8,6 +8,8 @@ use App\Models\Order\Order;
 use App\Models\Order\ReturnRequest;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
+use App\Services\AffiliateService;
+use App\Services\Microstore\MicrostoreAttributionService;
 use App\Services\Notification\RefundNotificationService;
 use App\Services\Referral\ReferralRewardService;
 use Illuminate\Database\QueryException;
@@ -24,6 +26,8 @@ class RefundService
         private readonly WalletLedgerService $walletLedger,
         private readonly RefundNotificationService $notifications,
         private readonly ReferralRewardService $referralRewards,
+        private readonly AffiliateService $affiliates,
+        private readonly MicrostoreAttributionService $microstores,
     ) {}
 
     /** @return array{refund: Refund, replayed: bool} */
@@ -140,6 +144,8 @@ class RefundService
                     ]);
                     if ($order->payment_status === 'refunded') {
                         $this->referralRewards->reverseForFullyRefundedOrder($order);
+                        $this->affiliates->reverseCommissionsForOrder($order, 'order_fully_refunded');
+                        $this->microstores->reverseOrder($order, 'order_fully_refunded');
                     }
 
                     $returnRefundedMinor = (int) $returnRequest->refunds()->where('status', 'processed')->sum('amount_minor');
@@ -321,6 +327,8 @@ class RefundService
                     ]);
                     if ($order->payment_status === 'refunded') {
                         $this->referralRewards->reverseForFullyRefundedOrder($order);
+                        $this->affiliates->reverseCommissionsForOrder($order, 'order_fully_refunded');
+                        $this->microstores->reverseOrder($order, 'order_fully_refunded');
                     }
 
                     $this->notifications->queueProcessed($refund);

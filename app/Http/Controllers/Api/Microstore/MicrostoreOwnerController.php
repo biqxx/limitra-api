@@ -6,12 +6,18 @@ use App\Http\Controllers\Api\BaseController;
 use App\Models\Microstore\Microstore;
 use App\Models\Microstore\MicrostoreEvent;
 use App\Models\Microstore\MicrostoreProduct;
+use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class MicrostoreOwnerController extends BaseController
 {
+    public function __construct(
+        private readonly BusinessSettingsService $settings,
+    ) {}
+
     public function show(Request $request): JsonResponse
     {
         $user = $request->user('api');
@@ -50,6 +56,8 @@ class MicrostoreOwnerController extends BaseController
             ? Str::slug($validated['slug'])
             : Str::slug($validated['name']).'-'.strtolower(Str::random(4));
 
+        $requireModeration = (bool) $this->settings->value('microstores.require_moderation', false);
+
         $microstore = Microstore::create([
             'user_id' => $user->id,
             'name' => $validated['name'],
@@ -59,8 +67,8 @@ class MicrostoreOwnerController extends BaseController
             'logo_url' => $validated['logo_url'] ?? null,
             'banner_url' => $validated['banner_url'] ?? null,
             'theme_color' => $validated['theme_color'] ?? '#000000',
-            'status' => 'active',
-            'moderation_status' => 'approved',
+            'status' => $requireModeration ? 'pending_review' : 'active',
+            'moderation_status' => $requireModeration ? 'pending' : 'approved',
             'settings' => $validated['settings'] ?? [],
         ]);
 
@@ -93,7 +101,11 @@ class MicrostoreOwnerController extends BaseController
         $microstore = Microstore::where('user_id', $user->id)->firstOrFail();
 
         $validated = $request->validate([
-            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'product_id' => [
+                'required',
+                'integer',
+                Rule::exists('products', 'id')->where('status', 'active')->whereNull('deleted_at'),
+            ],
             'custom_title' => ['nullable', 'string', 'max:255'],
             'custom_description' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'integer', 'min:0'],

@@ -2,6 +2,7 @@
 
 namespace App\Models\Microstore;
 
+use App\Models\Order\Order;
 use App\Models\Product\Product;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -44,6 +45,11 @@ class Microstore extends Model
         ];
     }
 
+    public function isPubliclyActive(): bool
+    {
+        return $this->status === 'active' && $this->moderation_status === 'approved';
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -59,11 +65,21 @@ class Microstore extends Model
         return $this->hasMany(MicrostoreProduct::class)->orderByDesc('is_pinned')->orderBy('sort_order')->orderByDesc('id');
     }
 
+    public function activeCuratedProducts(): HasMany
+    {
+        return $this->curatedProducts()->whereHas('product', fn ($query) => $query->where('status', 'active'));
+    }
+
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'microstore_products')
             ->withPivot(['custom_title', 'custom_description', 'sort_order', 'is_pinned', 'created_at'])
             ->withTimestamps();
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 
     public function events(): HasMany

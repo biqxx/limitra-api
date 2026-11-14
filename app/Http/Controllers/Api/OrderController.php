@@ -84,6 +84,8 @@ class OrderController extends BaseController
             'payment_method' => ['required', 'in:card,bank_transfer,cash_on_delivery'],
             'contact_email' => ['required', 'email:rfc', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'microstore_id' => ['nullable', 'integer', 'exists:microstores,id'],
+            'microstore_slug' => ['nullable', 'string', 'max:100', 'exists:microstores,slug'],
         ]);
         $idempotencyKey = $request->header('Idempotency-Key');
         Validator::make(['idempotency_key' => $idempotencyKey], [

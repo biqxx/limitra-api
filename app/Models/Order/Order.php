@@ -5,6 +5,7 @@ namespace App\Models\Order;
 use App\Models\Address\Address;
 use App\Models\Affiliate\AffiliateSale;
 use App\Models\Commerce\CheckoutQuote;
+use App\Models\Microstore\Microstore;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
 use App\Models\Support\SupportTicket;
@@ -22,6 +23,7 @@ class Order extends Model
     protected $fillable = [
         'user_id',
         'checkout_quote_id',
+        'microstore_id',
         'number',
         'currency',
         'subtotal',
@@ -75,6 +77,11 @@ class Order extends Model
     public function checkoutQuote(): BelongsTo
     {
         return $this->belongsTo(CheckoutQuote::class);
+    }
+
+    public function microstore(): BelongsTo
+    {
+        return $this->belongsTo(Microstore::class);
     }
 
     public function reservations(): HasMany

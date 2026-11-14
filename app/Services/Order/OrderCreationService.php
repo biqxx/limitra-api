@@ -14,6 +14,7 @@ use App\Models\Product\ProductVariant;
 use App\Services\AffiliateService;
 use App\Services\Commerce\DeliveryService;
 use App\Services\Commerce\PromotionService;
+use App\Services\Microstore\MicrostoreAttributionService;
 use App\Services\Payment\WalletCheckoutService;
 use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Database\QueryException;
@@ -32,6 +33,7 @@ class OrderCreationService
         private readonly BusinessSettingsService $settings,
         private readonly WalletCheckoutService $walletCheckout,
         private readonly AffiliateService $affiliates,
+        private readonly MicrostoreAttributionService $microstores,
     ) {}
 
     /**
@@ -108,9 +110,15 @@ class OrderCreationService
                 $reservationExpiresAt = $isCash || $isWalletPaid
                     ? null
                     : now()->addMinutes((int) $this->settings->value('orders.inventory_reservation_minutes'));
+                $microstore = $this->microstores->resolveForOrder(
+                    $userId,
+                    $data,
+                    $quote->items->pluck('product_id')->all(),
+                );
                 $order = Order::create([
                     'user_id' => $userId,
                     'checkout_quote_id' => $quote->id,
+                    'microstore_id' => $microstore?->id,
                     'number' => $this->orderNumber(),
                     'currency' => $quote->currency,
                     'subtotal' => $quote->subtotal,
@@ -178,6 +186,7 @@ class OrderCreationService
                 $cart->checkout();
                 if ($isWalletPaid) {
                     $this->affiliates->recordSales($order);
+                    $this->microstores->recordOrder($order);
                 }
                 $record->update([
                     'resource_type' => Order::class,

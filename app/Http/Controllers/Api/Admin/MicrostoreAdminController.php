@@ -4,9 +4,13 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\BaseController;
 use App\Models\Microstore\Microstore;
+use App\Models\Microstore\MicrostoreProduct;
 use App\Services\Admin\AuditEventService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class MicrostoreAdminController extends BaseController
 {
@@ -22,6 +26,10 @@ class MicrostoreAdminController extends BaseController
 
         if ($request->filled('moderation_status')) {
             $query->where('moderation_status', (string) $request->input('moderation_status'));
+        }
+
+        if ($request->has('featured')) {
+            $query->where('is_featured', $request->boolean('featured'));
         }
 
         if ($request->filled('search')) {
@@ -47,6 +55,81 @@ class MicrostoreAdminController extends BaseController
         ]);
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id', 'unique:microstores,user_id'],
+            'name' => ['required', 'string', 'max:150'],
+            'slug' => ['nullable', 'string', 'max:100', 'unique:microstores,slug'],
+            'tagline' => ['nullable', 'string', 'max:255'],
+            'bio' => ['nullable', 'string'],
+            'logo_url' => ['nullable', 'url', 'max:500'],
+            'banner_url' => ['nullable', 'url', 'max:500'],
+            'theme_color' => ['nullable', 'string', 'max:20'],
+            'is_featured' => ['nullable', 'boolean'],
+            'settings' => ['nullable', 'array'],
+            'product_ids' => ['nullable', 'array'],
+            'product_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('products', 'id')->where('status', 'active')->whereNull('deleted_at'),
+            ],
+        ]);
+
+        $admin = $request->user('api');
+        $slug = ! empty($validated['slug'])
+            ? Str::slug($validated['slug'])
+            : Str::slug($validated['name']).'-'.strtolower(Str::random(4));
+
+        $microstore = DB::transaction(function () use ($validated, $slug, $admin): Microstore {
+            $store = Microstore::create([
+                'user_id' => $validated['user_id'],
+                'name' => $validated['name'],
+                'slug' => $slug,
+                'tagline' => $validated['tagline'] ?? null,
+                'bio' => $validated['bio'] ?? null,
+                'logo_url' => $validated['logo_url'] ?? null,
+                'banner_url' => $validated['banner_url'] ?? null,
+                'theme_color' => $validated['theme_color'] ?? '#000000',
+                'status' => 'active',
+                'moderation_status' => 'approved',
+                'moderated_by' => $admin?->id,
+                'moderated_at' => now(),
+                'is_featured' => (bool) ($validated['is_featured'] ?? false),
+                'settings' => $validated['settings'] ?? [],
+            ]);
+
+            foreach ($validated['product_ids'] ?? [] as $index => $productId) {
+                MicrostoreProduct::create([
+                    'microstore_id' => $store->id,
+                    'product_id' => $productId,
+                    'sort_order' => $index,
+                    'is_pinned' => false,
+                ]);
+            }
+
+            $this->auditEvents->record(
+                action: 'microstore.created',
+                actor: $admin,
+                subject: $store,
+                after: [
+                    'name' => $store->name,
+                    'slug' => $store->slug,
+                    'user_id' => $store->user_id,
+                    'is_featured' => $store->is_featured,
+                ],
+            );
+
+            return $store;
+        });
+
+        return $this->success(
+            $microstore->load(['user:id,username,email', 'curatedProducts.product']),
+            'Celebrity microstore created successfully.',
+            201,
+        );
+    }
+
     public function show(Microstore $microstore): JsonResponse
     {
         return $this->success($microstore->load([
@@ -54,6 +137,32 @@ class MicrostoreAdminController extends BaseController
             'moderatedBy:id,username,email',
             'curatedProducts.product',
         ]));
+    }
+
+    public function update(Request $request, Microstore $microstore): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:150'],
+            'slug' => ['sometimes', 'string', 'max:100', Rule::unique('microstores', 'slug')->ignore($microstore->id)],
+            'tagline' => ['nullable', 'string', 'max:255'],
+            'bio' => ['nullable', 'string'],
+            'logo_url' => ['nullable', 'url', 'max:500'],
+            'banner_url' => ['nullable', 'url', 'max:500'],
+            'theme_color' => ['nullable', 'string', 'max:20'],
+            'is_featured' => ['sometimes', 'boolean'],
+            'settings' => ['nullable', 'array'],
+        ]);
+
+        if (isset($validated['slug'])) {
+            $validated['slug'] = Str::slug($validated['slug']);
+        }
+
+        $microstore->update($validated);
+
+        return $this->success(
+            $microstore->fresh()->load(['user:id,username,email', 'curatedProducts.product']),
+            'Microstore updated successfully.',
+        );
     }
 
     public function moderate(Request $request, Microstore $microstore): JsonResponse

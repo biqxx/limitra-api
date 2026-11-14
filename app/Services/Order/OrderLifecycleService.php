@@ -12,6 +12,7 @@ use App\Models\Product\ProductVariant;
 use App\Services\AffiliateService;
 use App\Services\Cart\CartService;
 use App\Services\Commerce\DeliveryService;
+use App\Services\Microstore\MicrostoreAttributionService;
 use App\Services\Payment\WalletCheckoutService;
 use App\Services\Referral\ReferralRewardService;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class OrderLifecycleService
         private readonly ReferralRewardService $referralRewards,
         private readonly WalletCheckoutService $walletCheckout,
         private readonly AffiliateService $affiliates,
+        private readonly MicrostoreAttributionService $microstores,
     ) {}
 
     public function cancel(Order $order, int $userId, string $reason): Order
@@ -75,6 +77,7 @@ class OrderLifecycleService
             ]);
             $this->walletCheckout->refundForOrder($order, 'customer_cancelled');
             $this->affiliates->reverseCommissionsForOrder($order, 'customer_cancelled');
+            $this->microstores->reverseOrder($order, 'customer_cancelled');
             $order->statusEvents()->create([
                 'from_status' => $fromStatus,
                 'to_status' => 'cancelled',
@@ -197,6 +200,9 @@ class OrderLifecycleService
             $this->transitionOrder($order, $status, $data['note'], $actorId);
             if ($status === 'delivered') {
                 $this->referralRewards->grantForDeliveredOrder($order);
+                if ($order->payment_method === 'cash_on_delivery') {
+                    $this->microstores->recordOrder($order);
+                }
             }
 
             return $order->fresh();

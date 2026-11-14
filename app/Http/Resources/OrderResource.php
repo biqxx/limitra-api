@@ -13,6 +13,7 @@ class OrderResource extends JsonResource
             'id' => $this->id,
             'number' => $this->number,
             'user_id' => $this->user_id,
+            'microstore_id' => $this->microstore_id,
             'user' => new UserResource($this->whenLoaded('user')),
             'currency' => $this->currency,
             'subtotal' => $this->subtotal,

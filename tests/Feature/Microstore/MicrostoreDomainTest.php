@@ -4,10 +4,14 @@ namespace Tests\Feature\Microstore;
 
 use App\Http\Middleware\TrackAnalytics;
 use App\Models\Microstore\Microstore;
+use App\Models\Order\Order;
 use App\Models\Product\Category;
 use App\Models\Product\Product;
+use App\Models\Settings\BusinessSetting;
 use App\Models\User;
+use App\Services\Microstore\MicrostoreAttributionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class MicrostoreDomainTest extends TestCase
@@ -246,5 +250,122 @@ class MicrostoreDomainTest extends TestCase
         $this->getJson('/api/v1/microstores/flagged-store')
             ->assertOk()
             ->assertJsonPath('data.name', 'Flagged Store');
+    }
+
+    public function test_public_store_hides_inactive_curated_products_and_supports_moderation_setting(): void
+    {
+        BusinessSetting::query()->where('key', 'microstores.require_moderation')->update([
+            'value' => true,
+        ]);
+        Cache::forget('business_settings.values.v1');
+
+        $pendingStoreRes = $this->actingAs($this->creator, 'api')
+            ->postJson('/api/v1/my-microstore', [
+                'name' => 'Celebrity Pending Store',
+                'slug' => 'celebrity-pending-store',
+            ]);
+
+        $pendingStoreRes->assertCreated()
+            ->assertJsonPath('data.status', 'pending_review')
+            ->assertJsonPath('data.moderation_status', 'pending');
+
+        $microstoreId = (int) $pendingStoreRes->json('data.id');
+
+        // Not publicly visible before approval
+        $this->getJson('/api/v1/microstores/celebrity-pending-store')->assertNotFound();
+
+        // Admin approves
+        $this->actingAs($this->admin, 'api')
+            ->postJson("/api/v1/admin/microstores/{$microstoreId}/moderate", [
+                'moderation_status' => 'approved',
+            ])->assertOk();
+
+        // Add active products, then archive product2
+        $this->actingAs($this->creator, 'api')
+            ->postJson('/api/v1/my-microstore/products', ['product_id' => $this->product1->id])
+            ->assertCreated();
+        $this->actingAs($this->creator, 'api')
+            ->postJson('/api/v1/my-microstore/products', ['product_id' => $this->product2->id])
+            ->assertCreated();
+
+        $this->product2->update(['status' => 'draft']);
+
+        // Public show and products only return active product1
+        $this->getJson('/api/v1/microstores/celebrity-pending-store')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.curated_products')
+            ->assertJsonPath('data.curated_products.0.product_id', $this->product1->id);
+
+        $this->getJson('/api/v1/microstores/celebrity-pending-store/products')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 1)
+            ->assertJsonPath('data.items.0.product_id', $this->product1->id);
+    }
+
+    public function test_admin_can_create_celebrity_store_and_orders_attribute_and_reverse_revenue(): void
+    {
+        $buyer = User::factory()->create(['role' => 'user']);
+
+        $createRes = $this->actingAs($this->admin, 'api')
+            ->postJson('/api/v1/admin/microstores', [
+                'user_id' => $this->creator->id,
+                'name' => 'Davido Official Store',
+                'slug' => 'davido-official',
+                'tagline' => 'Official celebrity picks',
+                'is_featured' => true,
+                'product_ids' => [$this->product1->id],
+            ]);
+
+        $createRes->assertCreated()
+            ->assertJsonPath('data.slug', 'davido-official')
+            ->assertJsonPath('data.is_featured', true)
+            ->assertJsonCount(1, 'data.curated_products');
+
+        $microstore = Microstore::where('slug', 'davido-official')->firstOrFail();
+
+        $order = Order::create([
+            'user_id' => $buyer->id,
+            'microstore_id' => $microstore->id,
+            'number' => 'LMT-CELEB-001',
+            'currency' => 'NGN',
+            'subtotal' => 45000,
+            'discount_total' => 0,
+            'credit_total' => 0,
+            'shipping_total' => 2500,
+            'grand_total' => 47500,
+            'total_amount' => 47500,
+            'status' => 'confirmed',
+            'payment_status' => 'paid',
+            'fulfilment_status' => 'unfulfilled',
+            'payment_method' => 'card',
+            'contact_email' => $buyer->email,
+            'delivery_method' => 'standard',
+            'shipping_address' => ['city' => 'Lagos'],
+        ]);
+
+        $order->items()->create([
+            'product_id' => $this->product1->id,
+            'product_name' => $this->product1->name,
+            'sku' => 'SKU-JKT-01',
+            'quantity' => 1,
+            'unit_price' => 45000,
+            'price_at_purchase' => 45000,
+            'line_total' => 45000,
+        ]);
+
+        $attribution = app(MicrostoreAttributionService::class);
+        $attribution->recordOrder($order);
+        // Idempotent second call
+        $attribution->recordOrder($order);
+
+        $microstore->refresh();
+        $this->assertSame(1, $microstore->orders_count);
+        $this->assertSame('45000.00', $microstore->total_revenue);
+
+        // Reversal on cancellation/refund
+        $attribution->reverseOrder($order, 'order_fully_refunded');
+        $microstore->refresh();
+        $this->assertSame(0, $microstore->orders_count);
+        $this->assertSame('0.00', $microstore->total_revenue);
     }
 }

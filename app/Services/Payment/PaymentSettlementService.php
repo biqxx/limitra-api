@@ -6,6 +6,7 @@ use App\Exceptions\PaymentGatewayException;
 use App\Models\Commerce\PromotionRedemption;
 use App\Models\Payment\Payment;
 use App\Services\AffiliateService;
+use App\Services\Microstore\MicrostoreAttributionService;
 use App\Services\Order\InventoryReservationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ class PaymentSettlementService
         private readonly InventoryReservationService $reservations,
         private readonly LatePaymentRefundService $latePaymentRefunds,
         private readonly AffiliateService $affiliates,
+        private readonly MicrostoreAttributionService $microstores,
     ) {}
 
     public function apply(Payment $payment, array $transaction): Payment
@@ -84,6 +86,7 @@ class PaymentSettlementService
                     ]);
                 }
                 $this->affiliates->recordSales($order);
+                $this->microstores->recordOrder($order);
 
                 if ($fromStatus !== $order->status || $order->cancellation_code === InventoryReservationService::LATE_PAYMENT_CANCELLATION_CODE) {
                     $order->statusEvents()->create([

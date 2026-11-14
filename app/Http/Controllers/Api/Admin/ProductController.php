@@ -35,7 +35,7 @@ class ProductController extends BaseController
             'category_id' => ['sometimes', 'integer', 'exists:categories,id'],
             'subcategory_id' => ['sometimes', 'integer', 'exists:categories,id'],
             'brand' => ['sometimes', 'string', 'max:100'],
-            'source' => ['sometimes', 'in:amazon,ebay'],
+            'source' => ['sometimes', 'in:amazon,ebay,walmart'],
             'stock_status' => ['sometimes', 'in:in_stock,out_of_stock,low_stock'],
             'is_featured' => ['sometimes', 'boolean'],
             'is_bestseller' => ['sometimes', 'boolean'],

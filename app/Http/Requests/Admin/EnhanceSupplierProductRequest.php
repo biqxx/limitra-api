@@ -19,7 +19,7 @@ class EnhanceSupplierProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'source' => ['required', Rule::in(['amazon', 'ebay'])],
+            'source' => ['required', Rule::in(['amazon', 'ebay', 'walmart'])],
             'external_product_id' => ['required', 'string', 'max:255'],
         ];
     }

@@ -18,7 +18,7 @@ class QueueSupplierProductsRequest extends FormRequest
     {
         return [
             'products' => ['required', 'array', 'min:1', 'max:20'],
-            'products.*.source' => ['required', Rule::in(['amazon', 'ebay'])],
+            'products.*.source' => ['required', Rule::in(['amazon', 'ebay', 'walmart'])],
             'products.*.external_product_id' => ['required', 'string', 'max:255'],
         ];
     }

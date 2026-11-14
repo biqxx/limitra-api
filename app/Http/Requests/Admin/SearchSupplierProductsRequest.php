@@ -24,7 +24,7 @@ class SearchSupplierProductsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'source' => ['required', Rule::in(['all', 'amazon', 'ebay'])],
+            'source' => ['required', Rule::in(['all', 'amazon', 'ebay', 'walmart'])],
             'q' => ['required', 'string', 'min:2', 'max:200'],
             'page' => ['required', 'integer', 'min:1', 'max:100'],
         ];

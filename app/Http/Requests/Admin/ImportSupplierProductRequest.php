@@ -26,7 +26,7 @@ class ImportSupplierProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'source' => ['required', Rule::in(['amazon', 'ebay'])],
+            'source' => ['required', Rule::in(['amazon', 'ebay', 'walmart'])],
             'external_product_id' => ['required', 'string', 'max:255'],
             'category_id' => ['required', 'integer', 'exists:categories,id'],
             'subcategory_id' => ['nullable', 'integer', 'exists:categories,id'],

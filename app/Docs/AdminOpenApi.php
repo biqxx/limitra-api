@@ -37,7 +37,7 @@ class AdminOpenApi
             new OA\Parameter(name: 'category_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
             new OA\Parameter(name: 'subcategory_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
             new OA\Parameter(name: 'brand', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
-            new OA\Parameter(name: 'source', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['amazon', 'ebay]'])),
+            new OA\Parameter(name: 'source', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['amazon', 'ebay', 'walmart]'])),
             new OA\Parameter(name: 'stock_status', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['in_stock', 'out_of_stock', 'low_stock]'])),
             new OA\Parameter(name: 'is_featured', in: 'query', required: false, schema: new OA\Schema(type: 'boolean')),
             new OA\Parameter(name: 'is_bestseller', in: 'query', required: false, schema: new OA\Schema(type: 'boolean')),

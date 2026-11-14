@@ -32,6 +32,7 @@ class SourcingController extends BaseController
         return $this->success([
             ['id' => 'amazon', 'name' => 'Amazon', 'enabled' => $configured],
             ['id' => 'ebay', 'name' => 'eBay', 'enabled' => $configured],
+            ['id' => 'walmart', 'name' => 'Walmart', 'enabled' => $configured],
             ['id' => 'shein', 'name' => 'Shein', 'enabled' => false, 'reason' => 'Not supported by the supplier service yet.'],
         ]);
     }

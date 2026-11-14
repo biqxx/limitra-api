@@ -13,102 +13,100 @@ use App\Http\Controllers\Api\ProductController as CatalogProductController;
 use Illuminate\Support\Facades\Route;
 
 // ── Categories & Catalog Products ───────────────────────────────────────────
-Route::middleware(['auth:api', 'active.session', 'role:admin'])
+Route::middleware(['auth:api', 'active.session'])
     ->prefix('categories')
     ->name('admin.categories.')
     ->group(function (): void {
-        Route::get('/', [AdminCategoryController::class, 'index'])->name('index');
-        Route::post('/', [CatalogCategoryController::class, 'store'])->name('store');
-        Route::get('{category}', [AdminCategoryController::class, 'show'])->name('show');
-        Route::match(['put', 'patch'], '{category}', [CatalogCategoryController::class, 'update'])->name('update');
-        Route::delete('{category}', [CatalogCategoryController::class, 'destroy'])->name('destroy');
+        Route::get('/', [AdminCategoryController::class, 'index'])->middleware('permission:catalog.read')->name('index');
+        Route::get('{category}', [AdminCategoryController::class, 'show'])->middleware('permission:catalog.read')->name('show');
+        Route::post('/', [CatalogCategoryController::class, 'store'])->middleware('permission:catalog.create')->name('store');
+        Route::match(['put', 'patch'], '{category}', [CatalogCategoryController::class, 'update'])->middleware('permission:catalog.update')->name('update');
+        Route::delete('{category}', [CatalogCategoryController::class, 'destroy'])->middleware('permission:catalog.archive')->name('destroy');
     });
 
-Route::middleware(['auth:api', 'active.session', 'role:admin'])
+Route::middleware(['auth:api', 'active.session'])
     ->prefix('products')
     ->name('admin.products.')
     ->group(function (): void {
-        Route::get('/', [AdminProductController::class, 'index'])->name('index');
-        Route::post('/', [CatalogProductController::class, 'store'])->name('store');
-        Route::post('{product}/restore', [AdminProductController::class, 'restore'])
-            ->withTrashed()
-            ->name('restore');
-        Route::get('{product}', [AdminProductController::class, 'show'])
-            ->withTrashed()
-            ->name('show');
-        Route::match(['put', 'patch'], '{product}', [CatalogProductController::class, 'update'])->name('update');
-        Route::delete('{product}', [CatalogProductController::class, 'destroy'])->name('destroy');
+        Route::get('/', [AdminProductController::class, 'index'])->middleware('permission:catalog.read')->name('index');
+        Route::get('{product}', [AdminProductController::class, 'show'])->middleware('permission:catalog.read')->withTrashed()->name('show');
+        Route::post('/', [CatalogProductController::class, 'store'])->middleware('permission:catalog.create')->name('store');
+        Route::match(['put', 'patch'], '{product}', [CatalogProductController::class, 'update'])->middleware('permission:catalog.update')->name('update');
+        Route::post('{product}/restore', [AdminProductController::class, 'restore'])->middleware('permission:catalog.archive')->withTrashed()->name('restore');
+        Route::delete('{product}', [CatalogProductController::class, 'destroy'])->middleware('permission:catalog.archive')->name('destroy');
     });
 
 // ── Order management ──────────────────────────────────────────────────────────
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('orders')->name('admin.orders.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'permission:orders.read'])->prefix('orders')->name('admin.orders.')->group(function () {
     Route::get('/', [AdminOrderController::class, 'index'])->name('index');
     Route::get('{order}', [AdminOrderController::class, 'show'])->name('show');
 });
 
 // ── Affiliate management ──────────────────────────────────────────────────────
-// Read: admin + staff   Write: admin only
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'permission:affiliates.read'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
     Route::get('/', [AdminAffiliateController::class, 'index'])->name('index');
     Route::get('{affiliate}', [AdminAffiliateController::class, 'show'])->name('show');
     Route::get('{affiliate}/commissions', [AdminAffiliateController::class, 'commissions'])->name('commissions');
 });
 
-Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'permission:affiliates.update,affiliates.manage'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {
     Route::post('/', [AdminAffiliateController::class, 'store'])->name('store');
     Route::patch('{affiliate}', [AdminAffiliateController::class, 'update'])->name('update');
 });
 
 // ── Commission management ─────────────────────────────────────────────────────
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('commissions')->name('admin.commissions.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'permission:commissions.read'])->prefix('commissions')->name('admin.commissions.')->group(function () {
     Route::get('/', [AdminCommissionController::class, 'index'])->name('index');
     Route::get('{commission}', [AdminCommissionController::class, 'show'])->name('show');
 });
 
-Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('commissions')->name('admin.commissions.')->group(function () {
+Route::middleware(['auth:api', 'active.session', 'permission:commissions.update'])->prefix('commissions')->name('admin.commissions.')->group(function () {
     Route::patch('{commission}', [AdminCommissionController::class, 'update'])->name('update');
     Route::post('bulk-update', [AdminCommissionController::class, 'bulkUpdate'])->name('bulk-update');
 });
 
 // ── Affiliate Applications ──────────────────────────────────────────────────
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('affiliate-applications')->name('admin.affiliate-applications.')->group(function (): void {
+Route::middleware(['auth:api', 'active.session', 'permission:affiliates.read'])->prefix('affiliate-applications')->name('admin.affiliate-applications.')->group(function (): void {
     Route::get('/', [AffiliateOperationsAdminController::class, 'applications'])->name('index');
     Route::get('{application}', [AffiliateOperationsAdminController::class, 'showApplication'])->name('show');
 });
 
-Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('affiliate-applications')->name('admin.affiliate-applications.')->group(function (): void {
+Route::middleware(['auth:api', 'active.session', 'permission:affiliates.approve'])->prefix('affiliate-applications')->name('admin.affiliate-applications.')->group(function (): void {
     Route::post('{application}/approve', [AffiliateOperationsAdminController::class, 'approveApplication'])->name('approve');
     Route::post('{application}/reject', [AffiliateOperationsAdminController::class, 'rejectApplication'])->name('reject');
 });
 
 // ── Affiliate Withdrawals ───────────────────────────────────────────────────
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
+Route::middleware(['auth:api', 'active.session', 'permission:payouts.read'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
     Route::get('/', [AffiliateOperationsAdminController::class, 'withdrawals'])->name('index');
 });
 
-Route::middleware(['auth:api', 'active.session', 'role:admin'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
+Route::middleware(['auth:api', 'active.session', 'permission:payouts.approve'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
     Route::post('{withdrawal}/approve', [AffiliateOperationsAdminController::class, 'approveWithdrawal'])->name('approve');
     Route::post('{withdrawal}/start-processing', [AffiliateOperationsAdminController::class, 'startProcessingWithdrawal'])->name('start-processing');
     Route::post('{withdrawal}/reject', [AffiliateOperationsAdminController::class, 'rejectWithdrawal'])->name('reject');
+});
+
+Route::middleware(['auth:api', 'active.session', 'permission:payouts.pay'])->prefix('withdrawals')->name('admin.withdrawals.')->group(function (): void {
     Route::post('{withdrawal}/mark-paid', [AffiliateOperationsAdminController::class, 'markPaidWithdrawal'])->name('mark-paid');
 });
 
 // ── Affiliate Program Rules & Resources ─────────────────────────────────────
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(function (): void {
+Route::middleware(['auth:api', 'active.session', 'permission:affiliates.read'])->group(function (): void {
     Route::get('affiliate-rules', [AffiliateOperationsAdminController::class, 'rules'])->name('admin.affiliate-rules.index');
     Route::get('affiliate-resources', [AffiliateOperationsAdminController::class, 'resources'])->name('admin.affiliate-resources.index');
 });
 
-Route::middleware(['auth:api', 'active.session', 'role:admin'])->group(function (): void {
+Route::middleware(['auth:api', 'active.session', 'permission:affiliates.manage'])->group(function (): void {
     Route::patch('affiliate-rules', [AffiliateOperationsAdminController::class, 'updateRules'])->name('admin.affiliate-rules.update');
     Route::post('affiliate-resources', [AffiliateOperationsAdminController::class, 'storeResource'])->name('admin.affiliate-resources.store');
     Route::delete('affiliate-resources/{resource}', [AffiliateOperationsAdminController::class, 'destroyResource'])->name('admin.affiliate-resources.destroy');
 });
 
 // ── Dashboard & Health ──────────────────────────────────────────────────────
-Route::middleware(['auth:api', 'active.session', 'role:admin,staff'])->group(function (): void {
+Route::middleware(['auth:api', 'active.session'])->group(function (): void {
     Route::get('dashboard', [AdminDashboardController::class, 'dashboard'])->name('admin.dashboard');
-    Route::get('health', [AdminDashboardController::class, 'health'])->name('admin.health');
+    Route::get('health', [AdminDashboardController::class, 'health'])->middleware('permission:settings.read,analytics.read,queue.read')->name('admin.health');
 
     // ── Reports ─────────────────────────────────────────────────────────────
     Route::prefix('reports')->name('admin.reports.')->group(function (): void {

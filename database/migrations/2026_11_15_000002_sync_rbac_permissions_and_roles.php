@@ -55,10 +55,10 @@ return new class extends Migration
 
         // Ensure the system admin role holds every permission so strict permission checks work seamlessly.
         $adminRoleId = DB::table('roles')->where('name', 'admin')->value('id');
-        if ($adminRoleId) {
+        if ($adminRoleId && Schema::hasTable('permission_role')) {
             $allPermissionIds = DB::table('permissions')->pluck('id');
             foreach ($allPermissionIds as $permissionId) {
-                DB::table('role_permissions')->updateOrInsert(
+                DB::table('permission_role')->updateOrInsert(
                     [
                         'role_id' => $adminRoleId,
                         'permission_id' => $permissionId,

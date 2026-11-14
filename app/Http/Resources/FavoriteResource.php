@@ -17,7 +17,7 @@ class FavoriteResource extends JsonResource
             'available' => $this->product?->status === 'active'
                 && (! $this->variant_id || $this->variant?->status === 'active')
                 && ($this->variant?->stock ?? $this->product?->stock ?? 0) > 0,
-            'product' => new ProductResource($this->whenLoaded('product')),
+            'product' => $this->whenLoaded('product', fn () => $this->product ? new ProductResource($this->product) : null),
             'created_at' => $this->created_at,
         ];
     }

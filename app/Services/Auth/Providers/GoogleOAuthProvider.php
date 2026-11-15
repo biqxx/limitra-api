@@ -65,6 +65,10 @@ class GoogleOAuthProvider implements SocialOAuthProviderContract
                 throw new InvalidArgumentException('Invalid token nonce from Google.');
             }
 
+            if (isset($claims['exp']) && (int) $claims['exp'] <= now()->timestamp) {
+                throw new InvalidArgumentException('Google ID token has expired.');
+            }
+
             $email = $claims['email'] ?? null;
             $emailVerified = filter_var($claims['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
 

@@ -38,7 +38,7 @@ class PasswordlessOtpController extends BaseController
 
         // Resend cooldown protection
         if (Cache::has($cooldownKey)) {
-            $maskedEmail = Str::mask($email, '*', 2, strpos($email, '@') - 2);
+            $maskedEmail = Str::mask($email, '*', 2, max(1, (int) strpos($email, '@') - 2));
             Log::warning('Passwordless OTP request rejected due to active cooldown', [
                 'email' => $maskedEmail,
                 'ip' => $request->ip(),

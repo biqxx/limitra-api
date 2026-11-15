@@ -21,6 +21,14 @@ class EnsureAgeVerified
     public function handle(Request $request, Closure $next): Response
     {
         $product = $request->route('product');
+        if (is_string($product) || is_int($product)) {
+            $product = Product::query()
+                ->with('category')
+                ->where(fn ($query) => is_numeric($product)
+                    ? $query->whereKey((int) $product)
+                    : $query->where('slug', $product))
+                ->first();
+        }
         if ($product instanceof Product) {
             $isAgeGated = (bool) ($product->is_age_gated || $product->category?->is_age_gated || $product->category?->age_gated);
             if (! $isAgeGated) {
@@ -29,6 +37,13 @@ class EnsureAgeVerified
         }
 
         $category = $request->route('category');
+        if (is_string($category) || is_int($category)) {
+            $category = Category::query()
+                ->where(fn ($query) => is_numeric($category)
+                    ? $query->whereKey((int) $category)
+                    : $query->where('slug', $category))
+                ->first();
+        }
         if ($category instanceof Category) {
             $isAgeGated = (bool) ($category->is_age_gated || $category->age_gated);
             if (! $isAgeGated) {

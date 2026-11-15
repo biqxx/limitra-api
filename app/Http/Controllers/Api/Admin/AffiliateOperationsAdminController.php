@@ -478,12 +478,13 @@ class AffiliateOperationsAdminController extends BaseController
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:1000'],
             'category' => ['nullable', 'string', 'max:50'],
-            'file' => ['required', 'file', 'max:20480'], // max 20MB
+            'file' => ['required', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,mp4,zip,csv,xlsx,docx,pptx', 'max:20480'], // max 20MB
             'is_published' => ['sometimes', 'boolean'],
         ]);
 
         $file = $request->file('file');
-        $filename = 'affiliate_resource_'.Str::random(24).'.'.$file->getClientOriginalExtension();
+        $extension = $file->extension() ?: ($file->guessExtension() ?: 'bin');
+        $filename = 'affiliate_resource_'.Str::random(24).'.'.$extension;
         $path = $file->storeAs('affiliate_resources', $filename, 'local');
 
         $resource = AffiliateResource::create([

@@ -145,6 +145,15 @@ class ProfileController extends BaseController
         $user = auth('api')->user();
 
         if (! $user->pending_email || ! $user->email_change_otp || ! $user->email_change_expires_at || now()->isAfter($user->email_change_expires_at)) {
+            if ($user->pending_email || $user->email_change_otp) {
+                $user->update([
+                    'pending_email' => null,
+                    'email_change_otp' => null,
+                    'email_change_expires_at' => null,
+                    'email_change_attempts' => 0,
+                ]);
+            }
+
             return $this->error('Invalid or expired verification code.', 422);
         }
         if ($user->email_change_attempts >= 5) {
@@ -156,14 +165,36 @@ class ProfileController extends BaseController
             return $this->error('Invalid or expired verification code.', 422);
         }
 
-        $user->update([
-            'email' => $user->pending_email,
-            'pending_email' => null,
-            'email_change_otp' => null,
-            'email_change_expires_at' => null,
-            'email_change_attempts' => 0,
-            'email_verified_at' => now(),
-        ]);
+        $conflict = DB::transaction(function () use ($user): bool {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $targetEmail = strtolower((string) $lockedUser->pending_email);
+
+            if ($targetEmail === '' || User::withTrashed()->where('email', $targetEmail)->whereKeyNot($lockedUser->id)->exists()) {
+                $lockedUser->update([
+                    'pending_email' => null,
+                    'email_change_otp' => null,
+                    'email_change_expires_at' => null,
+                    'email_change_attempts' => 0,
+                ]);
+
+                return true;
+            }
+
+            $lockedUser->update([
+                'email' => $targetEmail,
+                'pending_email' => null,
+                'email_change_otp' => null,
+                'email_change_expires_at' => null,
+                'email_change_attempts' => 0,
+                'email_verified_at' => now(),
+            ]);
+
+            return false;
+        });
+
+        if ($conflict) {
+            return $this->error('This email address is no longer available.', 422);
+        }
 
         return $this->success(new UserResource($user->fresh()->load('profile')), 'Email address updated.');
     }

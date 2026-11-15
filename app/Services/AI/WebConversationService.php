@@ -245,9 +245,7 @@ class WebConversationService
                     $attData = $this->attachmentScanner->validateAndStore($img, $conversation->id);
                     $attData['download_url'] = url("/api/v1/ai/conversations/{$conversation->id}/attachments/{$attData['id']}");
                     $storedAttachments[] = $attData;
-
-                    $storedPath = $img->store('ai/conversations/'.$conversation->id, 'public');
-                    $imageUrls[] = '/storage/'.$storedPath;
+                    $imageUrls[] = $attData['download_url'];
                 }
             }
 

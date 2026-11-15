@@ -66,6 +66,10 @@ class AppleOAuthProvider implements SocialOAuthProviderContract
             throw new InvalidArgumentException('Invalid token nonce from Apple.');
         }
 
+        if (isset($claims['exp']) && (int) $claims['exp'] <= now()->timestamp) {
+            throw new InvalidArgumentException('Apple ID token has expired.');
+        }
+
         $email = $claims['email'] ?? null;
         $emailVerified = filter_var($claims['email_verified'] ?? true, FILTER_VALIDATE_BOOLEAN);
 

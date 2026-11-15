@@ -9,16 +9,16 @@ use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 // ── Public auth routes ──────────────────────────────────────────────────────
-Route::post('signup', [AuthController::class, 'signup'])->name('auth.signup');
-Route::post('verify-email', [AuthController::class, 'verifyEmail'])->name('auth.verify-email');
+Route::post('signup', [AuthController::class, 'signup'])->middleware('throttle:10,1')->name('auth.signup');
+Route::post('verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:10,1')->name('auth.verify-email');
 Route::post('resend-verification', [AuthController::class, 'resendVerification'])
     ->middleware('throttle:3,15')
     ->name('auth.resend-verification');
-Route::post('login', [AuthController::class, 'login'])->name('auth.login');
+Route::post('login', [AuthController::class, 'login'])->middleware('throttle:10,1')->name('auth.login');
 Route::post('forgot-password', [AuthController::class, 'forgotPassword'])
     ->middleware('throttle:5,1')
     ->name('auth.forgot-password');
-Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('auth.reset-password');
+Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1')->name('auth.reset-password');
 
 // Passwordless OTP login
 Route::prefix('auth/otp')->name('auth.otp.')->group(function (): void {

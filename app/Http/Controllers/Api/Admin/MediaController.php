@@ -50,8 +50,8 @@ class MediaController extends BaseController
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => ['required', 'file', 'max:20480'], // max 20MB
-            'folder' => ['nullable', 'string', 'max:100'],
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif,pdf,mp4,mov,webm', 'max:20480'], // max 20MB
+            'folder' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9_\-\/]+$/'],
             'title' => ['nullable', 'string', 'max:255'],
             'alt' => ['nullable', 'string', 'max:255'],
             'tags' => ['nullable', 'array'],
@@ -60,7 +60,7 @@ class MediaController extends BaseController
 
         $uploadedFile = $request->file('file');
         $folder = trim((string) $request->input('folder', 'uploads'), '/');
-        if ($folder === '') {
+        if ($folder === '' || str_contains($folder, '..')) {
             $folder = 'uploads';
         }
 

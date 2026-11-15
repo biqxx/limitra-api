@@ -17,7 +17,7 @@ class SupplierProcurementController extends BaseController
     public function index(Request $request): JsonResponse
     {
         $query = SupplierOrder::query()
-            ->with(['order:id,order_number,status', 'createdBy:id,username,email'])
+            ->with(['order:id,number,status', 'createdBy:id,username,email'])
             ->latest('id');
 
         if ($request->filled('supplier')) {
@@ -54,7 +54,7 @@ class SupplierProcurementController extends BaseController
     public function show(SupplierOrder $order): JsonResponse
     {
         return $this->success($order->load([
-            'order:id,order_number,status,total_amount',
+            'order:id,number,status,grand_total,total_amount',
             'orderItem',
             'createdBy:id,username,email',
             'events.actor:id,username,email',
@@ -187,7 +187,27 @@ class SupplierProcurementController extends BaseController
 
         try {
             $data = $client->fetchProcurementStatus($order->supplier, $order->external_supplier_order_id);
-            $remoteStatus = $data['status'] ?? 'in_transit';
+            $rawStatus = strtolower(trim((string) ($data['status'] ?? 'dispatched')));
+            $statusMap = [
+                'in_transit' => 'dispatched',
+                'shipped' => 'dispatched',
+            ];
+            $allowedStatuses = [
+                'pending',
+                'quoted',
+                'purchased',
+                'received_at_warehouse',
+                'in_inspection',
+                'consolidated',
+                'dispatched',
+                'delivered',
+                'cancelled',
+                'refunded',
+            ];
+            $mappedStatus = $statusMap[$rawStatus] ?? $rawStatus;
+            $remoteStatus = in_array($mappedStatus, $allowedStatuses, true)
+                ? $mappedStatus
+                : $order->status;
 
             $order->update([
                 'status' => $remoteStatus,

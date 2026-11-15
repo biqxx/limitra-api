@@ -111,6 +111,10 @@ class CartController extends BaseController
     {
         $this->authorize('update', $cart);
 
+        if ($cart->status === 'checked_out') {
+            return $this->error('A checked-out cart cannot be modified.', 422);
+        }
+
         $data = $request->validate([
             'status' => ['required', 'in:active,checked_out'],
         ]);

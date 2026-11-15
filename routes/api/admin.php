@@ -105,7 +105,7 @@ Route::middleware(['auth:api', 'active.session', 'permission:affiliates.manage']
 
 // ── Dashboard & Health ──────────────────────────────────────────────────────
 Route::middleware(['auth:api', 'active.session'])->group(function (): void {
-    Route::get('dashboard', [AdminDashboardController::class, 'dashboard'])->name('admin.dashboard');
+    Route::get('dashboard', [AdminDashboardController::class, 'dashboard'])->middleware('role:admin,staff')->name('admin.dashboard');
     Route::get('health', [AdminDashboardController::class, 'health'])->middleware('permission:settings.read,analytics.read,queue.read')->name('admin.health');
 
     // ── Reports ─────────────────────────────────────────────────────────────

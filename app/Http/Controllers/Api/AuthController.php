@@ -22,6 +22,7 @@ use App\Services\Auth\UserStatusService;
 use App\Services\Referral\CustomerReferralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -177,6 +178,22 @@ class AuthController extends BaseController
             'email_verification_sent_at' => null,
             'email_verification_attempts' => 0,
         ]);
+
+        if ($this->userStatuses->isDeactivated($user)) {
+            return $this->error(
+                'This account has been deactivated.',
+                403,
+                code: ApiErrorCode::AccountDeactivated,
+            );
+        }
+
+        if ($this->userStatuses->isSuspended($user)) {
+            return $this->error(
+                'This account is suspended.',
+                403,
+                code: ApiErrorCode::AccountSuspended,
+            );
+        }
 
         $session = $this->createAuthSession($user, $request, 'Verified device');
         $jwtToken = auth('api')->claims(['sid' => $session->id])->login($user);
@@ -425,29 +442,49 @@ class AuthController extends BaseController
     public function resetPassword(ResetPasswordRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $email = strtolower((string) $data['email']);
+        $attemptsKey = "password_reset_attempts:{$email}";
         $record = DB::table('password_reset_tokens')
-            ->where('email', $data['email'])
+            ->where('email', $email)
             ->first();
 
         if (! $record) {
             return $this->error('No password reset request found for this email.', 422);
         }
 
+        if ((int) Cache::get($attemptsKey, 0) >= 5) {
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+            Cache::forget($attemptsKey);
+
+            return $this->error('Too many invalid attempts. Please request a new code.', 429);
+        }
+
         if ($record->expires_at && now()->isAfter($record->expires_at)) {
-            DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+            Cache::forget($attemptsKey);
 
             return $this->error('OTP has expired. Please request a new one.', 422);
         }
 
         if (! Hash::check($data['otp'], $record->token)) {
+            $attempts = (int) Cache::get($attemptsKey, 0) + 1;
+            Cache::put($attemptsKey, $attempts, now()->addMinutes(15));
+            if ($attempts >= 5) {
+                DB::table('password_reset_tokens')->where('email', $email)->delete();
+                Cache::forget($attemptsKey);
+
+                return $this->error('Too many invalid attempts. Please request a new code.', 429);
+            }
+
             return $this->error('Invalid OTP.', 422);
         }
 
-        $user = User::where('email', $data['email'])->firstOrFail();
+        $user = User::where('email', $email)->firstOrFail();
         $user->update(['password' => Hash::make($data['password'])]);
         $this->authSessions->revokeAll($user);
 
-        DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
+        DB::table('password_reset_tokens')->where('email', $email)->delete();
+        Cache::forget($attemptsKey);
 
         return $this->success(null, 'Password reset successfully. You may now log in.');
     }

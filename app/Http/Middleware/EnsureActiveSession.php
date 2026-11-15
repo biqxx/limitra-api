@@ -44,13 +44,16 @@ class EnsureActiveSession
         } catch (JWTException) {
             return $next($request);
         }
-        if ($sessionId) {
-            abort_unless(
-                $this->sessions->isActive($sessionId, (int) auth('api')->id()),
-                401,
-                'Session has expired or been revoked.'
-            );
+
+        if (! is_string($sessionId) || $sessionId === '') {
+            abort(401, 'Session has expired or been revoked.');
         }
+
+        abort_unless(
+            $this->sessions->isActive($sessionId, (int) auth('api')->id()),
+            401,
+            'Session has expired or been revoked.'
+        );
 
         return $next($request);
     }

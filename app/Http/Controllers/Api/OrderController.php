@@ -81,7 +81,7 @@ class OrderController extends BaseController
     {
         $data = $request->validate([
             'quote_id' => ['required', 'uuid'],
-            'payment_method' => ['required', 'in:card,bank_transfer,cash_on_delivery'],
+            'payment_method' => ['required', 'in:card,bank_transfer'],
             'contact_email' => ['required', 'email:rfc', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'microstore_id' => ['nullable', 'integer', 'exists:microstores,id'],

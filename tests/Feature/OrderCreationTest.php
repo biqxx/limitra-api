@@ -83,21 +83,33 @@ class OrderCreationTest extends TestCase
             ->assertJsonPath('data.items.0.unit_price', '100000.00');
     }
 
+    public function test_cash_on_delivery_is_rejected_at_checkout_and_order_creation(): void
+    {
+        [$user, $cart, , $address] = $this->checkoutContext();
+
+        $this->actingAs($user, 'api')->postJson('/api/v1/checkout/quote', [
+            'cart_id' => $cart->id,
+            'address_id' => $address->id,
+            'delivery_method' => 'standard',
+            'payment_method' => 'cash_on_delivery',
+        ])->assertUnprocessable()->assertJsonValidationErrors('payment_method');
+    }
+
     public function test_same_idempotency_key_replays_once_and_rejects_conflicting_payloads(): void
     {
         [$user, $cart, $product, $address] = $this->checkoutContext();
-        $quoteId = $this->quote($user, $cart, $address, 'cash_on_delivery');
+        $quoteId = $this->quote($user, $cart, $address, 'card');
         $payload = [
             'quote_id' => $quoteId,
-            'payment_method' => 'cash_on_delivery',
+            'payment_method' => 'card',
             'contact_email' => $user->email,
         ];
         $headers = ['Idempotency-Key' => 'create-order-retry'];
 
         $first = $this->actingAs($user, 'api')->postJson('/api/v1/orders', $payload, $headers)
             ->assertCreated()
-            ->assertJsonPath('data.status', 'confirmed')
-            ->assertJsonPath('data.payment_status', 'unpaid');
+            ->assertJsonPath('data.status', 'pending_payment')
+            ->assertJsonPath('data.payment_status', 'pending');
         $second = $this->actingAs($user, 'api')->postJson('/api/v1/orders', $payload, $headers)
             ->assertOk()
             ->assertJsonPath('message', 'Order already created.');
@@ -105,7 +117,7 @@ class OrderCreationTest extends TestCase
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
         $this->assertDatabaseCount('orders', 1);
         $this->assertDatabaseCount('inventory_reservations', 1);
-        $this->assertNull(Order::findOrFail($first->json('data.id'))->reservations()->firstOrFail()->expires_at);
+        $this->assertNotNull(Order::findOrFail($first->json('data.id'))->reservations()->firstOrFail()->expires_at);
         $this->assertSame(4, $product->fresh()->stock);
 
         $this->actingAs($user, 'api')->postJson('/api/v1/orders', $payload + ['notes' => 'Different request'], $headers)

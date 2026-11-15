@@ -110,6 +110,26 @@ class Product extends Model
         return (int) round((1 - ((float) $this->price / (float) $this->compare_at_price)) * 100);
     }
 
+    public function effectivePrice(): string
+    {
+        if ($this->compare_at_price !== null
+            && (float) $this->compare_at_price > (float) $this->price
+            && ! $this->hasActiveDiscount()) {
+            return number_format((float) $this->compare_at_price, 2, '.', '');
+        }
+
+        return number_format((float) $this->price, 2, '.', '');
+    }
+
+    public function effectiveCompareAtPrice(): ?string
+    {
+        if (! $this->hasActiveDiscount()) {
+            return null;
+        }
+
+        return number_format((float) $this->compare_at_price, 2, '.', '');
+    }
+
     // ── Relationships ─────────────────────────────────────────────────────────
 
     public function category(): BelongsTo

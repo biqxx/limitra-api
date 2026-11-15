@@ -207,6 +207,9 @@ class OrderCreationService
 
     private function assertQuoteIsUsable(CheckoutQuote $quote, string $paymentMethod): void
     {
+        if ($quote->payment_method === 'cash_on_delivery' || $paymentMethod === 'cash_on_delivery') {
+            $this->invalidQuote('Cash on delivery is not allowed.');
+        }
         if ($quote->consumed_at) {
             $this->invalidQuote('This checkout quote has already been used.');
         }
@@ -258,7 +261,7 @@ class OrderCreationService
             }
             $remainingStock[$stockKey] -= $item->quantity;
 
-            if (! $this->sameMoney($variant?->price ?? $product->price, $item->unit_price)) {
+            if (! $this->sameMoney($variant?->price ?? $product->effectivePrice(), $item->unit_price)) {
                 $this->invalidQuote("The price of {$item->product_name} changed. Create a new quote.");
             }
         }
@@ -266,7 +269,7 @@ class OrderCreationService
 
     private function assertTotalsAndRules(CheckoutQuote $quote, Cart $cart, Address $address, int $userId): void
     {
-        $subtotal = $cart->items->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->price) * $item->quantity);
+        $subtotal = $cart->items->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->effectivePrice()) * $item->quantity);
         if (! $this->sameMoney($subtotal, $quote->subtotal)) {
             $this->invalidQuote('The cart total changed. Create a new quote.');
         }

@@ -22,6 +22,12 @@ class CheckoutQuoteService
 
     public function create(array $data, int $userId): CheckoutQuote
     {
+        if (($data['payment_method'] ?? '') === 'cash_on_delivery') {
+            throw ValidationException::withMessages([
+                'payment_method' => ['Cash on delivery is not allowed.'],
+            ]);
+        }
+
         $cart = Cart::whereKey($data['cart_id'])->where('user_id', $userId)->where('status', 'active')->firstOrFail();
         $address = Address::whereKey($data['address_id'])->where('user_id', $userId)->firstOrFail();
         $cart->load(['items.product', 'items.variant']);
@@ -34,7 +40,7 @@ class CheckoutQuoteService
             $product = $item->product;
             $variant = $item->variant;
             $stock = $variant?->stock ?? $product->stock;
-            $price = $variant?->price ?? $product->price;
+            $price = $variant?->price ?? $product->effectivePrice();
             if ($product->status !== 'active' || ($item->variant_id && (! $variant || $variant->status !== 'active'))) {
                 throw ValidationException::withMessages(['cart_id' => ["{$product->name} is no longer available."]]);
             }

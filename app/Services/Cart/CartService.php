@@ -153,7 +153,7 @@ class CartService
         return [
             $variant,
             $this->canonicalize($selectedOptions),
-            $variant?->price ?? $product->price,
+            $variant?->price ?? $product->effectivePrice(),
             $variant?->stock ?? $product->stock,
         ];
     }

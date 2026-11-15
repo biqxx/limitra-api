@@ -735,7 +735,7 @@ class CommerceOpenApi
                     new OA\Property(property: 'cart_id', type: 'integer'),
                     new OA\Property(property: 'address_id', type: 'integer'),
                     new OA\Property(property: 'delivery_method', type: 'string'),
-                    new OA\Property(property: 'payment_method', type: 'string', enum: ['card', 'bank_transfer', 'cash_on_delivery]']),
+                    new OA\Property(property: 'payment_method', type: 'string', enum: ['card', 'bank_transfer']),
                     new OA\Property(property: 'saved_card_id', type: 'integer', nullable: true),
                     new OA\Property(property: 'promotion_code', type: 'string', nullable: true),
                     new OA\Property(property: 'use_wallet_credit', type: 'boolean', nullable: true),

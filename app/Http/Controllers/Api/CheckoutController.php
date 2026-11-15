@@ -15,7 +15,7 @@ class CheckoutController extends BaseController
             'cart_id' => ['required', 'integer', 'exists:carts,id'],
             'address_id' => ['required', 'integer', 'exists:addresses,id'],
             'delivery_method' => ['required', 'string', 'exists:delivery_methods,code'],
-            'payment_method' => ['required', 'in:card,bank_transfer,cash_on_delivery'],
+            'payment_method' => ['required', 'in:card,bank_transfer'],
             'saved_card_id' => ['nullable', 'integer', 'exists:saved_cards,id'],
             'promotion_code' => ['nullable', 'string', 'max:50'],
             'use_wallet_credit' => ['nullable', 'boolean'],

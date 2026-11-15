@@ -59,7 +59,7 @@ class RefundService
                 if (! in_array($returnRequest->status, ['approved', 'received'], true)) {
                     $this->invalid('return', 'Only an approved or received return can be refunded.');
                 }
-                if ($returnRequest->resolution !== 'refund') {
+                if (! in_array($returnRequest->resolution, ['refund', 'store_credit'], true)) {
                     $this->invalid('return', 'This return was not approved for a refund.');
                 }
 
@@ -74,6 +74,7 @@ class RefundService
                     ->where('status', 'succeeded')->latest('id')->lockForUpdate()->first();
 
                 $isWallet = ($data['method'] ?? '') === 'wallet'
+                    || $returnRequest->resolution === 'store_credit'
                     || (! $payment && ((float) $order->credit_total > 0 || $order->payment_method === 'wallet'));
 
                 if (! $isWallet && ! $payment) {
@@ -81,7 +82,10 @@ class RefundService
                 }
 
                 if (! $isWallet) {
-                    $paymentCommittedMinor = (int) $payment->refunds()->whereNotIn('status', ['failed'])->sum('amount_minor');
+                    $paymentCommittedMinor = (int) $payment->refunds()
+                        ->where('method', '!=', 'wallet')
+                        ->whereNotIn('status', ['failed'])
+                        ->sum('amount_minor');
                     if ($amountMinor > $payment->amount_minor - $paymentCommittedMinor) {
                         $this->invalid('amount', 'The refund amount exceeds the remaining captured payment amount.');
                     }
@@ -264,7 +268,9 @@ class RefundService
                     $this->invalid('method', 'No successful online payment is available for an original-payment refund.');
                 }
 
-                $committedMinor = (int) $order->refunds()->whereNotIn('status', ['failed'])->sum('amount_minor');
+                $committedMinor = $isWallet
+                    ? (int) $order->refunds()->whereNotIn('status', ['failed'])->sum('amount_minor')
+                    : (int) $order->refunds()->where('method', '!=', 'wallet')->whereNotIn('status', ['failed'])->sum('amount_minor');
                 $orderTotalMinor = $this->toMinorUnits($order->grand_total) + $this->toMinorUnits($order->credit_total);
                 if ($orderTotalMinor === 0) {
                     $orderTotalMinor = $this->toMinorUnits($order->total_amount);

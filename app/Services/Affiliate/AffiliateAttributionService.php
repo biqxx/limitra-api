@@ -253,8 +253,15 @@ class AffiliateAttributionService
             $lockedAffiliate = Affiliate::whereKey($affiliate->id)->lockForUpdate()->firstOrFail();
             $totalCommission = 0.0;
 
+            $subtotal = (float) $order->subtotal;
+            $discount = (float) $order->discount_total;
+            $netFactor = ($discount > 0 && $subtotal > 0)
+                ? max(0.0, ($subtotal - $discount) / $subtotal)
+                : 1.0;
+
             foreach ($order->items as $item) {
-                $saleAmount = $item->price_at_purchase * $item->quantity;
+                $grossAmount = (float) $item->price_at_purchase * (int) $item->quantity;
+                $saleAmount = round($grossAmount * $netFactor, 2);
 
                 $sale = AffiliateSale::create([
                     'affiliate_id' => $lockedAffiliate->id,

@@ -199,10 +199,12 @@ class OrderLifecycleService
 
             $this->transitionOrder($order, $status, $data['note'], $actorId);
             if ($status === 'delivered') {
-                $this->referralRewards->grantForDeliveredOrder($order);
-                if ($order->payment_method === 'cash_on_delivery') {
+                if ($order->payment_method === 'cash_on_delivery' && $order->payment_status !== 'paid') {
+                    $order->update(['payment_status' => 'paid']);
+                    $this->affiliates->recordSales($order);
                     $this->microstores->recordOrder($order);
                 }
+                $this->referralRewards->grantForDeliveredOrder($order);
             }
 
             return $order->fresh();

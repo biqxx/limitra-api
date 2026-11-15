@@ -138,6 +138,15 @@ class CustomerReferralService
                 'customer_referral_attribution_id' => $record?->id,
                 'status' => 'pending',
             ]);
+        } elseif ($attribution['type'] === 'affiliate' && ! empty($attribution['affiliate_id'])) {
+            $affiliate = Affiliate::query()->whereKey((int) $attribution['affiliate_id'])->where('status', 'active')->first();
+            if ($affiliate && (int) $affiliate->user_id !== (int) $user->id) {
+                $user->forceFill(['referred_by' => $affiliate->id])->save();
+                \App\Models\Affiliate\AffiliateReferral::firstOrCreate([
+                    'affiliate_id' => $affiliate->id,
+                    'user_id' => $user->id,
+                ]);
+            }
         }
 
         $record?->forceFill(['converted_user_id' => $user->id, 'converted_at' => now()])->save();

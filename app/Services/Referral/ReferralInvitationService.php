@@ -34,17 +34,20 @@ class ReferralInvitationService
 
         $targetHash = $this->hash($target);
         $resendAfter = now()->subDays((int) $this->settings->value('referrals.invitation_resend_days'));
-        $existing = CustomerReferralInvitation::query()
-            ->where('referrer_id', $user->id)
-            ->where('target_hash', $targetHash)
-            ->where('created_at', '>=', $resendAfter)
-            ->latest('id')
-            ->first();
-        if ($existing) {
-            return $existing;
-        }
 
-        return DB::transaction(function () use ($user, $data, $channel, $target, $targetHash): CustomerReferralInvitation {
+        return DB::transaction(function () use ($user, $data, $channel, $target, $targetHash, $resendAfter): CustomerReferralInvitation {
+            User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            $existing = CustomerReferralInvitation::query()
+                ->where('referrer_id', $user->id)
+                ->where('target_hash', $targetHash)
+                ->where('created_at', '>=', $resendAfter)
+                ->latest('id')
+                ->first();
+            if ($existing) {
+                return $existing;
+            }
+
             $code = $this->referrals->codeFor($user);
             $dailyCount = CustomerReferralInvitation::query()
                 ->where('referrer_id', $user->id)

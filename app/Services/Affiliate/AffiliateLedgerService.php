@@ -16,7 +16,10 @@ class AffiliateLedgerService
     public function calculateAuthoritativeAvailableBalance(Affiliate $affiliate, ?int $excludeWithdrawalId = null): float
     {
         $ledgerEarnings = (float) $affiliate->ledgerEntries()->where('type', 'earning')->sum('amount');
-        $baseEarnings = max((float) $affiliate->total_earnings, $ledgerEarnings);
+        $hasReversals = $affiliate->ledgerEntries()->where('type', 'reversal')->exists();
+        $baseEarnings = $hasReversals && $ledgerEarnings > 0
+            ? min((float) $affiliate->total_earnings, $ledgerEarnings)
+            : max((float) $affiliate->total_earnings, $ledgerEarnings);
 
         $hasLedgerDebits = $affiliate->ledgerEntries()->where('type', '!=', 'earning')->exists();
 

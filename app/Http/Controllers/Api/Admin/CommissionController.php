@@ -7,6 +7,7 @@ use App\Http\Resources\AffiliateCommissionResource;
 use App\Models\Affiliate\Affiliate;
 use App\Models\Affiliate\AffiliateCommission;
 use App\Services\Admin\AuditEventService;
+use App\Services\Affiliate\AffiliateLedgerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -119,7 +120,12 @@ class CommissionController extends BaseController
             new OA\Response(response: 200, description: 'Commission updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
         ]
     )]
-    public function update(Request $request, AffiliateCommission $commission, AuditEventService $auditEvents): JsonResponse
+    public function update(
+        Request $request,
+        AffiliateCommission $commission,
+        AuditEventService $auditEvents,
+        AffiliateLedgerService $ledgerService,
+    ): JsonResponse
     {
         $data = $request->validate([
             'payment_status' => ['required', Rule::in(['pending', 'approved', 'paid', 'rejected'])],
@@ -141,7 +147,7 @@ class CommissionController extends BaseController
             ]);
         }
 
-        DB::transaction(function () use ($commission, $currentStatus, $newStatus, $auditEvents, $request): void {
+        DB::transaction(function () use ($commission, $currentStatus, $newStatus, $auditEvents, $ledgerService, $request): void {
             /** @var AffiliateCommission $lockedCommission */
             $lockedCommission = AffiliateCommission::whereKey($commission->id)->lockForUpdate()->firstOrFail();
             /** @var Affiliate $affiliate */
@@ -155,9 +161,22 @@ class CommissionController extends BaseController
                 if ($currentStatus === 'paid') {
                     $affiliate->decrement('total_paid', $lockedCommission->commission_amount);
                 }
-                $affiliate->decrement('total_earnings', $lockedCommission->commission_amount);
+                $ledgerService->recordReversal(
+                    affiliate: $affiliate,
+                    amount: (float) $lockedCommission->commission_amount,
+                    referenceType: AffiliateCommission::class,
+                    referenceId: $lockedCommission->id,
+                    reason: 'Admin rejected commission',
+                );
             } elseif ($currentStatus === 'rejected' && $newStatus === 'approved') {
-                $affiliate->increment('total_earnings', $lockedCommission->commission_amount);
+                $ledgerService->recordEarning(
+                    affiliate: $affiliate,
+                    amount: (float) $lockedCommission->commission_amount,
+                    referenceType: AffiliateCommission::class,
+                    referenceId: $lockedCommission->id,
+                    description: "Commission #{$lockedCommission->id} re-approved by admin",
+                    idempotencyKey: "reapprove-commission-{$lockedCommission->id}-".now()->timestamp,
+                );
             }
 
             $lockedCommission->update([
@@ -204,7 +223,11 @@ class CommissionController extends BaseController
             new OA\Response(response: 200, description: 'Commissions updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse')),
         ]
     )]
-    public function bulkUpdate(Request $request, AuditEventService $auditEvents): JsonResponse
+    public function bulkUpdate(
+        Request $request,
+        AuditEventService $auditEvents,
+        AffiliateLedgerService $ledgerService,
+    ): JsonResponse
     {
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
@@ -214,7 +237,7 @@ class CommissionController extends BaseController
 
         $newStatus = $data['payment_status'];
 
-        $updatedCount = DB::transaction(function () use ($data, $newStatus, $auditEvents, $request): int {
+        $updatedCount = DB::transaction(function () use ($data, $newStatus, $auditEvents, $ledgerService, $request): int {
             $commissions = AffiliateCommission::whereIn('id', $data['ids'])
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -245,9 +268,22 @@ class CommissionController extends BaseController
                     if ($currentStatus === 'paid') {
                         $affiliate->decrement('total_paid', $commission->commission_amount);
                     }
-                    $affiliate->decrement('total_earnings', $commission->commission_amount);
+                    $ledgerService->recordReversal(
+                        affiliate: $affiliate,
+                        amount: (float) $commission->commission_amount,
+                        referenceType: AffiliateCommission::class,
+                        referenceId: $commission->id,
+                        reason: 'Admin rejected commission',
+                    );
                 } elseif ($currentStatus === 'rejected' && $newStatus === 'approved') {
-                    $affiliate->increment('total_earnings', $commission->commission_amount);
+                    $ledgerService->recordEarning(
+                        affiliate: $affiliate,
+                        amount: (float) $commission->commission_amount,
+                        referenceType: AffiliateCommission::class,
+                        referenceId: $commission->id,
+                        description: "Commission #{$commission->id} re-approved by admin",
+                        idempotencyKey: "reapprove-commission-{$commission->id}-".now()->timestamp,
+                    );
                 }
 
                 $commission->update([

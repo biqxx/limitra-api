@@ -80,36 +80,45 @@ class SavedCardController extends BaseController
         }
 
         $userId = auth('api')->id();
-        $makeDefault = (bool) ($data['make_default'] ?? false) || ! SavedCard::where('user_id', $userId)->exists();
+        $result = \Illuminate\Support\Facades\DB::transaction(function () use ($userId, $data, $authorization, $customer): array {
+            SavedCard::where('user_id', $userId)->lockForUpdate()->get();
+            $makeDefault = (bool) ($data['make_default'] ?? false) || ! SavedCard::where('user_id', $userId)->exists();
 
-        if ($makeDefault) {
-            $this->demotePreviousDefault($userId);
-        }
+            if ($makeDefault) {
+                $this->demotePreviousDefault($userId);
+            }
 
-        $card = SavedCard::firstOrCreate([
-            'signature' => $authorization['signature'],
-        ], [
-            'user_id' => $userId,
-            'provider' => 'paystack',
-            'provider_customer_code' => $customer['customer_code'] ?? null,
-            'authorization_code' => $authorization['authorization_code'],
-            'brand' => $authorization['brand'] ?? 'card',
-            'last4' => $authorization['last4'],
-            'expiry_month' => (int) $authorization['exp_month'],
-            'expiry_year' => (int) $authorization['exp_year'],
-            'cardholder_name' => $authorization['account_name'] ?? null,
-            'reusable' => true,
-            'is_default' => $makeDefault,
-        ]);
+            $card = SavedCard::firstOrCreate([
+                'signature' => $authorization['signature'],
+            ], [
+                'user_id' => $userId,
+                'provider' => 'paystack',
+                'provider_customer_code' => $customer['customer_code'] ?? null,
+                'authorization_code' => $authorization['authorization_code'],
+                'brand' => $authorization['brand'] ?? 'card',
+                'last4' => $authorization['last4'],
+                'expiry_month' => (int) $authorization['exp_month'],
+                'expiry_year' => (int) $authorization['exp_year'],
+                'cardholder_name' => $authorization['account_name'] ?? null,
+                'reusable' => true,
+                'is_default' => $makeDefault,
+            ]);
 
-        if ($card->user_id !== $userId) {
+            if ($card->user_id !== $userId) {
+                return ['conflict' => true, 'card' => null];
+            }
+            if ($makeDefault && ! $card->is_default) {
+                $card->setAsDefault();
+            }
+
+            return ['conflict' => false, 'card' => $card];
+        }, 3);
+
+        if ($result['conflict']) {
             return $this->error('This payment method is already linked to another account.', 409);
         }
-        if ($makeDefault && ! $card->is_default) {
-            $card->setAsDefault();
-        }
 
-        return $this->success(new SavedCardResource($card), 'Card saved.', 201);
+        return $this->success(new SavedCardResource($result['card']), 'Card saved.', 201);
     }
 
     #[OA\Get(

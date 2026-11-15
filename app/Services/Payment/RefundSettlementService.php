@@ -81,8 +81,18 @@ class RefundSettlementService
                 if ($orderTotalMinor === 0) {
                     $orderTotalMinor = $this->toMinorUnits($order->total_amount);
                 }
+                $gatewayRefundedMinor = (int) $order->refunds()
+                    ->where('status', 'processed')
+                    ->where('method', '!=', 'wallet')
+                    ->sum('amount_minor');
+                $allGatewayRefunded = (float) $order->grand_total > 0
+                    && $gatewayRefundedMinor >= $this->toMinorUnits($order->grand_total);
+                $isFullyRefunded = $orderRefundedMinor >= $orderTotalMinor
+                    || $allGatewayRefunded
+                    || $refund->source === LatePaymentRefundService::SOURCE;
+
                 $order->update([
-                    'payment_status' => $orderRefundedMinor >= $orderTotalMinor
+                    'payment_status' => $isFullyRefunded
                         ? 'refunded'
                         : 'partially_refunded',
                 ]);

@@ -68,19 +68,18 @@ class WalletDepositSettlementService
             }
         }
 
-        $account = Account::firstOrCreate(
-            ['user_id' => $user->id],
-            ['currency' => 'NGN', 'balance' => 0]
-        );
+        $account = $this->ledger->accountFor($user);
 
         $reference = 'WLT-DEP-'.strtoupper(Str::random(16));
         $expirationMinutes = (int) ($this->settings->value('wallet.deposit_expiration_minutes') ?? 1440);
 
         $paystackResponse = $this->paystack->initializeTransaction([
             'amount' => $amountMinor,
+            'currency' => strtoupper($account->currency),
             'email' => $user->email,
             'reference' => $reference,
             'callback_url' => $callbackUrl,
+            'channels' => [$method === 'card' ? 'card' : 'bank_transfer'],
             'metadata' => [
                 'type' => 'wallet_deposit',
                 'user_id' => $user->id,

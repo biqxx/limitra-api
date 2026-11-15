@@ -40,7 +40,14 @@ class ReturnService
                     $this->invalid('items', 'One or more selected items do not belong to this order.');
                 }
 
+                $subtotalMinor = $this->toMinorUnits($order->subtotal);
+                $discountMinor = $this->toMinorUnits($order->discount_total);
+                $netFactor = ($discountMinor > 0 && $subtotalMinor > 0)
+                    ? max(0.0, ($subtotalMinor - $discountMinor) / $subtotalMinor)
+                    : 1.0;
+
                 $requestedTotalMinor = 0;
+                $itemAmountsMinor = [];
                 foreach ($orderItems as $orderItem) {
                     $requested = (int) $itemData[$orderItem->id]['quantity'];
                     $alreadyRequested = (int) ReturnItem::query()
@@ -50,7 +57,24 @@ class ReturnService
                     if ($requested + $alreadyRequested > $orderItem->quantity) {
                         $this->invalid('items', "The return quantity for {$orderItem->product_name} exceeds the purchased quantity.");
                     }
-                    $requestedTotalMinor += $this->toMinorUnits($orderItem->unit_price) * $requested;
+                    $grossAmountMinor = $this->toMinorUnits($orderItem->unit_price) * $requested;
+                    $netAmountMinor = $netFactor < 1.0
+                        ? (int) round($grossAmountMinor * $netFactor)
+                        : $grossAmountMinor;
+                    $itemAmountsMinor[$orderItem->id] = $netAmountMinor;
+                    $requestedTotalMinor += $netAmountMinor;
+                }
+
+                $maxRefundableMinor = max(0, $subtotalMinor - $discountMinor);
+                $alreadyCommittedMinor = $this->toMinorUnits(
+                    ReturnRequest::query()
+                        ->where('order_id', $order->id)
+                        ->whereNotIn('status', ['rejected', 'cancelled'])
+                        ->get()
+                        ->sum(fn (ReturnRequest $existing): float => (float) ($existing->approved_total ?? $existing->requested_total)),
+                );
+                if ($requestedTotalMinor > max(0, $maxRefundableMinor - $alreadyCommittedMinor)) {
+                    $requestedTotalMinor = max(0, $maxRefundableMinor - $alreadyCommittedMinor);
                 }
 
                 $returnRequest = ReturnRequest::create([
@@ -67,7 +91,7 @@ class ReturnService
                 foreach ($orderItems as $orderItem) {
                     $item = $itemData[$orderItem->id];
                     $quantity = (int) $item['quantity'];
-                    $amountMinor = $this->toMinorUnits($orderItem->unit_price) * $quantity;
+                    $amountMinor = $itemAmountsMinor[$orderItem->id];
                     $returnRequest->items()->create([
                         'order_item_id' => $orderItem->id,
                         'quantity' => $quantity,
@@ -151,14 +175,11 @@ class ReturnService
                 if ($from !== 'received') {
                     $this->invalid('status', 'Only a received return can be completed.');
                 }
-                if ($returnRequest->resolution === 'refund') {
+                if (in_array($returnRequest->resolution, ['refund', 'store_credit'], true)) {
                     $processed = $returnRequest->refunds()->where('status', 'processed')->sum('amount');
                     if ($this->toMinorUnits($processed) < $this->toMinorUnits($returnRequest->approved_total)) {
                         $this->invalid('status', 'The approved refund has not finished processing.');
                     }
-                }
-                if ($returnRequest->resolution === 'store_credit') {
-                    $this->invalid('status', 'Store-credit completion requires the wallet ledger workflow.');
                 }
                 $returnRequest->update([
                     'status' => 'completed',
@@ -187,18 +208,41 @@ class ReturnService
             $this->invalid('items', 'Approved quantities must be supplied for every return item.');
         }
 
+        $order = $returnRequest->order()->firstOrFail();
+        $subtotalMinor = $this->toMinorUnits($order->subtotal);
+        $discountMinor = $this->toMinorUnits($order->discount_total);
+        $netFactor = ($discountMinor > 0 && $subtotalMinor > 0)
+            ? max(0.0, ($subtotalMinor - $discountMinor) / $subtotalMinor)
+            : 1.0;
+
         $approvedTotalMinor = 0;
         foreach ($items as $item) {
             $quantity = (int) $provided[$item->id]['approved_quantity'];
             if ($quantity > $item->quantity) {
                 $this->invalid('items', 'An approved quantity cannot exceed the requested quantity.');
             }
-            $amountMinor = $this->toMinorUnits($item->unit_price) * $quantity;
+            $grossAmountMinor = $this->toMinorUnits($item->unit_price) * $quantity;
+            $amountMinor = $netFactor < 1.0
+                ? (int) round($grossAmountMinor * $netFactor)
+                : $grossAmountMinor;
             $approvedTotalMinor += $amountMinor;
             $item->update([
                 'approved_quantity' => $quantity,
                 'approved_amount' => $this->fromMinorUnits($amountMinor),
             ]);
+        }
+        $maxRefundableMinor = max(0, $subtotalMinor - $discountMinor);
+        $otherApprovedMinor = $this->toMinorUnits(
+            ReturnRequest::query()
+                ->where('order_id', $order->id)
+                ->whereKeyNot($returnRequest->id)
+                ->whereNotIn('status', ['rejected', 'cancelled'])
+                ->get()
+                ->sum(fn (ReturnRequest $other): float => (float) ($other->approved_total ?? $other->requested_total)),
+        );
+        $remainingCapMinor = max(0, $maxRefundableMinor - $otherApprovedMinor);
+        if ($approvedTotalMinor > $remainingCapMinor) {
+            $approvedTotalMinor = $remainingCapMinor;
         }
         if ($approvedTotalMinor === 0) {
             $this->invalid('items', 'At least one item quantity must be approved.');

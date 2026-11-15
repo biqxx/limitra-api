@@ -211,7 +211,7 @@ class ProductImportService
                     try {
                         DB::transaction(function () use ($row, $job, $rowNum, &$errors, &$failed, &$successful): void {
                             $sku = ! empty($row['sku']) ? trim((string) $row['sku']) : 'SKU-'.strtoupper(Str::random(8));
-                            $existingProduct = Product::query()->where('sku', $sku)->first();
+                            $existingProduct = Product::withTrashed()->where('sku', $sku)->lockForUpdate()->first();
 
                             if ($existingProduct) {
                                 if ($job->duplicate_sku_policy === 'skip') {
@@ -220,7 +220,7 @@ class ProductImportService
                                     return;
                                 }
 
-                                if ($job->duplicate_sku_policy === 'error') {
+                                if ($job->duplicate_sku_policy === 'error' || $existingProduct->trashed()) {
                                     $failed++;
                                     $errors[] = [
                                         'row' => $rowNum,
@@ -240,8 +240,6 @@ class ProductImportService
                                     'stock' => $newStock,
                                     'brand' => $row['brand'] ?? $existingProduct->brand,
                                     'description' => $row['description'] ?? $existingProduct->description,
-                                    'status' => 'draft',
-                                    'is_active' => false,
                                 ]);
 
                                 if ($newStock !== $oldStock) {
@@ -264,7 +262,7 @@ class ProductImportService
 
                             // New product creation
                             $slug = Str::slug($row['name']);
-                            if (Product::query()->where('slug', $slug)->exists()) {
+                            if (Product::withTrashed()->where('slug', $slug)->exists()) {
                                 if ($job->duplicate_slug_policy === 'error') {
                                     $failed++;
                                     $errors[] = [

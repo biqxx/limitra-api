@@ -5,9 +5,11 @@ namespace App\Console\Commands;
 use App\Enums\UserStatus;
 use App\Models\User;
 use App\Services\Admin\AuditEventService;
+use App\Services\Auth\AuthSessionManager;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProcessExpiredAccountDeletionsCommand extends Command
@@ -16,7 +18,7 @@ class ProcessExpiredAccountDeletionsCommand extends Command
 
     protected $description = 'Process expired account deletion requests and anonymize personal identifying data.';
 
-    public function handle(AuditEventService $audits): int
+    public function handle(AuditEventService $audits, AuthSessionManager $sessions): int
     {
         $now = now();
         $expiredUsers = User::query()
@@ -29,25 +31,29 @@ class ProcessExpiredAccountDeletionsCommand extends Command
 
         $processed = 0;
         foreach ($expiredUsers as $user) {
-            DB::transaction(function () use ($user, $now, $audits): void {
+            DB::transaction(function () use ($user, $now, $audits, $sessions): void {
                 /** @var User $locked */
                 $locked = User::query()->lockForUpdate()->find($user->id);
                 if (! $locked || $locked->status === UserStatus::Deactivated || ! $locked->deletion_scheduled_for || $locked->deletion_scheduled_for->isFuture()) {
                     return;
                 }
 
-                // 1. Revoke all active sessions
+                // 1. Revoke all active sessions (DB + Redis cache)
+                $sessions->revokeAll($locked);
                 DB::table('auth_sessions')->where('user_id', $locked->id)->delete();
 
                 // 2. Anonymize user profile
                 if ($locked->profile) {
+                    if ($locked->profile->avatar) {
+                        Storage::disk('public')->delete($locked->profile->avatar);
+                    }
                     $locked->profile->update([
                         'first_name' => 'Anonymized',
                         'last_name' => 'User',
                         'middle_name' => null,
                         'phone' => null,
                         'birthday' => null,
-                        'avatar_url' => null,
+                        'avatar' => null,
                         'gender' => null,
                         'subscribe_to_newsletter' => false,
                     ]);

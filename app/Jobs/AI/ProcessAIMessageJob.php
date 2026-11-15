@@ -5,8 +5,10 @@ namespace App\Jobs\AI;
 use App\AI\AgentService;
 use App\Models\AI\Conversation;
 use App\Models\AI\ConversationMessage;
+use App\Services\AI\WebConversationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class ProcessAIMessageJob implements ShouldQueue
@@ -26,26 +28,37 @@ class ProcessAIMessageJob implements ShouldQueue
         $this->onQueue('ai');
     }
 
-    public function handle(AgentService $agent): void
+    public function handle(AgentService $agent, WebConversationService $webConversations): void
     {
-        $conversation = Conversation::query()->find($this->conversationId);
-        $requestMessage = ConversationMessage::query()->find($this->requestMessageId);
+        $lock = Cache::lock("ai:web:conversation:{$this->conversationId}", 120);
 
-        if (! $conversation || ! $requestMessage) {
-            return;
-        }
+        $lock->block(30, function () use ($agent, $webConversations): void {
+            $conversation = Conversation::query()->find($this->conversationId);
+            $requestMessage = ConversationMessage::query()->find($this->requestMessageId);
 
-        $existing = ConversationMessage::query()
-            ->where('request_message_id', $requestMessage->id)
-            ->where('role', 'assistant')
-            ->whereNull('tool_calls')
-            ->first();
+            if (! $conversation || ! $requestMessage) {
+                return;
+            }
 
-        if ($existing) {
-            return;
-        }
+            $existing = ConversationMessage::query()
+                ->where('request_message_id', $requestMessage->id)
+                ->where('role', 'assistant')
+                ->whereNull('tool_calls')
+                ->first();
 
-        $agent->respondToMessage($conversation, $requestMessage);
+            if ($existing) {
+                return;
+            }
+
+            $assistant = $agent->respondToMessage($conversation, $requestMessage);
+            $output = $webConversations->toolOutput($requestMessage, $assistant);
+            $assistant->forceFill([
+                'metadata' => array_merge($assistant->metadata ?? [], [
+                    'products' => $output['products'],
+                    'actions' => $output['actions'],
+                ]),
+            ])->save();
+        });
     }
 
     public function failed(?Throwable $exception): void

@@ -34,7 +34,7 @@ class GeneratePaymentLinkTool implements Tool
             return ['error' => 'Authentication is required to check out.'];
         }
 
-        $cart = Cart::with('items.product')
+        $cart = Cart::with(['items.product', 'items.variant'])
             ->where('user_id', $context->userId)
             ->where('status', 'active')
             ->find((int) $arguments['cart_id']);
@@ -43,7 +43,11 @@ class GeneratePaymentLinkTool implements Tool
             return ['error' => 'Cart not found or is empty'];
         }
 
-        $total = $cart->items->sum(fn ($item) => $item->quantity * $item->product->price);
+        $total = $cart->items->sum(function ($item): float {
+            $unitPrice = (float) ($item->unit_price ?? $item->variant?->price ?? $item->product?->price ?? 0);
+
+            return $item->quantity * $unitPrice;
+        });
 
         // Generates a signed frontend checkout URL. Replace with your actual payment gateway logic.
         $checkoutUrl = rtrim(config('app.frontend_url', config('app.url')), '/')

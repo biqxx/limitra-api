@@ -34,21 +34,25 @@ class ViewCartTool implements Tool
 
         $cart = Cart::where('user_id', $context->userId)
             ->where('status', 'active')
-            ->with(['items.product'])
+            ->with(['items.product', 'items.variant'])
             ->first();
 
         if (! $cart || $cart->items->isEmpty()) {
             return ['empty' => true, 'message' => 'Your cart is empty.'];
         }
 
-        $items = $cart->items->map(fn ($item) => [
-            'cart_item_id' => $item->id,
-            'product_id' => $item->product_id,
-            'product_name' => $item->product?->name,
-            'price' => $item->product?->price,
-            'quantity' => $item->quantity,
-            'subtotal' => ($item->product?->price ?? 0) * $item->quantity,
-        ]);
+        $items = $cart->items->map(function ($item): array {
+            $unitPrice = (float) ($item->unit_price ?? $item->variant?->price ?? $item->product?->price ?? 0);
+
+            return [
+                'cart_item_id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_name' => $item->product?->name,
+                'price' => $unitPrice,
+                'quantity' => $item->quantity,
+                'subtotal' => $unitPrice * $item->quantity,
+            ];
+        });
 
         return [
             'cart_id' => $cart->id,

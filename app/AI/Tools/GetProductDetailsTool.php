@@ -31,6 +31,7 @@ class GetProductDetailsTool implements Tool
     public function execute(array $arguments, ToolContext $context): mixed
     {
         $product = Product::with('category', 'subcategory')
+            ->where('status', 'active')
             ->find((int) $arguments['product_id']);
 
         if (! $product) {

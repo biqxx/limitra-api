@@ -51,6 +51,28 @@ class InboundMessageJob implements ShouldQueue
             $conversation = $this->findOrCreateConversation($socialAccount);
 
             $message->update(['conversation_id' => $conversation->id]);
+
+            if ($conversation->status === 'handed_off') {
+                $conversation->messages()->create([
+                    'role' => 'user',
+                    'content' => $message->message,
+                    'metadata' => ['inbound_social_message_id' => $message->id],
+                ]);
+                $conversation->forceFill(['last_message_at' => now()])->save();
+
+                InboundSocialMessage::whereKey($message->id)
+                    ->where('processing_token', $this->processingToken)
+                    ->update([
+                        'status' => 'processed',
+                        'processed_at' => now(),
+                        'processing_token' => null,
+                        'processing_started_at' => null,
+                        'last_error' => null,
+                    ]);
+
+                return;
+            }
+
             $reply = $message->reply;
 
             if ($reply === null) {
@@ -137,15 +159,22 @@ class InboundMessageJob implements ShouldQueue
 
     private function findOrCreateConversation(SocialAccount $account): Conversation
     {
-        return Conversation::firstOrCreate(
-            [
-                'social_account_id' => $account->id,
-                'platform' => $account->platform,
-                'status' => 'open',
-            ],
-            [
-                'user_id' => $account->user_id,
-            ],
-        );
+        $existing = Conversation::query()
+            ->where('social_account_id', $account->id)
+            ->where('platform', $account->platform)
+            ->whereIn('status', ['open', 'handed_off'])
+            ->latest('id')
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        return Conversation::create([
+            'social_account_id' => $account->id,
+            'platform' => $account->platform,
+            'status' => 'open',
+            'user_id' => $account->user_id,
+        ]);
     }
 }

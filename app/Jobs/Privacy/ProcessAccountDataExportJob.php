@@ -110,7 +110,8 @@ class ProcessAccountDataExportJob implements ShouldQueue
                 'reviews' => $user->reviews->map(fn ($rev) => [
                     'product_id' => $rev->product_id,
                     'rating' => $rev->rating,
-                    'comment' => $rev->comment,
+                    'title' => $rev->title,
+                    'body' => $rev->body,
                     'created_at' => $rev->created_at?->toIso8601String(),
                 ])->all(),
                 'support_tickets' => $user->supportTickets->map(fn ($st) => [

@@ -167,6 +167,11 @@ class AgentService
             ->reverse()
             ->values();
 
+        // Drop orphaned leading tool messages so the first turn is never a tool_result without an assistant tool_use.
+        while ($dbMessages->isNotEmpty() && $dbMessages->first()->role === 'tool') {
+            $dbMessages->shift();
+        }
+
         $messages = [];
 
         foreach ($dbMessages as $msg) {

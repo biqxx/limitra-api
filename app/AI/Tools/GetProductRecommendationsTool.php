@@ -118,12 +118,14 @@ class GetProductRecommendationsTool implements Tool
                 array_keys($cartMap),
                 array_keys($favMap),
                 $historyIds,
+                $candidateIds,
             ))),
             0, 25
         );
 
         // ── 7. Fetch full product details ─────────────────────────────────────
         $products = Product::with('category', 'subcategory')
+            ->where('status', 'active')
             ->whereIn('id', $union)
             ->get();
 

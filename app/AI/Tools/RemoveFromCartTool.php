@@ -57,6 +57,7 @@ class RemoveFromCartTool implements Tool
 
         return [
             'success' => true,
+            'cart_id' => $cart->id,
             'message' => "{$name} has been removed from your cart.",
         ];
     }

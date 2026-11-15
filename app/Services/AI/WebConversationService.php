@@ -268,7 +268,7 @@ class WebConversationService
     }
 
     /** @return array{products: array<int, mixed>, actions: array<int, array<string, mixed>>} */
-    private function toolOutput(ConversationMessage $request, ConversationMessage $assistant): array
+    public function toolOutput(ConversationMessage $request, ConversationMessage $assistant): array
     {
         $products = collect();
         $actions = collect();
@@ -283,6 +283,8 @@ class WebConversationService
             $name = $entry['name'] ?? null;
             if (is_array($result['products'] ?? null)) {
                 $products->push(...$result['products']);
+            } elseif (in_array($name, ['search_products', 'get_alternative_products'], true) && array_is_list($result)) {
+                $products->push(...$result);
             } elseif ($name === 'get_product_details' && isset($result['id'])) {
                 $products->push($result);
             }

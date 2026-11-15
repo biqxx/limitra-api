@@ -399,8 +399,26 @@ class ProductController extends BaseController
             }
 
             if ($variants !== null) {
-                $product->variants()->delete();
-                $product->variants()->createMany($variants);
+                $existingVariants = $product->variants()->get();
+                $byId = $existingVariants->keyBy('id');
+                $bySku = $existingVariants->whereNotNull('sku')->keyBy('sku');
+                $retainedIds = [];
+
+                foreach ($variants as $variantData) {
+                    $existing = isset($variantData['id'])
+                        ? $byId->get((int) $variantData['id'])
+                        : (! empty($variantData['sku']) ? $bySku->get($variantData['sku']) : null);
+
+                    if ($existing) {
+                        $existing->update($variantData);
+                        $retainedIds[] = $existing->id;
+                    } else {
+                        $created = $product->variants()->create($variantData);
+                        $retainedIds[] = $created->id;
+                    }
+                }
+
+                $product->variants()->whereNotIn('id', $retainedIds)->delete();
             }
 
             if ($specifications !== null) {
@@ -489,6 +507,7 @@ class ProductController extends BaseController
     public function related(Product $product): JsonResponse
     {
         $query = Product::query()
+            ->with(['category.image', 'subcategory.image', 'productImages'])
             ->where('status', 'active')
             ->where('id', '!=', $product->id);
 
@@ -512,6 +531,7 @@ class ProductController extends BaseController
         $max = $price * 1.30;
 
         $query = Product::query()
+            ->with(['category.image', 'subcategory.image', 'productImages'])
             ->where('status', 'active')
             ->where('id', '!=', $product->id);
 

@@ -30,13 +30,14 @@ class GetAlternativeProductsTool implements Tool
 
     public function execute(array $arguments, ToolContext $context): mixed
     {
-        $product = Product::find((int) $arguments['product_id']);
+        $product = Product::where('status', 'active')->find((int) $arguments['product_id']);
 
         if (! $product) {
             return ['error' => 'Product not found'];
         }
 
         $alternatives = Product::where('category_id', $product->category_id)
+            ->where('status', 'active')
             ->where('id', '!=', $product->id)
             ->where('stock', '>', 0)
             ->limit(4)

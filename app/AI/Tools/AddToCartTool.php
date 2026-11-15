@@ -42,7 +42,7 @@ class AddToCartTool implements Tool
             return ['error' => 'Authentication is required to modify a cart.'];
         }
 
-        $product = Product::find((int) $arguments['product_id']);
+        $product = Product::where('status', 'active')->find((int) $arguments['product_id']);
 
         if (! $product) {
             return ['error' => 'Product not found'];

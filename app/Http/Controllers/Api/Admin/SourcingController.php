@@ -151,6 +151,17 @@ class SourcingController extends BaseController
         );
     }
 
+    public function destroyJob(Request $request, SourcingJob $sourcingJob): JsonResponse
+    {
+        if ((int) $sourcingJob->user_id !== (int) $request->user()->id) {
+            return $this->error('Unauthorized.', 403);
+        }
+
+        $sourcingJob->delete();
+
+        return $this->success(null, 'Sourcing queue item deleted.');
+    }
+
     public function enhance(
         EnhanceSupplierProductRequest $request,
         ProductContentEnhancer $enhancer,

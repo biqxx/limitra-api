@@ -17,6 +17,7 @@ Route::middleware(['auth:api', 'active.session', 'role:admin'])
         Route::post('jobs', [SourcingController::class, 'queue'])
             ->middleware('throttle:10,1')
             ->name('jobs.store');
+        Route::delete('jobs/{sourcingJob}', [SourcingController::class, 'destroyJob'])->name('jobs.destroy');
         Route::get('imports', [SourcingController::class, 'index'])->name('imports.index');
         Route::post('imports', [SourcingController::class, 'store'])->name('imports.store');
         Route::get('imports/{productSource}/pricing', [ProductPricingController::class, 'show'])->name('pricing.show');

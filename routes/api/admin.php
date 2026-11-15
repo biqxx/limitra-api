@@ -32,6 +32,8 @@ Route::middleware(['auth:api', 'active.session'])
         Route::get('{product}', [AdminProductController::class, 'show'])->middleware('permission:catalog.read')->withTrashed()->name('show');
         Route::post('/', [CatalogProductController::class, 'store'])->middleware('permission:catalog.create')->name('store');
         Route::match(['put', 'patch'], '{product}', [CatalogProductController::class, 'update'])->middleware('permission:catalog.update')->name('update');
+        Route::post('{product}/discount', [CatalogProductController::class, 'applyDiscount'])->middleware('permission:catalog.update')->name('discount.apply');
+        Route::delete('{product}/discount', [CatalogProductController::class, 'removeDiscount'])->middleware('permission:catalog.update')->name('discount.remove');
         Route::post('{product}/restore', [AdminProductController::class, 'restore'])->middleware('permission:catalog.archive')->withTrashed()->name('restore');
         Route::delete('{product}', [CatalogProductController::class, 'destroy'])->middleware('permission:catalog.archive')->name('destroy');
     });

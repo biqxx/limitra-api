@@ -28,5 +28,7 @@ Route::middleware(['auth:api', 'active.session'])->group(function () {
     Route::post('products/imports/{job}/retry', [ProductImportController::class, 'retry'])->name('products.imports.retry');
     Route::get('products/imports/{job}/errors', [ProductImportController::class, 'downloadErrors'])->name('products.imports.errors');
     Route::apiResource('categories', CategoryController::class)->except(['index', 'show']);
+    Route::post('products/{product}/discount', [ProductController::class, 'applyDiscount'])->name('products.discount.apply');
+    Route::delete('products/{product}/discount', [ProductController::class, 'removeDiscount'])->name('products.discount.remove');
     Route::apiResource('products', ProductController::class)->except(['index', 'show']);
 });

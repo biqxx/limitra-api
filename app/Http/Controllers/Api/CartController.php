@@ -221,7 +221,7 @@ class CartController extends BaseController
             $cart->id,
             $product->id,
             $data['quantity'],
-            (float) $product->price,
+            (float) $product->effectivePrice(),
         ));
 
         return $identity->attachToken($this->success(

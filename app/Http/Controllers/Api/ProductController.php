@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 class ProductController extends BaseController
@@ -435,6 +436,88 @@ class ProductController extends BaseController
         return $this->success(
             new ProductResource($product->load('category.image', 'subcategory.image', 'creator', 'productImages', 'variants', 'specifications')),
             'Product updated.'
+        );
+    }
+
+    public function applyDiscount(Request $request, Product $product): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $data = $request->validate([
+            'discounted_price' => ['required_without:discount_percentage', 'prohibits:discount_percentage', 'numeric', 'gt:0'],
+            'discount_percentage' => ['required_without:discounted_price', 'prohibits:discounted_price', 'numeric', 'gt:0', 'lt:100'],
+            'discount_starts_at' => ['nullable', 'date'],
+            'discount_ends_at' => [
+                'nullable',
+                'date',
+                function (string $attribute, mixed $value, $fail) use ($request): void {
+                    $startsAt = $request->input('discount_starts_at');
+                    if ($value !== null && $startsAt !== null && strtotime((string) $value) <= strtotime((string) $startsAt)) {
+                        $fail('The discount ends at must be a date after discount starts at.');
+                    }
+                },
+            ],
+        ]);
+
+        $originalPrice = $product->compare_at_price !== null && (float) $product->compare_at_price > (float) $product->price
+            ? (float) $product->compare_at_price
+            : (float) $product->price;
+
+        if ($originalPrice <= 0) {
+            throw ValidationException::withMessages([
+                'price' => ['Product must have a positive calculated or base price before applying a discount.'],
+            ]);
+        }
+
+        $discountedPrice = isset($data['discounted_price'])
+            ? round((float) $data['discounted_price'], 2)
+            : round($originalPrice * (1 - ((float) $data['discount_percentage'] / 100)), 2);
+
+        if ($discountedPrice <= 0 || $discountedPrice >= $originalPrice) {
+            throw ValidationException::withMessages([
+                'discounted_price' => ['The discounted price must be greater than zero and less than the original price.'],
+            ]);
+        }
+
+        $actor = auth('api')->user();
+        $product->recordEditor($actor?->id);
+
+        $product->update([
+            'price' => number_format($discountedPrice, 2, '.', ''),
+            'compare_at_price' => number_format($originalPrice, 2, '.', ''),
+            'discount_starts_at' => $data['discount_starts_at'] ?? null,
+            'discount_ends_at' => $data['discount_ends_at'] ?? null,
+            'updated_by' => $product->updated_by,
+        ]);
+
+        return $this->success(
+            new ProductResource($product->load('category.image', 'subcategory.image', 'creator', 'productImages', 'variants', 'specifications')),
+            'Product discount applied.'
+        );
+    }
+
+    public function removeDiscount(Product $product): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $restoredPrice = $product->compare_at_price !== null && (float) $product->compare_at_price > (float) $product->price
+            ? $product->compare_at_price
+            : $product->price;
+
+        $actor = auth('api')->user();
+        $product->recordEditor($actor?->id);
+
+        $product->update([
+            'price' => $restoredPrice,
+            'compare_at_price' => null,
+            'discount_starts_at' => null,
+            'discount_ends_at' => null,
+            'updated_by' => $product->updated_by,
+        ]);
+
+        return $this->success(
+            new ProductResource($product->load('category.image', 'subcategory.image', 'creator', 'productImages', 'variants', 'specifications')),
+            'Product discount removed.'
         );
     }
 

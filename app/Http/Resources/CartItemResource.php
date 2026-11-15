@@ -9,7 +9,7 @@ class CartItemResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $currentPrice = $this->variant?->price ?? $this->product?->price;
+        $currentPrice = $this->variant?->price ?? $this->product?->effectivePrice();
         $stock = $this->variant?->stock ?? $this->product?->stock ?? 0;
         $available = $this->product?->status === 'active'
             && (! $this->variant_id || $this->variant?->status === 'active')

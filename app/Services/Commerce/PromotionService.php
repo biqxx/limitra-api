@@ -36,7 +36,7 @@ class PromotionService
                 || in_array($item->product->category_id, $categoryIds, true)
                 || in_array($item->product->subcategory_id, $categoryIds, true);
         });
-        $eligibleSubtotal = $eligibleLines->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->price) * $item->quantity);
+        $eligibleSubtotal = $eligibleLines->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->effectivePrice()) * $item->quantity);
 
         if ($eligibleSubtotal < (float) $promotion->minimum_spend || $eligibleSubtotal <= 0) {
             throw ValidationException::withMessages(['code' => ['The cart does not meet this promotion’s eligibility requirements.']]);

@@ -10,7 +10,7 @@ class DeliveryService
     public function options(Cart $cart, string $country, string $state, ?string $city): array
     {
         $cart->loadMissing(['items.product', 'items.variant']);
-        $subtotal = $cart->items->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->price) * $item->quantity);
+        $subtotal = $cart->items->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->effectivePrice()) * $item->quantity);
 
         return $this->optionsForSubtotal($subtotal, $cart->currency, $country, $state, $city);
     }

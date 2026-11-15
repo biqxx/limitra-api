@@ -125,12 +125,15 @@ class AIConversationAdminController extends BaseController
             'max_tool_iterations' => (int) config('ai.max_tool_iterations', 5),
             'web_greeting' => (string) config('ai.web_greeting', 'Hi! How can I help you today?'),
             'enabled_tools' => [
+                'search_products',
                 'get_product_recommendations',
                 'get_product_details',
                 'get_alternative_products',
                 'check_order_status',
                 'get_recent_orders',
+                'view_cart',
                 'add_to_cart',
+                'remove_from_cart',
                 'generate_payment_link',
             ],
         ], 'AI settings retrieved successfully.');

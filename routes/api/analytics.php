@@ -7,12 +7,17 @@ use App\Http\Controllers\Api\Admin\Analytics\ProductAnalyticsController;
 use App\Http\Controllers\Api\Admin\Analytics\SalesController;
 use App\Http\Controllers\Api\Admin\Analytics\TrafficController;
 use App\Http\Controllers\Api\AnalyticsEventController;
+use App\Http\Controllers\Api\ClientErrorController;
 use Illuminate\Support\Facades\Route;
 
 // ── Client Analytics Events Ingestion ─────────────────────────────────────────
 Route::post('analytics/events', [AnalyticsEventController::class, 'store'])
     ->middleware('throttle:60,1')
     ->name('analytics.events.store');
+
+Route::post('client-errors', [ClientErrorController::class, 'store'])
+    ->middleware('throttle:30,1')
+    ->name('client-errors.store');
 
 Route::middleware(['auth:api', 'active.session', 'permission:analytics.read'])->prefix('analytics')->name('analytics.')->group(function () {
     Route::get('overview', OverviewController::class)->name('overview');

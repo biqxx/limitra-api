@@ -2,13 +2,18 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\User;
+use App\Services\Auth\PermissionResolver;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RecalculateProductPriceRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(PermissionResolver $permissions): bool
     {
-        return $this->user()?->isAdmin() === true;
+        $user = $this->user();
+
+        return $user instanceof User
+            && $permissions->allowsAll($user, ['catalog.sourcing']);
     }
 
     public function rules(): array

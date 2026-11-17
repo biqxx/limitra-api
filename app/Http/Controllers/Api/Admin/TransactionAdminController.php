@@ -7,6 +7,8 @@ use App\Models\Order\Order;
 use App\Models\Payment\Payment;
 use App\Models\Payment\Refund;
 use App\Models\Payment\WalletDeposit;
+use App\Models\User;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,16 +22,17 @@ class TransactionAdminController extends BaseController
         $perPage = min(max($request->integer('per_page', 50), 1), 100);
         $page = max($request->integer('page', 1), 1);
         $fetchLimit = $page * $perPage;
+        $userSearch = $this->userSearchFilter($q);
 
         $items = collect();
 
         if ($type === 'all' || $type === 'deposit') {
             $deposits = WalletDeposit::query()
-                ->with('user:id,name,email')
+                ->with('user:id,username,email')
                 ->when($status, fn ($query, $s) => $query->where('status', $s))
-                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q) {
+                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q, $userSearch) {
                     $sub->where('reference', 'ilike', "%{$q}%")
-                        ->orWhereHas('user', fn ($u) => $u->where('name', 'ilike', "%{$q}%")->orWhere('email', 'ilike', "%{$q}%"));
+                        ->orWhereHas('user', $userSearch);
                 }))
                 ->latest('id')
                 ->limit($fetchLimit)
@@ -47,7 +50,7 @@ class TransactionAdminController extends BaseController
                     'provider' => 'paystack',
                     'order_id' => null,
                     'order_number' => null,
-                    'user' => $d->user ? ['id' => $d->user->id, 'name' => $d->user->name, 'email' => $d->user->email] : null,
+                    'user' => $this->formatUser($d->user),
                     'created_at' => $d->created_at?->toIso8601String(),
                 ]);
             $items = $items->concat($deposits);
@@ -55,12 +58,12 @@ class TransactionAdminController extends BaseController
 
         if ($type === 'all' || $type === 'payment') {
             $payments = Payment::query()
-                ->with(['user:id,name,email', 'order:id,order_number'])
+                ->with(['user:id,username,email', 'order:id,number'])
                 ->when($status, fn ($query, $s) => $query->where('status', $s))
-                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q) {
+                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q, $userSearch) {
                     $sub->where('reference', 'ilike', "%{$q}%")
                         ->orWhere('customer_email', 'ilike', "%{$q}%")
-                        ->orWhereHas('user', fn ($u) => $u->where('name', 'ilike', "%{$q}%")->orWhere('email', 'ilike', "%{$q}%"));
+                        ->orWhereHas('user', $userSearch);
                 }))
                 ->latest('id')
                 ->limit($fetchLimit)
@@ -77,8 +80,8 @@ class TransactionAdminController extends BaseController
                     'method' => $p->method,
                     'provider' => $p->provider,
                     'order_id' => $p->order_id,
-                    'order_number' => $p->order?->order_number,
-                    'user' => $p->user ? ['id' => $p->user->id, 'name' => $p->user->name, 'email' => $p->user->email] : null,
+                    'order_number' => $p->order?->number,
+                    'user' => $this->formatUser($p->user),
                     'created_at' => $p->created_at?->toIso8601String(),
                 ]);
             $items = $items->concat($payments);
@@ -86,12 +89,14 @@ class TransactionAdminController extends BaseController
 
         if ($type === 'all' || $type === 'order') {
             $orders = Order::query()
-                ->with('user:id,name,email')
-                ->when($status, fn ($query, $s) => $query->where('payment_status', $s)->orWhere('status', $s))
-                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q) {
-                    $sub->where('order_number', 'ilike', "%{$q}%")
+                ->with('user:id,username,email')
+                ->when($status, fn ($query, $s) => $query->where(function ($sub) use ($s) {
+                    $sub->where('payment_status', $s)->orWhere('status', $s);
+                }))
+                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q, $userSearch) {
+                    $sub->where('number', 'ilike', "%{$q}%")
                         ->orWhere('contact_email', 'ilike', "%{$q}%")
-                        ->orWhereHas('user', fn ($u) => $u->where('name', 'ilike', "%{$q}%")->orWhere('email', 'ilike', "%{$q}%"));
+                        ->orWhereHas('user', $userSearch);
                 }))
                 ->latest('id')
                 ->limit($fetchLimit)
@@ -100,7 +105,7 @@ class TransactionAdminController extends BaseController
                     'id' => 'ord-' . $o->id,
                     'record_id' => $o->id,
                     'type' => 'order',
-                    'reference' => $o->order_number ?: ('ORD-' . $o->id),
+                    'reference' => $o->number ?: ('ORD-' . $o->id),
                     'amount' => number_format((float) $o->total_amount + (float) ($o->credit_total ?? 0), 2, '.', ''),
                     'wallet_credit' => number_format((float) ($o->credit_total ?? 0), 2, '.', ''),
                     'currency' => $o->currency ?? 'NGN',
@@ -108,8 +113,8 @@ class TransactionAdminController extends BaseController
                     'method' => $o->payment_method,
                     'provider' => (float) ($o->credit_total ?? 0) > 0 && (float) $o->total_amount === 0.0 ? 'wallet' : 'paystack',
                     'order_id' => $o->id,
-                    'order_number' => $o->order_number,
-                    'user' => $o->user ? ['id' => $o->user->id, 'name' => $o->user->name, 'email' => $o->user->email] : null,
+                    'order_number' => $o->number,
+                    'user' => $this->formatUser($o->user),
                     'created_at' => $o->created_at?->toIso8601String(),
                 ]);
             $items = $items->concat($orders);
@@ -117,11 +122,11 @@ class TransactionAdminController extends BaseController
 
         if ($type === 'all' || $type === 'refund') {
             $refunds = Refund::query()
-                ->with(['user:id,name,email', 'order:id,order_number'])
+                ->with(['user:id,username,email', 'order:id,number'])
                 ->when($status, fn ($query, $s) => $query->where('status', $s))
-                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q) {
+                ->when($q !== '', fn ($query) => $query->where(function ($sub) use ($q, $userSearch) {
                     $sub->where('reference', 'ilike', "%{$q}%")
-                        ->orWhereHas('user', fn ($u) => $u->where('name', 'ilike', "%{$q}%")->orWhere('email', 'ilike', "%{$q}%"));
+                        ->orWhereHas('user', $userSearch);
                 }))
                 ->latest('id')
                 ->limit($fetchLimit)
@@ -138,9 +143,9 @@ class TransactionAdminController extends BaseController
                     'method' => $r->method,
                     'provider' => $r->provider,
                     'order_id' => $r->order_id,
-                    'order_number' => $r->order?->order_number,
+                    'order_number' => $r->order?->number,
                     'reason' => $r->reason,
-                    'user' => $r->user ? ['id' => $r->user->id, 'name' => $r->user->name, 'email' => $r->user->email] : null,
+                    'user' => $this->formatUser($r->user),
                     'created_at' => $r->created_at?->toIso8601String(),
                 ]);
             $items = $items->concat($refunds);
@@ -159,5 +164,24 @@ class TransactionAdminController extends BaseController
                 'last_page' => max(1, (int) ceil($total / $perPage)),
             ],
         ], 'Admin transactions retrieved.');
+    }
+
+    private function formatUser(?User $user): ?array
+    {
+        if (! $user) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'name' => $user->username ?: $user->email,
+            'email' => $user->email,
+        ];
+    }
+
+    private function userSearchFilter(string $q): Closure
+    {
+        return fn ($u) => $u->where('username', 'ilike', "%{$q}%")
+            ->orWhere('email', 'ilike', "%{$q}%");
     }
 }

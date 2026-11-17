@@ -22,6 +22,7 @@ class OrderResource extends JsonResource
             'shipping_total' => $this->shipping_total,
             'grand_total' => $this->grand_total,
             'total_amount' => $this->total_amount,
+            'order_total' => number_format((float) $this->total_amount + (float) ($this->credit_total ?? 0), 2, '.', ''),
             'status' => $this->status,
             'payment_status' => $this->payment_status,
             'fulfilment_status' => $this->fulfilment_status,

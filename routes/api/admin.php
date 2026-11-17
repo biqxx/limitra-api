@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\CommissionController as AdminCommissionContro
 use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\Admin\ReportController;
+use App\Http\Controllers\Api\Admin\TransactionAdminController;
 use App\Http\Controllers\Api\CategoryController as CatalogCategoryController;
 use App\Http\Controllers\Api\ProductController as CatalogProductController;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,11 @@ Route::middleware(['auth:api', 'active.session', 'permission:orders.read'])->pre
     Route::get('/', [AdminOrderController::class, 'index'])->name('index');
     Route::get('{order}', [AdminOrderController::class, 'show'])->name('show');
 });
+
+// ── Financial Transactions (deposits, payments, orders, refunds) ──────────────
+Route::middleware(['auth:api', 'active.session', 'permission:orders.read'])
+    ->get('transactions', [TransactionAdminController::class, 'index'])
+    ->name('admin.transactions.index');
 
 // ── Affiliate management ──────────────────────────────────────────────────────
 Route::middleware(['auth:api', 'active.session', 'permission:affiliates.read'])->prefix('affiliates')->name('admin.affiliates.')->group(function () {

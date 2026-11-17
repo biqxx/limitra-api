@@ -103,7 +103,7 @@ class OrderController extends BaseController
                 $sessionId,
                 $order->user_id,
                 $order->id,
-                (float) $order->total_amount,
+                (float) $order->total_amount + (float) ($order->credit_total ?? 0),
             ));
         }
 

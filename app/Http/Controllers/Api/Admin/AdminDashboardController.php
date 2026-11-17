@@ -19,7 +19,9 @@ class AdminDashboardController extends BaseController
     public function dashboard(Request $request): JsonResponse
     {
         $ordersCount = Order::query()->count();
-        $totalRevenue = Order::query()->where('payment_status', 'paid')->sum('total_amount');
+        $totalRevenue = Order::query()
+            ->where('payment_status', 'paid')
+            ->sum(DB::raw('COALESCE(total_amount, 0) + COALESCE(credit_total, 0)'));
         $customersCount = User::query()->where('role', 'user')->count();
         $productsCount = Product::query()->where('status', 'active')->count();
         $lowStockCount = Product::query()->where('status', 'active')->where('stock', '<=', 5)->count();

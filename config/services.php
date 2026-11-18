@@ -40,6 +40,23 @@ return [
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
     ],
 
+    'redstar' => [
+        'base_url' => env('REDSTAR_BASE_URL', 'http://rsmdev.westeurope.cloudapp.azure.com:89'),
+        'api_key' => env('REDSTAR_API_KEY'),
+        'timeout' => (int) env('REDSTAR_TIMEOUT', 15),
+        'sender_city' => env('REDSTAR_SENDER_CITY', 'LOS'),
+        'sender_town_id' => (int) env('REDSTAR_SENDER_TOWN_ID', 1),
+        'sender_name' => env('REDSTAR_SENDER_NAME', 'Limitra'),
+        'sender_address' => env('REDSTAR_SENDER_ADDRESS', 'Lagos Warehouse'),
+        'sender_phone' => env('REDSTAR_SENDER_PHONE', ''),
+        'default_weight_kg' => (float) env('REDSTAR_DEFAULT_WEIGHT_KG', 1.0),
+        'default_pickup_type' => (int) env('REDSTAR_DEFAULT_PICKUP_TYPE', 1),
+        'default_payment_type' => env('REDSTAR_DEFAULT_PAYMENT_TYPE', 'Prepaid'),
+        'default_delivery_type' => env('REDSTAR_DEFAULT_DELIVERY_TYPE', 'Normal'),
+        'location_cache_ttl' => (int) env('REDSTAR_LOCATION_CACHE_TTL', 86400),
+        'fee_cache_ttl' => (int) env('REDSTAR_FEE_CACHE_TTL', 3600),
+    ],
+
     'supplier' => [
         'base_url' => env('SUPPLIER_SERVICE_URL'),
         'secret' => env('SUPPLIER_SERVICE_SECRET'),

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BaseController;
 use App\Models\Microstore\Microstore;
 use App\Models\Microstore\MicrostoreEvent;
 use App\Models\Microstore\MicrostoreProduct;
+use App\Notifications\Microstore\MicrostoreRegisteredNotification;
 use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,9 +22,11 @@ class MicrostoreOwnerController extends BaseController
     public function show(Request $request): JsonResponse
     {
         $user = $request->user('api');
+        $storeType = $this->resolveStoreType($request);
         $microstore = Microstore::query()
             ->with(['curatedProducts.product'])
             ->where('user_id', $user->id)
+            ->where('type', $storeType)
             ->first();
 
         if (! $microstore) {
@@ -36,9 +39,12 @@ class MicrostoreOwnerController extends BaseController
     public function store(Request $request): JsonResponse
     {
         $user = $request->user('api');
+        $storeType = $this->resolveStoreType($request);
 
-        if (Microstore::where('user_id', $user->id)->exists()) {
-            return $this->error('You already have an active microstore.', 422);
+        if (Microstore::where('user_id', $user->id)->where('type', $storeType)->exists()) {
+            $label = $storeType === 'celebrity' ? 'celebrity store' : 'microstore';
+
+            return $this->error("You already have an active {$label}.", 422);
         }
 
         $validated = $request->validate([
@@ -60,6 +66,7 @@ class MicrostoreOwnerController extends BaseController
 
         $microstore = Microstore::create([
             'user_id' => $user->id,
+            'type' => $storeType,
             'name' => $validated['name'],
             'slug' => $slug,
             'tagline' => $validated['tagline'] ?? null,
@@ -72,13 +79,19 @@ class MicrostoreOwnerController extends BaseController
             'settings' => $validated['settings'] ?? [],
         ]);
 
+        $user->notify(new MicrostoreRegisteredNotification(
+            $microstore->name,
+            $microstore->slug,
+            $requireModeration,
+        ));
+
         return $this->success($microstore, 'Microstore created successfully.', 201);
     }
 
     public function update(Request $request): JsonResponse
     {
         $user = $request->user('api');
-        $microstore = Microstore::where('user_id', $user->id)->firstOrFail();
+        $microstore = $this->ownedStoreOrFail($request, $user->id);
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:150'],
@@ -98,7 +111,7 @@ class MicrostoreOwnerController extends BaseController
     public function addProduct(Request $request): JsonResponse
     {
         $user = $request->user('api');
-        $microstore = Microstore::where('user_id', $user->id)->firstOrFail();
+        $microstore = $this->ownedStoreOrFail($request, $user->id);
 
         $validated = $request->validate([
             'product_id' => [
@@ -131,7 +144,7 @@ class MicrostoreOwnerController extends BaseController
     public function updateProduct(Request $request, int $productId): JsonResponse
     {
         $user = $request->user('api');
-        $microstore = Microstore::where('user_id', $user->id)->firstOrFail();
+        $microstore = $this->ownedStoreOrFail($request, $user->id);
 
         $item = MicrostoreProduct::where('microstore_id', $microstore->id)
             ->where('product_id', $productId)
@@ -152,7 +165,7 @@ class MicrostoreOwnerController extends BaseController
     public function removeProduct(Request $request, int $productId): JsonResponse
     {
         $user = $request->user('api');
-        $microstore = Microstore::where('user_id', $user->id)->firstOrFail();
+        $microstore = $this->ownedStoreOrFail($request, $user->id);
 
         $item = MicrostoreProduct::where('microstore_id', $microstore->id)
             ->where('product_id', $productId)
@@ -166,7 +179,7 @@ class MicrostoreOwnerController extends BaseController
     public function analytics(Request $request): JsonResponse
     {
         $user = $request->user('api');
-        $microstore = Microstore::where('user_id', $user->id)->firstOrFail();
+        $microstore = $this->ownedStoreOrFail($request, $user->id);
 
         $totalClicks = MicrostoreEvent::where('microstore_id', $microstore->id)
             ->where('event_type', 'product_click')
@@ -187,5 +200,19 @@ class MicrostoreOwnerController extends BaseController
             'total_revenue' => (float) $microstore->total_revenue,
             'recent_events' => $recentEvents,
         ], 'Microstore analytics retrieved.');
+    }
+
+    private function ownedStoreOrFail(Request $request, int $userId): Microstore
+    {
+        return Microstore::where('user_id', $userId)
+            ->where('type', $this->resolveStoreType($request))
+            ->firstOrFail();
+    }
+
+    private function resolveStoreType(Request $request): string
+    {
+        $type = $request->route('storeType') ?? $request->input('type', 'microstore');
+
+        return in_array($type, ['microstore', 'celebrity'], true) ? $type : 'microstore';
     }
 }

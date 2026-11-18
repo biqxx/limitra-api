@@ -64,7 +64,14 @@ class CheckoutQuoteService
         });
         $subtotal = $lines->sum('line_total');
 
-        $deliveryOptions = $this->delivery->options($cart, $address->country, $address->state, $address->city);
+        $deliveryOptions = $this->delivery->options(
+            $cart,
+            $address->country,
+            $address->state,
+            $address->city,
+            $address->redstar_city_code,
+            $address->redstar_town_id,
+        );
         $shipping = collect($deliveryOptions)->firstWhere('code', $data['delivery_method']);
         if (! $shipping) {
             throw ValidationException::withMessages(['delivery_method' => ['The selected delivery method is unavailable for this cart and address.']]);
@@ -144,6 +151,7 @@ class CheckoutQuoteService
                     'label' => $address->label, 'recipient_name' => $address->recipient_name, 'phone' => $address->phone,
                     'line1' => $address->line1, 'line2' => $address->line2, 'city' => $address->city,
                     'state' => $address->state, 'postal_code' => $address->postal_code, 'country' => $address->country,
+                    'redstar_city_code' => $address->redstar_city_code, 'redstar_town_id' => $address->redstar_town_id,
                 ],
                 'shipping_snapshot' => $shipping,
                 'promotion_snapshot' => $promotion,

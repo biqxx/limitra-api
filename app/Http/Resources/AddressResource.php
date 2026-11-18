@@ -23,6 +23,8 @@ class AddressResource extends JsonResource
             'state' => $this->state,
             'country' => $this->country,
             'postal_code' => $this->postal_code,
+            'redstar_city_code' => $this->redstar_city_code,
+            'redstar_town_id' => $this->redstar_town_id,
             'is_default' => $this->is_default,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

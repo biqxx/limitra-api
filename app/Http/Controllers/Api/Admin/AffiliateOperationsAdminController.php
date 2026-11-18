@@ -9,6 +9,7 @@ use App\Models\Affiliate\AffiliateResource;
 use App\Models\Affiliate\AffiliateWithdrawal;
 use App\Models\User\Role;
 use App\Notifications\Affiliate\AffiliateWithdrawalPaidNotification;
+use App\Notifications\Affiliate\AffiliateApplicationStatusNotification;
 use App\Notifications\Affiliate\AffiliateWithdrawalRejectedNotification;
 use App\Services\Admin\AuditEventService;
 use App\Services\Affiliate\AffiliateLedgerService;
@@ -126,6 +127,9 @@ class AffiliateOperationsAdminController extends BaseController
                 after: $application->fresh()->toArray(),
             );
 
+            $approvedNotes = $application->admin_notes;
+            DB::afterCommit(fn () => $user->notify(new AffiliateApplicationStatusNotification('approved', $affiliate->code, $approvedNotes)));
+
             return $this->success([
                 'application' => $application->fresh()->load('reviewer:id,email,username'),
                 'affiliate' => $affiliate,
@@ -157,6 +161,8 @@ class AffiliateOperationsAdminController extends BaseController
             before: $before,
             after: $application->fresh()->toArray(),
         );
+
+        $application->user?->notify(new AffiliateApplicationStatusNotification('rejected', null, $application->admin_notes));
 
         return $this->success($application->fresh()->load('reviewer:id,email,username'), 'Affiliate application rejected.');
     }

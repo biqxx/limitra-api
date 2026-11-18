@@ -13,8 +13,11 @@ class MicrostorePublicController extends BaseController
 {
     public function index(Request $request): JsonResponse
     {
+        $storeType = $this->resolveStoreType($request);
+
         $query = Microstore::query()
             ->with('user:id,username,email')
+            ->when($storeType, fn ($q) => $q->where('type', $storeType))
             ->where('status', 'active')
             ->where('moderation_status', 'approved')
             ->latest('id');
@@ -50,6 +53,8 @@ class MicrostorePublicController extends BaseController
 
     public function show(string $slug, Request $request): JsonResponse
     {
+        $storeType = $this->resolveStoreType($request);
+
         $microstore = Microstore::query()
             ->with([
                 'user:id,username,email',
@@ -57,6 +62,7 @@ class MicrostorePublicController extends BaseController
                     ->whereHas('product', fn ($productQuery) => $productQuery->where('status', 'active'))
                     ->with('product'),
             ])
+            ->when($storeType, fn ($q) => $q->where('type', $storeType))
             ->where('slug', $slug)
             ->where('status', 'active')
             ->where('moderation_status', 'approved')
@@ -77,7 +83,10 @@ class MicrostorePublicController extends BaseController
 
     public function products(string $slug, Request $request): JsonResponse
     {
+        $storeType = $this->resolveStoreType($request);
+
         $microstore = Microstore::query()
+            ->when($storeType, fn ($q) => $q->where('type', $storeType))
             ->where('slug', $slug)
             ->where('status', 'active')
             ->where('moderation_status', 'approved')
@@ -103,7 +112,10 @@ class MicrostorePublicController extends BaseController
 
     public function trackClick(string $slug, Request $request): JsonResponse
     {
+        $storeType = $this->resolveStoreType($request);
+
         $microstore = Microstore::query()
+            ->when($storeType, fn ($q) => $q->where('type', $storeType))
             ->where('slug', $slug)
             ->where('status', 'active')
             ->where('moderation_status', 'approved')
@@ -128,5 +140,12 @@ class MicrostorePublicController extends BaseController
         ]);
 
         return $this->success(null, 'Click tracked.');
+    }
+
+    private function resolveStoreType(Request $request): ?string
+    {
+        $type = $request->route('storeType') ?? $request->input('type');
+
+        return in_array($type, ['microstore', 'celebrity'], true) ? $type : null;
     }
 }

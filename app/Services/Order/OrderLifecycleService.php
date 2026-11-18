@@ -105,6 +105,8 @@ class OrderLifecycleService
                 $address->country,
                 $address->state,
                 $address->city,
+                $address->redstar_city_code,
+                $address->redstar_town_id,
             ))->firstWhere('code', $order->delivery_method);
             if (! $option) {
                 $this->invalid('address_id', 'The selected delivery method is unavailable for this address.');
@@ -266,6 +268,8 @@ class OrderLifecycleService
             'state' => $address->state,
             'postal_code' => $address->postal_code,
             'country' => $address->country,
+            'redstar_city_code' => $address->redstar_city_code,
+            'redstar_town_id' => $address->redstar_town_id,
         ];
     }
 

@@ -23,12 +23,15 @@ class Address extends Model
         'state',
         'country',
         'postal_code',
+        'redstar_city_code',
+        'redstar_town_id',
         'is_default',
     ];
 
     protected function casts(): array
     {
         return [
+            'redstar_town_id' => 'integer',
             'is_default' => 'boolean',
         ];
     }

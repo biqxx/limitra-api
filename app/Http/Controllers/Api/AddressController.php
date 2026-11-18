@@ -4,13 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\AddressResource;
 use App\Models\Address\Address;
+use App\Services\Logistics\RedStarService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
 class AddressController extends BaseController
 {
+    public function __construct(private readonly RedStarService $redStar) {}
     // ═══════════════════════════════════════════════════════════════════════
     //  Standard apiResource methods
     // ═══════════════════════════════════════════════════════════════════════
@@ -75,13 +78,34 @@ class AddressController extends BaseController
             'phone' => ['required', 'string', 'max:20'],
             'line1' => ['required', 'string', 'max:255'],
             'line2' => ['nullable', 'string', 'max:255'],
-            'city' => ['required', 'string', 'max:100'],
+            'city' => ['required_if:type,billing', 'nullable', 'string', 'max:100'],
             'landmark' => ['nullable', 'string', 'max:255'],
-            'state' => ['required', 'string', 'max:100'],
+            'state' => ['required_if:type,billing', 'nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'size:2'],
             'postal_code' => ['nullable', 'string', 'max:20'],
+            'redstar_city_code' => ['required_if:type,delivery', 'nullable', 'string', 'max:20'],
+            'redstar_town_id' => ['required_if:type,delivery', 'nullable', 'integer', 'min:1'],
             'is_default' => ['nullable', 'boolean'],
         ]);
+
+        if ($data['type'] === 'delivery') {
+            $location = $this->redStar->resolveLocation(
+                (string) $data['redstar_city_code'],
+                (int) $data['redstar_town_id'],
+            );
+
+            if (! $location) {
+                throw ValidationException::withMessages([
+                    'redstar_town_id' => ['The selected city and town are not valid Red Star Logistics delivery locations.'],
+                ]);
+            }
+
+            $data['redstar_city_code'] = $location['city_code'];
+            $data['redstar_town_id'] = $location['town_id'];
+            $data['state'] = $location['city_name'];
+            $data['city'] = $location['town_name'];
+            $data['country'] = 'NG';
+        }
 
         $userId = auth('api')->id();
 
@@ -162,8 +186,37 @@ class AddressController extends BaseController
             'state' => ['sometimes', 'required', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'size:2'],
             'postal_code' => ['nullable', 'string', 'max:20'],
+            'redstar_city_code' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'redstar_town_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'is_default' => ['nullable', 'boolean'],
         ]);
+
+        $effectiveType = $data['type'] ?? $address->type;
+
+        if ($effectiveType === 'delivery' && ($request->hasAny(['type', 'redstar_city_code', 'redstar_town_id']))) {
+            $cityCode = (string) ($data['redstar_city_code'] ?? $address->redstar_city_code ?? '');
+            $townId = (int) ($data['redstar_town_id'] ?? $address->redstar_town_id ?? 0);
+
+            if ($cityCode === '' || $townId <= 0) {
+                throw ValidationException::withMessages([
+                    'redstar_town_id' => ['Delivery addresses must use a valid Red Star Logistics city and town.'],
+                ]);
+            }
+
+            $location = $this->redStar->resolveLocation($cityCode, $townId);
+
+            if (! $location) {
+                throw ValidationException::withMessages([
+                    'redstar_town_id' => ['The selected city and town are not valid Red Star Logistics delivery locations.'],
+                ]);
+            }
+
+            $data['redstar_city_code'] = $location['city_code'];
+            $data['redstar_town_id'] = $location['town_id'];
+            $data['state'] = $location['city_name'];
+            $data['city'] = $location['town_name'];
+            $data['country'] = 'NG';
+        }
 
         DB::transaction(function () use ($data, $address): void {
             if (! empty($data['is_default'])) {

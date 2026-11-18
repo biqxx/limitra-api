@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\BaseController;
 use App\Models\Microstore\Microstore;
 use App\Models\Microstore\MicrostoreProduct;
+use App\Notifications\Microstore\MicrostoreModeratedNotification;
 use App\Services\Admin\AuditEventService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,11 @@ class MicrostoreAdminController extends BaseController
     public function index(Request $request): JsonResponse
     {
         $query = Microstore::query()->with('user:id,username,email')->latest('id');
+
+        $storeType = $request->route('storeType') ?? $request->input('type');
+        if (in_array($storeType, ['microstore', 'celebrity'], true)) {
+            $query->where('type', $storeType);
+        }
 
         if ($request->filled('status')) {
             $query->where('status', (string) $request->input('status'));
@@ -57,8 +63,16 @@ class MicrostoreAdminController extends BaseController
 
     public function store(Request $request): JsonResponse
     {
+        $storeType = $request->route('storeType') ?? $request->input('type', 'microstore');
+
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id', 'unique:microstores,user_id'],
+            'user_id' => [
+                'required',
+                'integer',
+                'exists:users,id',
+                Rule::unique('microstores', 'user_id')->where('type', $storeType),
+            ],
+            'type' => ['sometimes', 'string', 'in:microstore,celebrity'],
             'name' => ['required', 'string', 'max:150'],
             'slug' => ['nullable', 'string', 'max:100', 'unique:microstores,slug'],
             'tagline' => ['nullable', 'string', 'max:255'],
@@ -81,9 +95,10 @@ class MicrostoreAdminController extends BaseController
             ? Str::slug($validated['slug'])
             : Str::slug($validated['name']).'-'.strtolower(Str::random(4));
 
-        $microstore = DB::transaction(function () use ($validated, $slug, $admin): Microstore {
+        $microstore = DB::transaction(function () use ($validated, $slug, $admin, $storeType): Microstore {
             $store = Microstore::create([
                 'user_id' => $validated['user_id'],
+                'type' => $storeType,
                 'name' => $validated['name'],
                 'slug' => $slug,
                 'tagline' => $validated['tagline'] ?? null,
@@ -130,8 +145,10 @@ class MicrostoreAdminController extends BaseController
         );
     }
 
-    public function show(Microstore $microstore): JsonResponse
+    public function show(Request $request, Microstore $microstore): JsonResponse
     {
+        $this->assertRouteStoreType($request, $microstore);
+
         return $this->success($microstore->load([
             'user:id,username,email',
             'moderatedBy:id,username,email',
@@ -141,6 +158,8 @@ class MicrostoreAdminController extends BaseController
 
     public function update(Request $request, Microstore $microstore): JsonResponse
     {
+        $this->assertRouteStoreType($request, $microstore);
+
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:150'],
             'slug' => ['sometimes', 'string', 'max:100', Rule::unique('microstores', 'slug')->ignore($microstore->id)],
@@ -167,6 +186,8 @@ class MicrostoreAdminController extends BaseController
 
     public function moderate(Request $request, Microstore $microstore): JsonResponse
     {
+        $this->assertRouteStoreType($request, $microstore);
+
         $validated = $request->validate([
             'moderation_status' => ['required', 'string', 'in:approved,rejected,suspended'],
             'moderation_notes' => ['nullable', 'string', 'max:1000'],
@@ -208,11 +229,20 @@ class MicrostoreAdminController extends BaseController
             ],
         );
 
+        $microstore->user?->notify(new MicrostoreModeratedNotification(
+            $microstore->name,
+            $microstore->slug,
+            $validated['moderation_status'],
+            $validated['moderation_notes'] ?? null,
+        ));
+
         return $this->success($microstore->fresh(), 'Microstore moderation status updated.');
     }
 
     public function toggleFeatured(Request $request, Microstore $microstore): JsonResponse
     {
+        $this->assertRouteStoreType($request, $microstore);
+
         $isFeatured = $request->has('is_featured')
             ? $request->boolean('is_featured')
             : ! $microstore->is_featured;
@@ -220,5 +250,13 @@ class MicrostoreAdminController extends BaseController
         $microstore->update(['is_featured' => $isFeatured]);
 
         return $this->success($microstore->fresh(), 'Microstore featured status updated.');
+    }
+
+    private function assertRouteStoreType(Request $request, Microstore $microstore): void
+    {
+        $routeType = $request->route('storeType');
+        if (in_array($routeType, ['microstore', 'celebrity'], true) && $microstore->type !== $routeType) {
+            abort(404);
+        }
     }
 }

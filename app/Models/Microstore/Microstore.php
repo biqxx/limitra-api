@@ -14,6 +14,7 @@ class Microstore extends Model
 {
     protected $fillable = [
         'user_id',
+        'type',
         'name',
         'slug',
         'tagline',
@@ -48,6 +49,11 @@ class Microstore extends Model
     public function isPubliclyActive(): bool
     {
         return $this->status === 'active' && $this->moderation_status === 'approved';
+    }
+
+    public function isCelebrityStore(): bool
+    {
+        return $this->type === 'celebrity';
     }
 
     public function user(): BelongsTo

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Affiliate;
 use App\Http\Controllers\Api\BaseController;
 use App\Models\Affiliate\Affiliate;
 use App\Models\Affiliate\AffiliateApplication;
+use App\Notifications\Affiliate\AffiliateApplicationSubmittedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -41,6 +42,8 @@ class AffiliateApplicationController extends BaseController
             'website_url' => $validated['website_url'] ?? null,
             'notes' => $validated['notes'] ?? null,
         ]);
+
+        $user->notify(AffiliateApplicationSubmittedNotification::forApplication($application, 3));
 
         return $this->success([
             'application' => $application,

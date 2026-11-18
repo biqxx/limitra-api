@@ -9,11 +9,13 @@ use App\Http\Resources\AdminRefundResource;
 use App\Http\Resources\OrderResource;
 use App\Models\Order\Order;
 use App\Services\Admin\AuditEventService;
+use App\Services\Logistics\RedStarShipmentService;
 use App\Services\Order\OrderLifecycleService;
 use App\Services\Payment\RefundService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use RuntimeException;
 
 class OrderController extends BaseController
 {
@@ -102,6 +104,49 @@ class OrderController extends BaseController
         $order = $lifecycle->ship($order, $data, (int) auth('api')->id());
 
         return $this->success(new OrderResource($order->load(self::DETAIL_RELATIONS)), 'Order shipped.');
+    }
+
+    public function shipRedStar(Request $request, Order $order, RedStarShipmentService $redStarShipments): JsonResponse
+    {
+        $data = $request->validate([
+            'packaging' => ['nullable', 'string', 'max:100'],
+            'box_and_crating' => ['nullable', 'string', 'max:100'],
+            'delivery_type' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'onforwarding_location' => ['nullable', 'string', 'max:150'],
+            'pickup_type' => ['nullable', 'integer', 'min:1'],
+            'estimated_delivery_at' => ['nullable', 'date', 'after:now'],
+            'location' => ['nullable', 'string', 'max:150'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        try {
+            $order = $redStarShipments->dispatch($order, $data, (int) auth('api')->id());
+        } catch (RuntimeException $exception) {
+            return $this->error($exception->getMessage(), 502);
+        }
+
+        return $this->success(new OrderResource($order->load(self::DETAIL_RELATIONS)), 'Order dispatched to Red Star Logistics.');
+    }
+
+    public function waybill(Request $request, Order $order, RedStarShipmentService $redStarShipments): JsonResponse
+    {
+        $mini = filter_var($request->query('mini', false), FILTER_VALIDATE_BOOLEAN);
+
+        try {
+            return $this->success($redStarShipments->waybill($order, $mini));
+        } catch (RuntimeException $exception) {
+            return $this->error($exception->getMessage(), 502);
+        }
+    }
+
+    public function cancelShipment(Order $order, RedStarShipmentService $redStarShipments): JsonResponse
+    {
+        try {
+            return $this->success($redStarShipments->cancel($order), 'Red Star shipment cancelled.');
+        } catch (RuntimeException $exception) {
+            return $this->error($exception->getMessage(), 502);
+        }
     }
 
     public function refund(

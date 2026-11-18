@@ -283,8 +283,14 @@ class OrderCreationService
             }
         }
 
-        $shipping = collect($this->delivery->options($cart, $address->country, $address->state, $address->city))
-            ->firstWhere('code', $quote->shipping_snapshot['code']);
+        $shipping = collect($this->delivery->options(
+            $cart,
+            $address->country,
+            $address->state,
+            $address->city,
+            $address->redstar_city_code,
+            $address->redstar_town_id,
+        ))->firstWhere('code', $quote->shipping_snapshot['code']);
         if (! $shipping) {
             $this->invalidQuote('The selected delivery method is no longer available. Create a new quote.');
         }

@@ -13,8 +13,12 @@ Route::middleware(['auth:api', 'active.session', 'permission:orders.update'])
     ->name('admin.orders.status');
 
 Route::middleware(['auth:api', 'active.session', 'permission:orders.fulfill'])
-    ->post('orders/{order}/ship', [OrderController::class, 'ship'])
-    ->name('admin.orders.ship');
+    ->group(function (): void {
+        Route::post('orders/{order}/ship', [OrderController::class, 'ship'])->name('admin.orders.ship');
+        Route::post('orders/{order}/ship/redstar', [OrderController::class, 'shipRedStar'])->name('admin.orders.ship.redstar');
+        Route::get('orders/{order}/waybill', [OrderController::class, 'waybill'])->name('admin.orders.waybill');
+        Route::post('orders/{order}/cancel-shipment', [OrderController::class, 'cancelShipment'])->name('admin.orders.cancel-shipment');
+    });
 
 Route::middleware(['auth:api', 'active.session', 'permission:refunds.resolve'])
     ->post('orders/{order}/refund', [OrderController::class, 'refund'])

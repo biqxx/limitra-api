@@ -109,3 +109,9 @@ Schedule::command('products:expire-discounts')
     ->withoutOverlapping()
     ->onOneServer()
     ->name('products:expire-discounts');
+
+Schedule::command('redstar:sync-shipments')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('redstar:sync-shipments');

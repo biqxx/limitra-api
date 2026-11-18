@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Address\Address;
 use App\Models\Cart\Cart;
-use App\Models\Commerce\PickupLocation;
 use App\Services\Cart\CartIdentityService;
 use App\Services\Commerce\DeliveryService;
+use App\Services\Logistics\RedStarService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 class DeliveryController extends BaseController
 {
@@ -17,10 +18,14 @@ class DeliveryController extends BaseController
         $data = $request->validate([
             'cart_id' => ['required', 'integer', 'exists:carts,id'],
             'address_id' => ['nullable', 'integer', 'exists:addresses,id'],
-            'country' => ['required_without:address_id', 'string', 'size:2'],
-            'state' => ['required_without:address_id', 'string', 'max:100'],
+            'redstar_city_code' => ['required_without:address_id', 'string', 'max:20'],
+            'redstar_town_id' => ['required_without:address_id', 'integer', 'min:1'],
+            'pickup_type' => ['nullable', 'integer', 'min:1'],
+            'country' => ['nullable', 'string', 'size:2'],
+            'state' => ['nullable', 'string', 'max:100'],
             'city' => ['nullable', 'string', 'max:100'],
         ]);
+
         $cart = Cart::findOrFail($data['cart_id']);
         $identity->authorize($request, $cart);
 
@@ -30,24 +35,37 @@ class DeliveryController extends BaseController
             $data['country'] = $address->country;
             $data['state'] = $address->state;
             $data['city'] = $address->city;
+            $data['redstar_city_code'] = $address->redstar_city_code;
+            $data['redstar_town_id'] = $address->redstar_town_id;
         }
 
-        return $this->success($delivery->options($cart, $data['country'], $data['state'], $data['city'] ?? null));
+        try {
+            $options = $delivery->options(
+                cart: $cart,
+                country: $data['country'] ?? 'NG',
+                state: $data['state'] ?? '',
+                city: $data['city'] ?? null,
+                redstarCityCode: $data['redstar_city_code'] ?? null,
+                redstarTownId: isset($data['redstar_town_id']) ? (int) $data['redstar_town_id'] : null,
+                pickupType: isset($data['pickup_type']) ? (int) $data['pickup_type'] : null,
+            );
+        } catch (RuntimeException $exception) {
+            return $this->error($exception->getMessage(), 502);
+        }
+
+        return $this->success($options);
     }
 
-    public function pickupLocations(Request $request): JsonResponse
+    public function pickupLocations(Request $request, RedStarService $redStar): JsonResponse
     {
         $data = $request->validate([
-            'country' => ['nullable', 'string', 'size:2'],
-            'state' => ['nullable', 'string', 'max:100'],
-            'city' => ['nullable', 'string', 'max:100'],
+            'city_code' => ['required', 'string', 'max:20'],
         ]);
-        $locations = PickupLocation::where('active', true)
-            ->where('country', strtoupper($data['country'] ?? 'NG'))
-            ->when($data['state'] ?? null, fn ($query, $state) => $query->whereRaw('LOWER(state) = ?', [strtolower($state)]))
-            ->when($data['city'] ?? null, fn ($query, $city) => $query->whereRaw('LOWER(city) = ?', [strtolower($city)]))
-            ->orderBy('name')->get();
 
-        return $this->success($locations);
+        try {
+            return $this->success($redStar->dropOffLocations($data['city_code']));
+        } catch (RuntimeException $exception) {
+            return $this->error($exception->getMessage(), 502);
+        }
     }
 }

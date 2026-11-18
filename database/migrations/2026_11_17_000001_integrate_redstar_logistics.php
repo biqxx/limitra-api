@@ -71,7 +71,6 @@ return new class extends Migration
             'code' => 'redstar',
             'name' => 'Red Star Express Delivery',
             'type' => 'standard',
-            'description' => 'Doorstep and express centre delivery powered by Red Star Logistics.',
             'active' => true,
             'created_at' => $now,
             'updated_at' => $now,

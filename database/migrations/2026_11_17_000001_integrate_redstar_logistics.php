@@ -19,12 +19,41 @@ return new class extends Migration
             $table->decimal('weight_kg', 8, 3)->nullable()->after('price');
         });
 
-        // Remove all legacy non-RedStar delivery addresses and static delivery rules.
-        DB::table('addresses')->where('type', 'delivery')->delete();
+        // Remove legacy non-RedStar delivery addresses and static delivery rules
+        // without breaking foreign keys on historical orders or checkout quotes.
+        $referencedAddressIds = DB::table('orders')
+            ->whereNotNull('shipping_address_id')
+            ->pluck('shipping_address_id')
+            ->merge(DB::table('checkout_quotes')->whereNotNull('address_id')->pluck('address_id'))
+            ->unique()
+            ->values()
+            ->all();
+
+        DB::table('addresses')
+            ->where('type', 'delivery')
+            ->when($referencedAddressIds !== [], fn ($q) => $q->whereNotIn('id', $referencedAddressIds))
+            ->delete();
+
         DB::table('pickup_locations')->delete();
         DB::table('delivery_zone_method')->delete();
         DB::table('delivery_zones')->delete();
-        DB::table('delivery_methods')->delete();
+
+        $referencedMethodIds = DB::table('checkout_quotes')
+            ->whereNotNull('delivery_method_id')
+            ->pluck('delivery_method_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($referencedMethodIds !== []) {
+            DB::table('delivery_methods')
+                ->whereIn('id', $referencedMethodIds)
+                ->update(['active' => false, 'updated_at' => now()]);
+        }
+
+        DB::table('delivery_methods')
+            ->when($referencedMethodIds !== [], fn ($q) => $q->whereNotIn('id', $referencedMethodIds))
+            ->delete();
 
         $now = now();
         $zoneId = DB::table('delivery_zones')->insertGetId([

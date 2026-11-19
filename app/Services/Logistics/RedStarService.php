@@ -131,18 +131,20 @@ class RedStarService
         ?string $senderCityCode = null,
         ?int $senderTownId = null,
     ): array {
-        $senderCity = strtoupper(trim($senderCityCode ?: (string) config('services.redstar.sender_city', 'LOS')));
-        $senderTown = $senderTownId ?: (int) config('services.redstar.sender_town_id', 1);
-        $recipientCity = strtoupper(trim($recipientCityCode));
+        $senderCityCode = strtoupper(trim($senderCityCode ?: (string) config('services.redstar.sender_city', 'MLD')));
+        $senderTown = $senderTownId ?: (int) config('services.redstar.sender_town_id', 3164);
+        $recipientCityCode = strtoupper(trim($recipientCityCode));
+        $senderCity = $this->resolveCityName($senderCityCode);
+        $recipientCity = $this->resolveCityName($recipientCityCode);
         $pickup = $pickupType ?: (int) config('services.redstar.default_pickup_type', 1);
         $normalizedWeight = max(0.1, round($weightKg, 2));
 
         $cacheKey = implode(':', [
             'redstar',
             'fee',
-            $senderCity,
+            md5($senderCity),
             $senderTown,
-            $recipientCity,
+            md5($recipientCity),
             $recipientTownId,
             $pickup,
             number_format($normalizedWeight, 2, '.', ''),
@@ -169,6 +171,21 @@ class RedStarService
                 ];
             },
         );
+    }
+
+    private function resolveCityName(string $cityCodeOrName): string
+    {
+        $needle = strtoupper(trim($cityCodeOrName));
+        if ($needle === 'LOS') {
+            $needle = 'MLD';
+        }
+
+        $match = collect($this->cities())->first(function (array $item) use ($needle): bool {
+            return strtoupper((string) ($item['abbr'] ?? '')) === $needle
+                || strtoupper((string) ($item['name'] ?? '')) === $needle;
+        });
+
+        return (string) ($match['name'] ?? $cityCodeOrName);
     }
 
     /**
@@ -290,14 +307,15 @@ class RedStarService
             return round((float) $response['value'], 2);
         }
 
-        foreach (['totalAmount', 'total_amount', 'deliveryFee', 'delivery_fee', 'fee', 'amount', 'price'] as $key) {
-            if (isset($response[$key]) && is_numeric($response[$key])) {
-                return round((float) $response[$key], 2);
+        $lower = array_change_key_case($response, CASE_LOWER);
+        foreach (['totalamount', 'total_amount', 'deliveryfee', 'delivery_fee', 'fee', 'amount', 'price'] as $key) {
+            if (isset($lower[$key]) && is_numeric($lower[$key])) {
+                return round((float) $lower[$key], 2);
             }
         }
 
-        if (isset($response['data']) && is_array($response['data'])) {
-            return $this->extractFee($response['data']);
+        if (isset($lower['data']) && is_array($lower['data'])) {
+            return $this->extractFee($lower['data']);
         }
 
         throw new RuntimeException('Red Star Logistics API did not return a valid delivery fee.');

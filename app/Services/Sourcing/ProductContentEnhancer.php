@@ -17,11 +17,21 @@ class ProductContentEnhancer
      */
     public function enhance(string $supplier, string $externalProductId): array
     {
+        $supplierProduct = $this->client->details($supplier, $externalProductId);
+
+        return $this->enhancePayload($supplier, $externalProductId, $supplierProduct);
+    }
+
+    /**
+     * @param  array<string, mixed>  $supplierProduct
+     * @return array{supplier_product: array<string, mixed>, enhanced: array<string, mixed>}
+     */
+    public function enhancePayload(string $supplier, string $externalProductId, array $supplierProduct): array
+    {
         if (! filled(config('ai.openrouter.api_key'))) {
             throw new UnexpectedValueException('AI product enhancement is not configured.');
         }
 
-        $supplierProduct = $this->client->details($supplier, $externalProductId);
         $categories = $this->categories();
         $prompt = $this->prompt($supplierProduct, $categories);
         $lastError = null;

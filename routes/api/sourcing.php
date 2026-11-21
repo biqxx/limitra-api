@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\ExtensionSourcingController;
 use App\Http\Controllers\Api\Admin\ProductPricingController;
 use App\Http\Controllers\Api\Admin\SourcingController;
 use Illuminate\Support\Facades\Route;
@@ -27,4 +28,10 @@ Route::middleware(['auth:api', 'active.session', 'permission:catalog.sourcing'])
         Route::post('imports/{productSource}/pricing/approve', [ProductPricingController::class, 'approve'])
             ->middleware('throttle:30,1')
             ->name('pricing.approve');
+        Route::post('extension-review', [ExtensionSourcingController::class, 'review'])
+            ->middleware('throttle:30,1')
+            ->name('extension.review');
+        Route::post('extension-import', [ExtensionSourcingController::class, 'import'])
+            ->middleware('throttle:30,1')
+            ->name('extension.import');
     });

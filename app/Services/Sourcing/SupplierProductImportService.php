@@ -308,6 +308,7 @@ class SupplierProductImportService
             : 0.0;
         $baseNgnPrice = (float) ($preparedQuote['proposed_price_ngn'] ?? 0);
         $usedSkus = [];
+        $storedImageCache = [];
 
         foreach ($variants as $index => $variant) {
             if (! is_array($variant)) {
@@ -354,10 +355,27 @@ class SupplierProductImportService
                 ? max(0, (int) $variant['stock'])
                 : ($available ? 10 : 0);
 
+            $variantImages = [];
+            if (is_array($variant['images'] ?? null)) {
+                foreach (array_slice($variant['images'], 0, 5) as $imgPos => $rawImg) {
+                    $imgUrl = is_string($rawImg) ? $this->secureUrl($rawImg) : (is_array($rawImg) ? $this->secureUrl($rawImg['url'] ?? null) : null);
+                    if (! $imgUrl) {
+                        continue;
+                    }
+                    if (! isset($storedImageCache[$imgUrl])) {
+                        $storedImageCache[$imgUrl] = $this->downloadAndStoreImage($imgUrl, $product->id, 100 + ($index * 10) + $imgPos);
+                    }
+                    if (! in_array($storedImageCache[$imgUrl], $variantImages, true)) {
+                        $variantImages[] = $storedImageCache[$imgUrl];
+                    }
+                }
+            }
+
             ProductVariant::create([
                 'product_id' => $product->id,
                 'sku' => $variantSku,
                 'attributes' => $attributes,
+                'images' => $variantImages !== [] ? $variantImages : null,
                 'price' => $ngnPrice,
                 'stock' => $stock,
                 'status' => $available ? 'active' : 'disabled',

@@ -48,6 +48,7 @@ class ProductResource extends JsonResource
                 'id' => $variant->id,
                 'sku' => $variant->sku,
                 'attributes' => $variant->attributes,
+                'images' => $variant->images ?? [],
                 'price' => $variant->price ?? $this->price,
                 'stock' => $variant->stock,
                 'status' => $variant->status,

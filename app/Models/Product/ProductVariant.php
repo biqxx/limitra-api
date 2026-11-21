@@ -11,6 +11,7 @@ class ProductVariant extends Model
         'product_id',
         'sku',
         'attributes',
+        'images',
         'price',
         'stock',
         'low_stock_threshold',
@@ -21,6 +22,7 @@ class ProductVariant extends Model
     {
         return [
             'attributes' => 'array',
+            'images' => 'array',
             'price' => 'decimal:2',
             'stock' => 'integer',
             'low_stock_threshold' => 'integer',

@@ -79,6 +79,8 @@ class MicrostoreOwnerController extends BaseController
             'settings' => $validated['settings'] ?? [],
         ]);
 
+        $microstore->assignOwnerRole();
+
         $user->notify(new MicrostoreRegisteredNotification(
             $microstore->name,
             $microstore->slug,

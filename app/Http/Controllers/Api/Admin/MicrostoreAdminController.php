@@ -114,6 +114,8 @@ class MicrostoreAdminController extends BaseController
                 'settings' => $validated['settings'] ?? [],
             ]);
 
+            $store->assignOwnerRole();
+
             foreach ($validated['product_ids'] ?? [] as $index => $productId) {
                 MicrostoreProduct::create([
                     'microstore_id' => $store->id,

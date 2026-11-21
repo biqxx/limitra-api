@@ -32,6 +32,8 @@ class UserResource extends JsonResource
             'linked_roles' => [
                 'affiliate' => $roles->contains('name', 'affiliate'),
                 'staff' => $roles->contains(fn (Role $role): bool => in_array($role->name, ['staff', 'admin'], true)),
+                'microstore_owner' => $roles->contains('name', 'microstore_owner'),
+                'celebrity_store_owner' => $roles->contains('name', 'celebrity_store_owner'),
             ],
             'roles' => $roles->map(fn (Role $role): array => [
                 'id' => $role->id,

@@ -5,6 +5,7 @@ namespace App\Models\Microstore;
 use App\Models\Order\Order;
 use App\Models\Product\Product;
 use App\Models\User;
+use App\Models\User\Role;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -91,5 +92,19 @@ class Microstore extends Model
     public function events(): HasMany
     {
         return $this->hasMany(MicrostoreEvent::class);
+    }
+
+    /**
+     * Ensure the store owner has the matching microstore_owner or celebrity_store_owner role.
+     */
+    public function assignOwnerRole(): void
+    {
+        $roleName = $this->type === 'celebrity' ? 'celebrity_store_owner' : 'microstore_owner';
+        $roleId = Role::query()->where('name', $roleName)->value('id');
+        if ($roleId && $this->user_id) {
+            $this->owner()->first()?->roles()->syncWithoutDetaching([
+                $roleId => ['is_primary' => false, 'assigned_at' => now()],
+            ]);
+        }
     }
 }

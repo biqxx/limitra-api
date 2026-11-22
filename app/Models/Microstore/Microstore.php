@@ -102,7 +102,7 @@ class Microstore extends Model
         $roleName = $this->type === 'celebrity' ? 'celebrity_store_owner' : 'microstore_owner';
         $roleId = Role::query()->where('name', $roleName)->value('id');
         if ($roleId && $this->user_id) {
-            $this->owner()->first()?->roles()->syncWithoutDetaching([
+            $this->user()->first()?->roles()->syncWithoutDetaching([
                 $roleId => ['is_primary' => false, 'assigned_at' => now()],
             ]);
         }

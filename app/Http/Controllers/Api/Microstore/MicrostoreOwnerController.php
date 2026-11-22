@@ -6,10 +6,13 @@ use App\Http\Controllers\Api\BaseController;
 use App\Models\Microstore\Microstore;
 use App\Models\Microstore\MicrostoreEvent;
 use App\Models\Microstore\MicrostoreProduct;
+use App\Models\Order\Order;
+use App\Models\Order\OrderItem;
 use App\Notifications\Microstore\MicrostoreRegisteredNotification;
 use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -192,6 +195,31 @@ class MicrostoreOwnerController extends BaseController
             ->limit(20)
             ->get();
 
+        $orderStatusBreakdown = Order::query()
+            ->where('microstore_id', $microstore->id)
+            ->select('status', DB::raw('COUNT(*) as count'))
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        $topProducts = OrderItem::query()
+            ->whereHas('order', fn ($q) => $q->where('microstore_id', $microstore->id)->where('status', '!=', 'cancelled'))
+            ->select(
+                'product_id',
+                DB::raw('MAX(product_name) as product_name'),
+                DB::raw('SUM(quantity) as units_sold'),
+                DB::raw('COALESCE(SUM(line_total), 0) as revenue')
+            )
+            ->groupBy('product_id')
+            ->orderByDesc('revenue')
+            ->limit(10)
+            ->get()
+            ->map(fn ($row): array => [
+                'product_id' => (int) $row->product_id,
+                'product_name' => $row->product_name,
+                'units_sold' => (int) $row->units_sold,
+                'revenue' => (float) $row->revenue,
+            ])->values();
+
         return $this->success([
             'microstore_id' => $microstore->id,
             'name' => $microstore->name,
@@ -200,6 +228,8 @@ class MicrostoreOwnerController extends BaseController
             'clicks_count' => $totalClicks,
             'orders_count' => (int) $microstore->orders_count,
             'total_revenue' => (float) $microstore->total_revenue,
+            'order_status_breakdown' => $orderStatusBreakdown,
+            'top_performing_products' => $topProducts,
             'recent_events' => $recentEvents,
         ], 'Microstore analytics retrieved.');
     }

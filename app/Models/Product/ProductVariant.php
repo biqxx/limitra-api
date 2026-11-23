@@ -33,4 +33,20 @@ class ProductVariant extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    public function hasOwnPrice(): bool
+    {
+        return $this->price !== null && (float) $this->price > 0;
+    }
+
+    public function effectivePrice(?Product $product = null): string
+    {
+        if ($this->hasOwnPrice()) {
+            return number_format((float) $this->price, 2, '.', '');
+        }
+
+        $parent = $product ?? ($this->relationLoaded('product') ? $this->product : $this->product()->first());
+
+        return $parent ? $parent->effectivePrice() : '0.00';
+    }
 }

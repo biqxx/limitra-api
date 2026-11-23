@@ -49,7 +49,7 @@ class ProductResource extends JsonResource
                 'sku' => $variant->sku,
                 'attributes' => $variant->attributes,
                 'images' => $variant->images ?? [],
-                'price' => $variant->price ?? $this->price,
+                'price' => $variant->effectivePrice($this->resource),
                 'stock' => $variant->stock,
                 'status' => $variant->status,
             ])),

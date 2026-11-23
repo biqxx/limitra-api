@@ -40,7 +40,7 @@ class CheckoutQuoteService
             $product = $item->product;
             $variant = $item->variant;
             $stock = $variant?->stock ?? $product->stock;
-            $price = $variant?->price ?? $product->effectivePrice();
+            $price = $variant ? $variant->effectivePrice($product) : $product->effectivePrice();
             if ($product->status !== 'active' || ($item->variant_id && (! $variant || $variant->status !== 'active'))) {
                 throw ValidationException::withMessages(['cart_id' => ["{$product->name} is no longer available."]]);
             }

@@ -8,21 +8,9 @@ use App\Models\Microstore\MicrostoreEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use OpenApi\Attributes as OA;
 
 class MicrostorePublicController extends BaseController
 {
-    #[OA\Get(
-        path: '/microstores',
-        tags: ['Microstores'],
-        summary: 'List active microstores',
-        parameters: [
-            new OA\Parameter(name: 'featured', in: 'query', required: false, schema: new OA\Schema(type: 'boolean')),
-            new OA\Parameter(name: 'search', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
-            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', default: 16)),
-        ],
-        responses: [new OA\Response(response: 200, description: 'Paginated microstores', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function index(Request $request): JsonResponse
     {
         $storeType = $this->resolveStoreType($request);
@@ -63,13 +51,6 @@ class MicrostorePublicController extends BaseController
         ]);
     }
 
-    #[OA\Get(
-        path: '/microstores/{slug}',
-        tags: ['Microstores'],
-        summary: 'Get public microstore by slug',
-        parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        responses: [new OA\Response(response: 200, description: 'Microstore details', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function show(string $slug, Request $request): JsonResponse
     {
         $storeType = $this->resolveStoreType($request);
@@ -100,16 +81,6 @@ class MicrostorePublicController extends BaseController
         return $this->success($microstore);
     }
 
-    #[OA\Get(
-        path: '/microstores/{slug}/products',
-        tags: ['Microstores'],
-        summary: 'List curated products in a microstore',
-        parameters: [
-            new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
-            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', default: 20)),
-        ],
-        responses: [new OA\Response(response: 200, description: 'Paginated microstore products', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function products(string $slug, Request $request): JsonResponse
     {
         $storeType = $this->resolveStoreType($request);
@@ -139,13 +110,6 @@ class MicrostorePublicController extends BaseController
         ]);
     }
 
-    #[OA\Post(
-        path: '/microstores/{slug}/clicks',
-        tags: ['Microstores'],
-        summary: 'Track a microstore or product click',
-        parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        responses: [new OA\Response(response: 201, description: 'Click tracked', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function trackClick(string $slug, Request $request): JsonResponse
     {
         $storeType = $this->resolveStoreType($request);

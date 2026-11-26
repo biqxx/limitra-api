@@ -209,7 +209,14 @@ class ProductController extends BaseController
 
         $product = DB::transaction(function () use ($data, $variants, $specifications) {
             $product = Product::create($data);
-            $product->variants()->createMany($variants);
+            $normalizedVariants = array_map(function (array $variant) use ($product): array {
+                if (! isset($variant['price']) || ! is_numeric($variant['price']) || (float) $variant['price'] <= 0) {
+                    $variant['price'] = $product->price;
+                }
+
+                return $variant;
+            }, $variants);
+            $product->variants()->createMany($normalizedVariants);
             $product->specifications()->createMany(array_map(fn ($specification) => [
                 'group' => $specification['group'] ?? null,
                 'name' => $specification['name'],
@@ -410,6 +417,10 @@ class ProductController extends BaseController
                 $retainedIds = [];
 
                 foreach ($variants as $variantData) {
+                    if (! isset($variantData['price']) || ! is_numeric($variantData['price']) || (float) $variantData['price'] <= 0) {
+                        $variantData['price'] = $product->price;
+                    }
+
                     $existing = isset($variantData['id'])
                         ? $byId->get((int) $variantData['id'])
                         : (! empty($variantData['sku']) ? $bySku->get($variantData['sku']) : null);
@@ -424,6 +435,12 @@ class ProductController extends BaseController
                 }
 
                 $product->variants()->whereNotIn('id', $retainedIds)->delete();
+            } elseif (array_key_exists('price', $data)) {
+                $product->variants()
+                    ->where(function (Builder $q): void {
+                        $q->whereNull('price')->orWhere('price', '<=', 0);
+                    })
+                    ->update(['price' => $product->price]);
             }
 
             if ($specifications !== null) {

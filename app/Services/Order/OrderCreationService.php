@@ -261,7 +261,7 @@ class OrderCreationService
             }
             $remainingStock[$stockKey] -= $item->quantity;
 
-            if (! $this->sameMoney($variant?->price ?? $product->effectivePrice(), $item->unit_price)) {
+            if (! $this->sameMoney($variant ? $variant->effectivePrice($product) : $product->effectivePrice(), $item->unit_price)) {
                 $this->invalidQuote("The price of {$item->product_name} changed. Create a new quote.");
             }
         }
@@ -269,7 +269,7 @@ class OrderCreationService
 
     private function assertTotalsAndRules(CheckoutQuote $quote, Cart $cart, Address $address, int $userId): void
     {
-        $subtotal = $cart->items->sum(fn ($item) => (float) ($item->variant?->price ?? $item->product->effectivePrice()) * $item->quantity);
+        $subtotal = $cart->items->sum(fn ($item) => (float) ($item->variant ? $item->variant->effectivePrice($item->product) : $item->product->effectivePrice()) * $item->quantity);
         if (! $this->sameMoney($subtotal, $quote->subtotal)) {
             $this->invalidQuote('The cart total changed. Create a new quote.');
         }

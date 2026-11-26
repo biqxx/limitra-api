@@ -102,7 +102,7 @@ class SupplierProductImportService
             $variantsInput = is_array($attributes['variants'] ?? null)
                 ? $attributes['variants']
                 : ($supplierProduct['variants'] ?? []);
-            $this->syncProductVariants($product, $variantsInput, $supplier, $externalProductId, $supplierProduct, $preparedQuote);
+            $syncedVariants = $this->syncProductVariants($product, $variantsInput, $supplier, $externalProductId, $supplierProduct, $preparedQuote);
 
             if ($remoteImageUrls !== []) {
                 $storedUrls = [];
@@ -135,7 +135,7 @@ class SupplierProductImportService
                 'restriction_status' => null,
                 'validation_status' => null,
                 'final_price_ngn' => null,
-                'variants' => $supplierProduct['variants'] ?? null,
+                'variants' => $syncedVariants !== [] ? $syncedVariants : ($supplierProduct['variants'] ?? null),
                 'cost_breakdown' => null,
                 'source_snapshot' => $supplierProduct,
                 'sync_status' => 'needs_review',
@@ -290,6 +290,7 @@ class SupplierProductImportService
      * @param  array<int, mixed>  $variants
      * @param  array<string, mixed>  $supplierProduct
      * @param  array<string, mixed>  $preparedQuote
+     * @return array<int, array<string, mixed>>
      */
     private function syncProductVariants(
         Product $product,
@@ -298,17 +299,19 @@ class SupplierProductImportService
         string $externalProductId,
         array $supplierProduct,
         array $preparedQuote,
-    ): void {
+    ): array {
         if ($variants === []) {
-            return;
+            return [];
         }
 
         $baseSupplierPrice = isset($supplierProduct['price']) && is_numeric($supplierProduct['price'])
             ? (float) $supplierProduct['price']
             : 0.0;
-        $baseNgnPrice = (float) ($preparedQuote['proposed_price_ngn'] ?? 0);
+        $baseNgnPrice = (float) ($preparedQuote['proposed_price_ngn'] ?? $product->price ?? 0);
         $usedSkus = [];
         $storedImageCache = [];
+        $quoteBySupplierPrice = [];
+        $syncedVariants = [];
 
         foreach ($variants as $index => $variant) {
             if (! is_array($variant)) {
@@ -325,16 +328,46 @@ class SupplierProductImportService
                 $attributes = [$label !== '' ? $label : 'Option' => $value];
             }
 
+            $varSupplierPrice = isset($variant['price']) && is_numeric($variant['price']) && (float) $variant['price'] > 0
+                ? (float) $variant['price']
+                : $baseSupplierPrice;
+
             $ngnPrice = null;
-            if (isset($variant['proposed_price_ngn']) && is_numeric($variant['proposed_price_ngn']) && (float) $variant['proposed_price_ngn'] > 0) {
-                $ngnPrice = round((float) $variant['proposed_price_ngn'], 2);
-            } elseif (isset($variant['price']) && is_numeric($variant['price']) && (float) $variant['price'] > 0) {
-                $varSupplierPrice = (float) $variant['price'];
-                if ($baseSupplierPrice > 0 && $baseNgnPrice > 0) {
-                    $ngnPrice = round(($varSupplierPrice / $baseSupplierPrice) * $baseNgnPrice, 2);
+            if ($varSupplierPrice > 0 && $baseSupplierPrice > 0 && abs($varSupplierPrice - $baseSupplierPrice) >= 0.01) {
+                $priceKey = number_format($varSupplierPrice, 4, '.', '');
+                if (! array_key_exists($priceKey, $quoteBySupplierPrice)) {
+                    try {
+                        $varQuote = $this->pricing->prepareQuote(
+                            array_merge($supplierProduct, ['price' => $varSupplierPrice]),
+                            [
+                                'name' => $product->name,
+                                'description' => $product->description,
+                                'category_id' => $product->category_id,
+                                'subcategory_id' => $product->subcategory_id,
+                            ]
+                        );
+                        $quoteBySupplierPrice[$priceKey] = isset($varQuote['proposed_price_ngn']) && (float) $varQuote['proposed_price_ngn'] > 0
+                            ? round((float) $varQuote['proposed_price_ngn'], 2)
+                            : null;
+                    } catch (Throwable) {
+                        $quoteBySupplierPrice[$priceKey] = null;
+                    }
                 }
-            } elseif ($baseNgnPrice > 0) {
-                $ngnPrice = round($baseNgnPrice, 2);
+                $ngnPrice = $quoteBySupplierPrice[$priceKey];
+            }
+
+            if ($ngnPrice === null && isset($variant['proposed_price_ngn']) && is_numeric($variant['proposed_price_ngn']) && (float) $variant['proposed_price_ngn'] > 0) {
+                $ngnPrice = round((float) $variant['proposed_price_ngn'], 2);
+            }
+
+            if ($ngnPrice === null && $varSupplierPrice > 0 && $baseSupplierPrice > 0 && $baseNgnPrice > 0) {
+                $ngnPrice = abs($varSupplierPrice - $baseSupplierPrice) < 0.01
+                    ? round($baseNgnPrice, 2)
+                    : round(($varSupplierPrice / $baseSupplierPrice) * $baseNgnPrice, 2);
+            }
+
+            if ($ngnPrice === null || $ngnPrice <= 0) {
+                $ngnPrice = $baseNgnPrice > 0 ? round($baseNgnPrice, 2) : round((float) $product->price, 2);
             }
 
             $rawSku = trim((string) ($variant['sku'] ?? $variant['id'] ?? ''));
@@ -371,7 +404,7 @@ class SupplierProductImportService
                 }
             }
 
-            ProductVariant::create([
+            $createdVariant = ProductVariant::create([
                 'product_id' => $product->id,
                 'sku' => $variantSku,
                 'attributes' => $attributes,
@@ -380,7 +413,20 @@ class SupplierProductImportService
                 'stock' => $stock,
                 'status' => $available ? 'active' : 'disabled',
             ]);
+
+            $syncedVariants[] = array_merge($variant, [
+                'variant_id' => $createdVariant->id,
+                'sku' => $variantSku,
+                'selected_options' => $attributes,
+                'price' => $varSupplierPrice > 0 ? $varSupplierPrice : null,
+                'proposed_price_ngn' => $ngnPrice,
+                'available' => $available,
+                'stock' => $stock,
+                'images' => $variantImages !== [] ? $variantImages : ($variant['images'] ?? []),
+            ]);
         }
+
+        return $syncedVariants;
     }
 
     private function uniqueSlug(string $name): string

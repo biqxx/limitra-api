@@ -237,6 +237,7 @@ class ProductPricingService
                 $productUpdates['discount_ends_at'] = null;
             }
             $source->product->update($productUpdates);
+            $this->syncVariantPricesForSource($source, (float) $prepared['proposed_price_ngn']);
         }
 
         $this->auditEvents->record(
@@ -361,6 +362,7 @@ class ProductPricingService
                 $productUpdates['discount_ends_at'] = null;
             }
             $lockedSource->product->update($productUpdates);
+            $this->syncVariantPricesForSource($lockedSource, (float) $quote->approved_price_ngn);
 
             $this->auditEvents->record(
                 action: 'product_price.quote_approved',
@@ -478,5 +480,93 @@ class ProductPricingService
     private function minorToNaira(int $minor): float
     {
         return $minor / 100;
+    }
+
+    private function syncVariantPricesForSource(ProductSource $source, float $baseNgnPrice): void
+    {
+        if ($baseNgnPrice <= 0 || ! $source->product) {
+            return;
+        }
+
+        $product = $source->product;
+        $productVariants = $product->variants()->get();
+        if ($productVariants->isEmpty()) {
+            return;
+        }
+
+        $baseSupplierPrice = (float) ($source->supplier_price ?? 0);
+        $sourceVariants = is_array($source->variants) ? $source->variants : [];
+        $sourceByVariantId = [];
+        $sourceBySku = [];
+
+        foreach ($sourceVariants as $idx => $sv) {
+            if (! is_array($sv)) {
+                continue;
+            }
+            if (! empty($sv['variant_id'])) {
+                $sourceByVariantId[(int) $sv['variant_id']] = [$idx, $sv];
+            }
+            if (! empty($sv['sku'])) {
+                $sourceBySku[(string) $sv['sku']] = [$idx, $sv];
+            }
+        }
+
+        $quoteCache = [];
+        $sourceVariantsModified = false;
+
+        foreach ($productVariants as $variant) {
+            $match = $sourceByVariantId[$variant->id] ?? $sourceBySku[$variant->sku] ?? null;
+            $sv = $match[1] ?? null;
+            $svIdx = $match[0] ?? null;
+
+            $varSupplierPrice = is_array($sv) && isset($sv['price']) && is_numeric($sv['price']) && (float) $sv['price'] > 0
+                ? (float) $sv['price']
+                : $baseSupplierPrice;
+
+            $variantNgn = round($baseNgnPrice, 2);
+
+            if ($varSupplierPrice > 0 && $baseSupplierPrice > 0 && abs($varSupplierPrice - $baseSupplierPrice) >= 0.01) {
+                $priceKey = number_format($varSupplierPrice, 4, '.', '');
+                if (! array_key_exists($priceKey, $quoteCache)) {
+                    $varQuote = $this->prepareQuote(
+                        [
+                            'price' => $varSupplierPrice,
+                            'currency' => $source->supplier_currency,
+                            'weight_lb' => $source->weight_lb,
+                            'us_delivery_days_min' => $source->delivery_days_min,
+                            'us_delivery_days_max' => $source->delivery_days_max,
+                            'title' => $product->name,
+                            'description' => $product->description,
+                        ],
+                        [
+                            'name' => $product->name,
+                            'description' => $product->description,
+                            'category_id' => $product->category_id,
+                            'subcategory_id' => $product->subcategory_id,
+                        ]
+                    );
+                    $quoteCache[$priceKey] = isset($varQuote['proposed_price_ngn']) && (float) $varQuote['proposed_price_ngn'] > 0
+                        ? round((float) $varQuote['proposed_price_ngn'], 2)
+                        : round(($varSupplierPrice / $baseSupplierPrice) * $baseNgnPrice, 2);
+                }
+                $variantNgn = $quoteCache[$priceKey];
+            } elseif (! $variant->hasOwnPrice()) {
+                $variantNgn = round($baseNgnPrice, 2);
+            }
+
+            if ((float) $variant->price !== $variantNgn) {
+                $variant->update(['price' => $variantNgn]);
+            }
+
+            if ($svIdx !== null && isset($sourceVariants[$svIdx]) && is_array($sourceVariants[$svIdx])) {
+                $sourceVariants[$svIdx]['price'] = $varSupplierPrice > 0 ? $varSupplierPrice : null;
+                $sourceVariants[$svIdx]['proposed_price_ngn'] = $variantNgn;
+                $sourceVariantsModified = true;
+            }
+        }
+
+        if ($sourceVariantsModified) {
+            $source->forceFill(['variants' => $sourceVariants])->save();
+        }
     }
 }

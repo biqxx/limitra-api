@@ -108,21 +108,30 @@ class ExtensionSourcingController extends BaseController
                 $baseNgn = (float) ($quote['proposed_price_ngn'] ?? 0);
 
                 $variantsWithNgn = array_map(function (array $variant) use ($supplierProduct, $pricing, $enhanced, $baseSupplierPrice, $baseNgn): array {
-                    $varPrice = isset($variant['price']) && is_numeric($variant['price']) ? (float) $variant['price'] : null;
-                    if ($varPrice !== null && $varPrice > 0) {
+                    $varPrice = isset($variant['price']) && is_numeric($variant['price']) && (float) $variant['price'] > 0
+                        ? (float) $variant['price']
+                        : $baseSupplierPrice;
+                    $variant['price'] = $varPrice > 0 ? $varPrice : null;
+
+                    if ($varPrice > 0) {
                         if (abs($varPrice - $baseSupplierPrice) < 0.01 && $baseNgn > 0) {
                             $variant['proposed_price_ngn'] = $baseNgn;
                         } else {
                             try {
                                 $varQuote = $pricing->prepareQuote(
                                     array_merge($supplierProduct, ['price' => $varPrice]),
-                                    ['name' => $enhanced['name'], 'category_id' => $enhanced['category_id']]
+                                    [
+                                        'name' => $enhanced['name'],
+                                        'description' => $enhanced['description'],
+                                        'category_id' => $enhanced['category_id'],
+                                        'subcategory_id' => $enhanced['subcategory_id'],
+                                    ]
                                 );
-                                $variant['proposed_price_ngn'] = $varQuote['proposed_price_ngn'] ?? null;
+                                $variant['proposed_price_ngn'] = $varQuote['proposed_price_ngn'] ?? ($baseNgn > 0 ? $baseNgn : null);
                             } catch (Throwable) {
                                 $variant['proposed_price_ngn'] = ($baseSupplierPrice > 0 && $baseNgn > 0)
                                     ? round(($varPrice / $baseSupplierPrice) * $baseNgn, 2)
-                                    : null;
+                                    : ($baseNgn > 0 ? $baseNgn : null);
                             }
                         }
                     } else {
@@ -247,6 +256,19 @@ class ExtensionSourcingController extends BaseController
         $primaryImage = ! empty($data['image_url']) ? (string) $data['image_url'] : ($images[0] ?? '');
         $currency = strtoupper(trim((string) ($data['currency'] ?? 'USD')));
 
+        $defaultPrice = isset($data['price']) && is_numeric($data['price']) && (float) $data['price'] > 0
+            ? (float) $data['price']
+            : null;
+
+        if ($defaultPrice === null && is_array($data['variants'] ?? null)) {
+            foreach ($data['variants'] as $rawVar) {
+                if (is_array($rawVar) && isset($rawVar['price']) && is_numeric($rawVar['price']) && (float) $rawVar['price'] > 0) {
+                    $defaultPrice = (float) $rawVar['price'];
+                    break;
+                }
+            }
+        }
+
         return [
             'supplier' => $data['source'],
             'supplier_id' => $data['external_product_id'],
@@ -255,7 +277,7 @@ class ExtensionSourcingController extends BaseController
             'description' => $data['description'] ?? '',
             'bullet_points' => $data['bullet_points'] ?? [],
             'specifications' => $data['specifications'] ?? [],
-            'price' => isset($data['price']) ? (float) $data['price'] : null,
+            'price' => $defaultPrice,
             'original_price' => isset($data['original_price']) ? (float) $data['original_price'] : null,
             'currency' => $currency,
             'shipping_price' => isset($data['shipping_price']) ? (float) $data['shipping_price'] : null,
@@ -268,17 +290,22 @@ class ExtensionSourcingController extends BaseController
             'product_url' => $data['product_url'] ?? '',
             'category' => $data['category'] ?? null,
             'category_path' => $data['category_path'] ?? [],
-            'variants' => array_values(array_map(function ($v): array {
+            'variants' => array_values(array_map(function ($v) use ($defaultPrice): array {
                 $v = is_array($v) ? $v : [];
                 $selected = is_array($v['selected_options'] ?? null) ? $v['selected_options'] : [];
+                $variantPrice = isset($v['price']) && is_numeric($v['price']) && (float) $v['price'] > 0
+                    ? (float) $v['price']
+                    : $defaultPrice;
 
                 return [
                     'id' => isset($v['id']) ? (string) $v['id'] : null,
                     'sku' => isset($v['sku']) ? (string) $v['sku'] : null,
                     'label' => (string) ($v['label'] ?? implode(' / ', array_keys($selected)) ?: 'Option'),
                     'value' => (string) ($v['value'] ?? implode(' / ', array_values($selected)) ?: 'Default'),
-                    'price' => isset($v['price']) && is_numeric($v['price']) ? (float) $v['price'] : null,
-                    'proposed_price_ngn' => isset($v['proposed_price_ngn']) && is_numeric($v['proposed_price_ngn']) ? (float) $v['proposed_price_ngn'] : null,
+                    'price' => $variantPrice,
+                    'proposed_price_ngn' => isset($v['proposed_price_ngn']) && is_numeric($v['proposed_price_ngn']) && (float) $v['proposed_price_ngn'] > 0
+                        ? (float) $v['proposed_price_ngn']
+                        : null,
                     'available' => array_key_exists('available', $v) ? (bool) $v['available'] : true,
                     'stock' => isset($v['stock']) && is_numeric($v['stock']) ? (int) $v['stock'] : null,
                     'selected_options' => $selected,
@@ -286,7 +313,7 @@ class ExtensionSourcingController extends BaseController
                 ];
             }, $data['variants'] ?? [])),
             'data_quality' => [
-                'price_verified' => isset($data['price']) && is_numeric($data['price']) && (float) $data['price'] > 0,
+                'price_verified' => $defaultPrice !== null && $defaultPrice > 0,
                 'currency_verified' => preg_match('/^[A-Z]{3}$/', $currency) === 1,
                 'images_verified' => count($images) > 0 || $primaryImage !== '',
             ],

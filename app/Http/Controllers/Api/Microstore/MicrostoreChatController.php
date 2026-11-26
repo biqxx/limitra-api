@@ -24,14 +24,6 @@ class MicrostoreChatController extends BaseController
         parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
         responses: [new OA\Response(response: 200, description: 'Conversation retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
     )]
-    #[OA\Get(
-        path: '/celebrity-stores/{slug}/chat',
-        tags: ['Celebrity Store Chat'],
-        summary: 'Get or start customer chat with a celebrity store owner',
-        security: [['bearerAuth' => []]],
-        parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        responses: [new OA\Response(response: 200, description: 'Conversation retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function customerShow(Request $request, string $slug): JsonResponse
     {
         $user = $request->user('api');
@@ -72,14 +64,6 @@ class MicrostoreChatController extends BaseController
         path: '/microstores/{slug}/chat/messages',
         tags: ['Microstore Chat'],
         summary: 'Send message to microstore owner',
-        security: [['bearerAuth' => []]],
-        parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        responses: [new OA\Response(response: 201, description: 'Message sent', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
-    #[OA\Post(
-        path: '/celebrity-stores/{slug}/chat/messages',
-        tags: ['Celebrity Store Chat'],
-        summary: 'Send message to celebrity store owner',
         security: [['bearerAuth' => []]],
         parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
         responses: [new OA\Response(response: 201, description: 'Message sent', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
@@ -125,13 +109,6 @@ class MicrostoreChatController extends BaseController
         security: [['bearerAuth' => []]],
         responses: [new OA\Response(response: 200, description: 'Conversations retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
     )]
-    #[OA\Get(
-        path: '/my-celebrity-store/chats',
-        tags: ['My Celebrity Store'],
-        summary: 'List customer chat conversations for celebrity store owner',
-        security: [['bearerAuth' => []]],
-        responses: [new OA\Response(response: 200, description: 'Conversations retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function ownerIndex(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -166,14 +143,6 @@ class MicrostoreChatController extends BaseController
         parameters: [new OA\Parameter(name: 'conversation', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         responses: [new OA\Response(response: 200, description: 'Conversation retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
     )]
-    #[OA\Get(
-        path: '/my-celebrity-store/chats/{conversation}',
-        tags: ['My Celebrity Store'],
-        summary: 'Read a celebrity store customer conversation',
-        security: [['bearerAuth' => []]],
-        parameters: [new OA\Parameter(name: 'conversation', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        responses: [new OA\Response(response: 200, description: 'Conversation retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function ownerShow(Request $request, int $conversationId): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -202,14 +171,6 @@ class MicrostoreChatController extends BaseController
         path: '/my-microstore/chats/{conversation}/messages',
         tags: ['My Microstore'],
         summary: 'Reply to a microstore customer conversation',
-        security: [['bearerAuth' => []]],
-        parameters: [new OA\Parameter(name: 'conversation', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
-        responses: [new OA\Response(response: 201, description: 'Reply sent', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
-    #[OA\Post(
-        path: '/my-celebrity-store/chats/{conversation}/messages',
-        tags: ['My Celebrity Store'],
-        summary: 'Reply to a celebrity store customer conversation',
         security: [['bearerAuth' => []]],
         parameters: [new OA\Parameter(name: 'conversation', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         responses: [new OA\Response(response: 201, description: 'Reply sent', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]

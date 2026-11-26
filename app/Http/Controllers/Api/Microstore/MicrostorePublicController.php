@@ -23,17 +23,6 @@ class MicrostorePublicController extends BaseController
         ],
         responses: [new OA\Response(response: 200, description: 'Paginated microstores', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
     )]
-    #[OA\Get(
-        path: '/celebrity-stores',
-        tags: ['Celebrity Stores'],
-        summary: 'List active celebrity stores',
-        parameters: [
-            new OA\Parameter(name: 'featured', in: 'query', required: false, schema: new OA\Schema(type: 'boolean')),
-            new OA\Parameter(name: 'search', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
-            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', default: 16)),
-        ],
-        responses: [new OA\Response(response: 200, description: 'Paginated celebrity stores', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function index(Request $request): JsonResponse
     {
         $storeType = $this->resolveStoreType($request);
@@ -81,13 +70,6 @@ class MicrostorePublicController extends BaseController
         parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
         responses: [new OA\Response(response: 200, description: 'Microstore details', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
     )]
-    #[OA\Get(
-        path: '/celebrity-stores/{slug}',
-        tags: ['Celebrity Stores'],
-        summary: 'Get public celebrity store by slug',
-        parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        responses: [new OA\Response(response: 200, description: 'Celebrity store details', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function show(string $slug, Request $request): JsonResponse
     {
         $storeType = $this->resolveStoreType($request);
@@ -128,16 +110,6 @@ class MicrostorePublicController extends BaseController
         ],
         responses: [new OA\Response(response: 200, description: 'Paginated microstore products', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
     )]
-    #[OA\Get(
-        path: '/celebrity-stores/{slug}/products',
-        tags: ['Celebrity Stores'],
-        summary: 'List curated products in a celebrity store',
-        parameters: [
-            new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
-            new OA\Parameter(name: 'per_page', in: 'query', required: false, schema: new OA\Schema(type: 'integer', default: 20)),
-        ],
-        responses: [new OA\Response(response: 200, description: 'Paginated celebrity store products', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
     public function products(string $slug, Request $request): JsonResponse
     {
         $storeType = $this->resolveStoreType($request);
@@ -171,13 +143,6 @@ class MicrostorePublicController extends BaseController
         path: '/microstores/{slug}/clicks',
         tags: ['Microstores'],
         summary: 'Track a microstore or product click',
-        parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
-        responses: [new OA\Response(response: 201, description: 'Click tracked', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
-    )]
-    #[OA\Post(
-        path: '/celebrity-stores/{slug}/clicks',
-        tags: ['Celebrity Stores'],
-        summary: 'Track a celebrity store or product click',
         parameters: [new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string'))],
         responses: [new OA\Response(response: 201, description: 'Click tracked', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
     )]

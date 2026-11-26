@@ -42,6 +42,7 @@ class SupplierProductImportService
         array $attributes,
         User $admin,
         array $supplierProduct,
+        bool $upsertExisting = false,
     ): ProductSource {
         $this->assertSupplierProductCanBeImported($supplierProduct);
 
@@ -63,8 +64,14 @@ class SupplierProductImportService
             'subcategory_id' => $attributes['subcategory_id'] ?? null,
         ]);
 
-        return DB::transaction(function () use ($attributes, $admin, $supplier, $externalProductId, $supplierProduct, $preparedQuote, $name, $description) {
-            if ($this->alreadyImported($supplier, $externalProductId)) {
+        return DB::transaction(function () use ($attributes, $admin, $supplier, $externalProductId, $supplierProduct, $preparedQuote, $name, $description, $upsertExisting) {
+            $existingSource = ProductSource::query()
+                ->with('product')
+                ->where('supplier', $supplier)
+                ->where('external_product_id', $externalProductId)
+                ->first();
+
+            if ($existingSource && ! $upsertExisting) {
                 throw new DomainException('This supplier product has already been imported.');
             }
 
@@ -72,39 +79,59 @@ class SupplierProductImportService
             $publishNow = (bool) ($attributes['publish'] ?? false);
             $defaultStock = max(0, (int) ($attributes['stock'] ?? ($publishNow ? 10 : 0)));
 
-            $product = Product::create([
-                'category_id' => $attributes['category_id'],
-                'subcategory_id' => $attributes['subcategory_id'] ?? null,
-                'name' => $name,
-                'slug' => $this->uniqueSlug($name),
-                'brand' => $attributes['brand'] ?? $supplierProduct['brand'] ?? null,
-                'sku' => $this->uniqueSku($attributes['sku'] ?? null, $supplier, $externalProductId),
-                'description' => $description,
-                'price' => $preparedQuote['proposed_price_ngn'] ?? 0,
-                'currency' => 'NGN',
-                'stock' => $defaultStock,
-                'status' => 'draft',
-                'seo_meta' => $attributes['seo_meta'] ?? null,
-                'images' => $remoteImageUrls !== [] ? $remoteImageUrls : null,
-                'created_by' => $admin->id,
-            ]);
+            if ($existingSource && $existingSource->product) {
+                $product = $existingSource->product;
+                $product->recordEditor($admin->id);
+                $product->update([
+                    'category_id' => $attributes['category_id'] ?? $product->category_id,
+                    'subcategory_id' => array_key_exists('subcategory_id', $attributes) ? $attributes['subcategory_id'] : $product->subcategory_id,
+                    'name' => $name,
+                    'brand' => $attributes['brand'] ?? $supplierProduct['brand'] ?? $product->brand,
+                    'description' => $description ?? $product->description,
+                    'price' => $preparedQuote['proposed_price_ngn'] ?? $product->price,
+                    'currency' => 'NGN',
+                    'stock' => max(1, $defaultStock),
+                    'seo_meta' => $attributes['seo_meta'] ?? $product->seo_meta,
+                    'updated_by' => $product->updated_by,
+                ]);
+            } else {
+                $product = Product::create([
+                    'category_id' => $attributes['category_id'],
+                    'subcategory_id' => $attributes['subcategory_id'] ?? null,
+                    'name' => $name,
+                    'slug' => $this->uniqueSlug($name),
+                    'brand' => $attributes['brand'] ?? $supplierProduct['brand'] ?? null,
+                    'sku' => $this->uniqueSku($attributes['sku'] ?? null, $supplier, $externalProductId),
+                    'description' => $description,
+                    'price' => $preparedQuote['proposed_price_ngn'] ?? 0,
+                    'currency' => 'NGN',
+                    'stock' => $defaultStock,
+                    'status' => 'draft',
+                    'seo_meta' => $attributes['seo_meta'] ?? null,
+                    'images' => $remoteImageUrls !== [] ? $remoteImageUrls : null,
+                    'created_by' => $admin->id,
+                ]);
+            }
 
-            $product->specifications()->createMany(array_map(
-                fn (array $specification, int $position): array => [
-                    'name' => $specification['name'],
-                    'value' => $specification['value'],
-                    'sort_order' => $position,
-                ],
-                $attributes['specifications'] ?? [],
-                array_keys($attributes['specifications'] ?? []),
-            ));
+            if (! empty($attributes['specifications']) && is_array($attributes['specifications'])) {
+                $product->specifications()->delete();
+                $product->specifications()->createMany(array_map(
+                    fn (array $specification, int $position): array => [
+                        'name' => $specification['name'],
+                        'value' => $specification['value'],
+                        'sort_order' => $position,
+                    ],
+                    $attributes['specifications'],
+                    array_keys($attributes['specifications']),
+                ));
+            }
 
-            $variantsInput = is_array($attributes['variants'] ?? null)
-                ? $attributes['variants']
-                : ($supplierProduct['variants'] ?? []);
+            $variantsInput = ! empty($supplierProduct['variants']) && is_array($supplierProduct['variants'])
+                ? $supplierProduct['variants']
+                : (is_array($attributes['variants'] ?? null) ? $attributes['variants'] : []);
             $syncedVariants = $this->syncProductVariants($product, $variantsInput, $supplier, $externalProductId, $supplierProduct, $preparedQuote);
 
-            if ($remoteImageUrls !== []) {
+            if ($remoteImageUrls !== [] && (! $existingSource || empty($product->images))) {
                 $storedUrls = [];
                 foreach ($remoteImageUrls as $position => $remoteUrl) {
                     $finalUrl = $this->downloadAndStoreImage($remoteUrl, $product->id, $position);
@@ -121,26 +148,43 @@ class SupplierProductImportService
                 $product->update(['images' => $storedUrls]);
             }
 
-            $source = ProductSource::create([
-                'product_id' => $product->id,
-                'supplier' => $supplier,
-                'external_product_id' => $externalProductId,
-                'supplier_url' => $supplierProduct['product_url'] ?? null,
-                'supplier_price' => $supplierProduct['price'] ?? null,
-                'supplier_currency' => $supplierProduct['currency'] ?? null,
-                'available' => (bool) ($supplierProduct['available'] ?? false),
-                'weight_lb' => $supplierProduct['weight_lb'] ?? null,
-                'delivery_days_min' => $supplierProduct['us_delivery_days_min'] ?? null,
-                'delivery_days_max' => $supplierProduct['us_delivery_days_max'] ?? null,
-                'restriction_status' => null,
-                'validation_status' => null,
-                'final_price_ngn' => null,
-                'variants' => $syncedVariants !== [] ? $syncedVariants : ($supplierProduct['variants'] ?? null),
-                'cost_breakdown' => null,
-                'source_snapshot' => $supplierProduct,
-                'sync_status' => 'needs_review',
-                'last_synced_at' => now(),
-            ]);
+            if ($existingSource) {
+                $existingSource->update([
+                    'supplier_url' => $supplierProduct['product_url'] ?? $existingSource->supplier_url,
+                    'supplier_price' => $supplierProduct['price'] ?? $existingSource->supplier_price,
+                    'supplier_currency' => $supplierProduct['currency'] ?? $existingSource->supplier_currency,
+                    'available' => (bool) ($supplierProduct['available'] ?? true),
+                    'weight_lb' => $supplierProduct['weight_lb'] ?? $existingSource->weight_lb,
+                    'delivery_days_min' => $supplierProduct['us_delivery_days_min'] ?? $existingSource->delivery_days_min,
+                    'delivery_days_max' => $supplierProduct['us_delivery_days_max'] ?? $existingSource->delivery_days_max,
+                    'variants' => $syncedVariants !== [] ? $syncedVariants : ($supplierProduct['variants'] ?? $existingSource->variants),
+                    'source_snapshot' => $supplierProduct,
+                    'last_synced_at' => now(),
+                ]);
+                $source = $existingSource;
+            } else {
+                $source = ProductSource::create([
+                    'product_id' => $product->id,
+                    'supplier' => $supplier,
+                    'external_product_id' => $externalProductId,
+                    'supplier_url' => $supplierProduct['product_url'] ?? null,
+                    'supplier_price' => $supplierProduct['price'] ?? null,
+                    'supplier_currency' => $supplierProduct['currency'] ?? null,
+                    'available' => (bool) ($supplierProduct['available'] ?? false),
+                    'weight_lb' => $supplierProduct['weight_lb'] ?? null,
+                    'delivery_days_min' => $supplierProduct['us_delivery_days_min'] ?? null,
+                    'delivery_days_max' => $supplierProduct['us_delivery_days_max'] ?? null,
+                    'restriction_status' => null,
+                    'validation_status' => null,
+                    'final_price_ngn' => null,
+                    'variants' => $syncedVariants !== [] ? $syncedVariants : ($supplierProduct['variants'] ?? null),
+                    'cost_breakdown' => null,
+                    'source_snapshot' => $supplierProduct,
+                    'sync_status' => 'needs_review',
+                    'last_synced_at' => now(),
+                ]);
+            }
+
             $quote = $this->pricing->storeQuote($source, $preparedQuote, $admin);
 
             if ($publishNow && (float) ($quote->proposed_price_ngn ?? 0) > 0) {
@@ -308,6 +352,15 @@ class SupplierProductImportService
             ? (float) $supplierProduct['price']
             : 0.0;
         $baseNgnPrice = (float) ($preparedQuote['proposed_price_ngn'] ?? $product->price ?? 0);
+        $existingVariants = $product->variants()->get();
+        $existingBySku = $existingVariants->keyBy(fn (ProductVariant $v): string => strtoupper((string) $v->sku));
+        $existingByAttrs = $existingVariants->keyBy(function (ProductVariant $v): string {
+            $norm = $v->normalizedAttributes();
+            ksort($norm);
+
+            return json_encode($norm) ?: '';
+        });
+        $retainedIds = [];
         $usedSkus = [];
         $storedImageCache = [];
         $quoteBySupplierPrice = [];
@@ -318,14 +371,16 @@ class SupplierProductImportService
                 continue;
             }
 
-            $attributes = is_array($variant['selected_options'] ?? null) ? $variant['selected_options'] : [];
+            $rawAttrs = is_array($variant['selected_options'] ?? null) && $variant['selected_options'] !== []
+                ? $variant['selected_options']
+                : (is_array($variant['attributes'] ?? null) ? $variant['attributes'] : []);
+            $attributes = ProductVariant::normalizeAttributeMap(
+                $rawAttrs,
+                isset($variant['label']) ? (string) $variant['label'] : null,
+                isset($variant['value']) ? (string) $variant['value'] : null,
+            );
             if ($attributes === []) {
-                $label = trim((string) ($variant['label'] ?? 'Option'));
-                $value = trim((string) ($variant['value'] ?? ''));
-                if ($value === '') {
-                    continue;
-                }
-                $attributes = [$label !== '' ? $label : 'Option' => $value];
+                continue;
             }
 
             $varSupplierPrice = isset($variant['price']) && is_numeric($variant['price']) && (float) $variant['price'] > 0
@@ -370,18 +425,31 @@ class SupplierProductImportService
                 $ngnPrice = $baseNgnPrice > 0 ? round($baseNgnPrice, 2) : round((float) $product->price, 2);
             }
 
+            $sortedAttrs = $attributes;
+            ksort($sortedAttrs);
+            $attrSignature = json_encode($sortedAttrs) ?: '';
+
             $rawSku = trim((string) ($variant['sku'] ?? $variant['id'] ?? ''));
-            $baseSku = $this->uniqueSku(
-                $rawSku !== '' ? $rawSku : "{$supplier}-{$externalProductId}-V".($index + 1),
-                $supplier,
-                $externalProductId
-            );
-            $variantSku = $baseSku;
-            $suffix = 2;
-            while (in_array($variantSku, $usedSkus, true) || ProductVariant::query()->where('sku', $variantSku)->exists()) {
-                $variantSku = Str::limit($baseSku, 90, '').'-'.$suffix++;
+            $matchedExisting = ($rawSku !== '' ? $existingBySku->get(strtoupper($rawSku)) : null)
+                ?? ($attrSignature !== '' ? $existingByAttrs->get($attrSignature) : null);
+
+            if ($matchedExisting && ! in_array($matchedExisting->id, $retainedIds, true)) {
+                $variantSku = $matchedExisting->sku;
+                $usedSkus[] = $variantSku;
+            } else {
+                $matchedExisting = null;
+                $baseSku = $this->uniqueSku(
+                    $rawSku !== '' ? $rawSku : "{$supplier}-{$externalProductId}-V".($index + 1),
+                    $supplier,
+                    $externalProductId
+                );
+                $variantSku = $baseSku;
+                $suffix = 2;
+                while (in_array($variantSku, $usedSkus, true) || ProductVariant::query()->where('sku', $variantSku)->exists()) {
+                    $variantSku = Str::limit($baseSku, 90, '').'-'.$suffix++;
+                }
+                $usedSkus[] = $variantSku;
             }
-            $usedSkus[] = $variantSku;
 
             $available = array_key_exists('available', $variant) ? (bool) $variant['available'] : true;
             $stock = isset($variant['stock']) && is_numeric($variant['stock'])
@@ -404,26 +472,51 @@ class SupplierProductImportService
                 }
             }
 
-            $createdVariant = ProductVariant::create([
-                'product_id' => $product->id,
-                'sku' => $variantSku,
-                'attributes' => $attributes,
-                'images' => $variantImages !== [] ? $variantImages : null,
-                'price' => $ngnPrice,
-                'stock' => $stock,
-                'status' => $available ? 'active' : 'disabled',
-            ]);
+            if ($matchedExisting) {
+                $matchedExisting->update([
+                    'attributes' => $attributes,
+                    'images' => $variantImages !== [] ? $variantImages : $matchedExisting->images,
+                    'price' => $ngnPrice,
+                    'stock' => $stock,
+                    'status' => $available ? 'active' : 'disabled',
+                ]);
+                $createdVariant = $matchedExisting;
+            } else {
+                $createdVariant = ProductVariant::create([
+                    'product_id' => $product->id,
+                    'sku' => $variantSku,
+                    'attributes' => $attributes,
+                    'images' => $variantImages !== [] ? $variantImages : null,
+                    'price' => $ngnPrice,
+                    'stock' => $stock,
+                    'status' => $available ? 'active' : 'disabled',
+                ]);
+            }
+            $retainedIds[] = $createdVariant->id;
 
             $syncedVariants[] = array_merge($variant, [
                 'variant_id' => $createdVariant->id,
                 'sku' => $variantSku,
                 'selected_options' => $attributes,
+                'attributes' => $attributes,
                 'price' => $varSupplierPrice > 0 ? $varSupplierPrice : null,
                 'proposed_price_ngn' => $ngnPrice,
                 'available' => $available,
                 'stock' => $stock,
                 'images' => $variantImages !== [] ? $variantImages : ($variant['images'] ?? []),
             ]);
+        }
+
+        if ($retainedIds !== [] && $existingVariants->isNotEmpty()) {
+            foreach ($existingVariants as $oldVariant) {
+                if (! in_array($oldVariant->id, $retainedIds, true)) {
+                    try {
+                        $oldVariant->delete();
+                    } catch (Throwable) {
+                        $oldVariant->update(['status' => 'disabled', 'stock' => 0]);
+                    }
+                }
+            }
         }
 
         return $syncedVariants;

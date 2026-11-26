@@ -46,9 +46,9 @@ class ContentController extends BaseController
                 ->limit(6)
                 ->get(['id', 'name', 'slug']);
 
-            $featuredProducts = Product::query()->where('status', 'active')->where('is_featured', true)->limit(8)->get();
+            $featuredProducts = Product::query()->with(['category.image', 'subcategory.image', 'productImages', 'variants'])->where('status', 'active')->where('is_featured', true)->limit(8)->get();
             if ($featuredProducts->isEmpty()) {
-                $featuredProducts = Product::query()->where('status', 'active')->latest('id')->limit(8)->get();
+                $featuredProducts = Product::query()->with(['category.image', 'subcategory.image', 'productImages', 'variants'])->where('status', 'active')->latest('id')->limit(8)->get();
             }
 
             $activePromotions = Promotion::query()

@@ -81,7 +81,7 @@ class ProductController extends BaseController
         $brands = is_array($brands) ? $brands : array_filter(array_map('trim', explode(',', $brands)));
 
         $data = $this->catalogCache->rememberProducts('index', $request->query(), function () use ($request, $sortBy, $sortDir, $search, $minPrice, $maxPrice, $brands): array {
-            $products = Product::with('category.image', 'subcategory.image', 'productImages')
+            $products = Product::with('category.image', 'subcategory.image', 'productImages', 'variants')
                 ->where('status', 'active')
                 ->when($request->filled('subcategory_id'), fn ($q) => $q->where('subcategory_id', $request->integer('subcategory_id')))
                 ->when($request->filled('subcategory_slug'), fn ($q) => $q->whereHas('subcategory', fn ($subquery) => $subquery->where('slug', $request->input('subcategory_slug'))))
@@ -611,7 +611,7 @@ class ProductController extends BaseController
     public function related(Product $product): JsonResponse
     {
         $query = Product::query()
-            ->with(['category.image', 'subcategory.image', 'productImages'])
+            ->with(['category.image', 'subcategory.image', 'productImages', 'variants'])
             ->where('status', 'active')
             ->where('id', '!=', $product->id);
 
@@ -635,7 +635,7 @@ class ProductController extends BaseController
         $max = $price * 1.30;
 
         $query = Product::query()
-            ->with(['category.image', 'subcategory.image', 'productImages'])
+            ->with(['category.image', 'subcategory.image', 'productImages', 'variants'])
             ->where('status', 'active')
             ->where('id', '!=', $product->id);
 

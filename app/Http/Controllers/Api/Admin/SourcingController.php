@@ -79,7 +79,7 @@ class SourcingController extends BaseController
     {
         $perPage = min(max($request->integer('per_page', 20), 1), 100);
         $sources = ProductSource::query()
-            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications', 'currentPriceQuote', 'approvedPriceQuote'])
+            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications', 'product.variants', 'currentPriceQuote', 'approvedPriceQuote'])
             ->latest('id')
             ->paginate($perPage);
 
@@ -99,7 +99,7 @@ class SourcingController extends BaseController
         $perPage = min(max($request->integer('per_page', 20), 1), 100);
         $jobs = SourcingJob::query()
             ->where('user_id', $request->user()->id)
-            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications'])
+            ->with(['product.category', 'product.subcategory', 'product.productImages', 'product.specifications', 'product.variants'])
             ->latest('id')
             ->paginate($perPage);
 

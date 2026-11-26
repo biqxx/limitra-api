@@ -6,6 +6,7 @@ use App\Exceptions\SupplierProductDataException;
 use App\Http\Controllers\Api\BaseController;
 use App\Http\Resources\ProductSourceResource;
 use App\Models\Product\Category;
+use App\Models\Product\ProductVariant;
 use App\Services\Sourcing\ProductContentEnhancer;
 use App\Services\Sourcing\ProductPricingService;
 use App\Services\Sourcing\SupplierProductImportService;
@@ -206,22 +207,23 @@ class ExtensionSourcingController extends BaseController
             'images.*' => ['string'],
             'product_url' => ['nullable', 'string'],
             'variants' => ['nullable', 'array'],
-            'variants.*.id' => ['nullable', 'string'],
-            'variants.*.sku' => ['nullable', 'string', 'max:100'],
-            'variants.*.label' => ['nullable', 'string'],
-            'variants.*.value' => ['nullable', 'string'],
+            'variants.*.id' => ['nullable'],
+            'variants.*.sku' => ['nullable', 'max:255'],
+            'variants.*.label' => ['nullable', 'string', 'max:255'],
+            'variants.*.value' => ['nullable', 'string', 'max:500'],
             'variants.*.price' => ['nullable', 'numeric', 'min:0'],
             'variants.*.proposed_price_ngn' => ['nullable', 'numeric', 'min:0'],
             'variants.*.available' => ['nullable', 'boolean'],
             'variants.*.stock' => ['nullable', 'integer', 'min:0'],
             'variants.*.selected_options' => ['nullable', 'array'],
+            'variants.*.attributes' => ['nullable', 'array'],
             'variants.*.images' => ['nullable', 'array'],
         ]);
 
         $supplierProduct = $this->normalizeSupplierPayload($validated);
 
         try {
-            $source = $importer->importResolved($validated, $request->user(), $supplierProduct);
+            $source = $importer->importResolved($validated, $request->user(), $supplierProduct, true);
         } catch (SupplierProductDataException $exception) {
             return $this->error(
                 $exception->getMessage(),
@@ -292,7 +294,14 @@ class ExtensionSourcingController extends BaseController
             'category_path' => $data['category_path'] ?? [],
             'variants' => array_values(array_map(function ($v) use ($defaultPrice): array {
                 $v = is_array($v) ? $v : [];
-                $selected = is_array($v['selected_options'] ?? null) ? $v['selected_options'] : [];
+                $rawSelected = is_array($v['selected_options'] ?? null) && $v['selected_options'] !== []
+                    ? $v['selected_options']
+                    : (is_array($v['attributes'] ?? null) ? $v['attributes'] : []);
+                $selected = ProductVariant::normalizeAttributeMap(
+                    $rawSelected,
+                    isset($v['label']) ? (string) $v['label'] : null,
+                    isset($v['value']) ? (string) $v['value'] : null,
+                );
                 $variantPrice = isset($v['price']) && is_numeric($v['price']) && (float) $v['price'] > 0
                     ? (float) $v['price']
                     : $defaultPrice;
@@ -309,6 +318,7 @@ class ExtensionSourcingController extends BaseController
                     'available' => array_key_exists('available', $v) ? (bool) $v['available'] : true,
                     'stock' => isset($v['stock']) && is_numeric($v['stock']) ? (int) $v['stock'] : null,
                     'selected_options' => $selected,
+                    'attributes' => $selected,
                     'images' => is_array($v['images'] ?? null) ? $v['images'] : [],
                 ];
             }, $data['variants'] ?? [])),

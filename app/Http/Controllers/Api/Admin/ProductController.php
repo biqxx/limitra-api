@@ -14,6 +14,7 @@ class ProductController extends BaseController
         'category.image',
         'subcategory.image',
         'productImages',
+        'variants',
     ];
 
     private const DETAIL_RELATIONS = [

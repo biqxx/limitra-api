@@ -44,15 +44,24 @@ class ProductResource extends JsonResource
                     'position' => $image->sort_order,
                 ])->values()
                 : ($this->images ?? []),
-            'variants' => $this->whenLoaded('variants', fn () => $this->variants->map(fn ($variant) => [
-                'id' => $variant->id,
-                'sku' => $variant->sku,
-                'attributes' => $variant->attributes,
-                'images' => $variant->images ?? [],
-                'price' => $variant->effectivePrice($this->resource),
-                'stock' => $variant->stock,
-                'status' => $variant->status,
-            ])),
+            'variants' => $this->whenLoaded('variants', fn () => $this->variants->map(function ($variant) {
+                $attrs = $variant->normalizedAttributes();
+
+                return [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku,
+                    'attributes' => $attrs,
+                    'selected_options' => $attrs,
+                    'label' => $attrs !== [] ? implode(' / ', array_keys($attrs)) : 'Option',
+                    'value' => $attrs !== [] ? implode(' / ', array_values($attrs)) : '',
+                    'images' => $variant->images ?? [],
+                    'price' => $variant->effectivePrice($this->resource),
+                    'has_own_price' => $variant->hasOwnPrice(),
+                    'stock' => $variant->stock,
+                    'available' => $variant->status === 'active' && $variant->stock > 0,
+                    'status' => $variant->status,
+                ];
+            })),
             'variants_count' => $this->whenCounted('variants'),
             'specifications' => $this->whenLoaded('specifications', fn () => $this->specifications->map(fn ($specification) => [
                 'id' => $specification->id,

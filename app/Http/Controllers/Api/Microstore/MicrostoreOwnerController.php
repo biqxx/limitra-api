@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use OpenApi\Attributes as OA;
 
 class MicrostoreOwnerController extends BaseController
 {
@@ -22,6 +23,20 @@ class MicrostoreOwnerController extends BaseController
         private readonly BusinessSettingsService $settings,
     ) {}
 
+    #[OA\Get(
+        path: '/my-microstore',
+        tags: ['My Microstore'],
+        summary: 'Get authenticated owner microstore',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Owner microstore details', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store',
+        tags: ['My Celebrity Store'],
+        summary: 'Get authenticated owner celebrity store',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Owner celebrity store details', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function show(Request $request): JsonResponse
     {
         $user = $request->user('api');
@@ -39,6 +54,20 @@ class MicrostoreOwnerController extends BaseController
         return $this->success($microstore);
     }
 
+    #[OA\Post(
+        path: '/my-microstore',
+        tags: ['My Microstore'],
+        summary: 'Create microstore and assign microstore_owner role',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 201, description: 'Microstore created', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Post(
+        path: '/my-celebrity-store',
+        tags: ['My Celebrity Store'],
+        summary: 'Create celebrity store and assign celebrity_store_owner role',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 201, description: 'Celebrity store created', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function store(Request $request): JsonResponse
     {
         $user = $request->user('api');
@@ -93,6 +122,20 @@ class MicrostoreOwnerController extends BaseController
         return $this->success($microstore, 'Microstore created successfully.', 201);
     }
 
+    #[OA\Patch(
+        path: '/my-microstore',
+        tags: ['My Microstore'],
+        summary: 'Update authenticated owner microstore',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Microstore updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Patch(
+        path: '/my-celebrity-store',
+        tags: ['My Celebrity Store'],
+        summary: 'Update authenticated owner celebrity store',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Celebrity store updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function update(Request $request): JsonResponse
     {
         $user = $request->user('api');
@@ -113,6 +156,20 @@ class MicrostoreOwnerController extends BaseController
         return $this->success($microstore->fresh(), 'Microstore updated successfully.');
     }
 
+    #[OA\Post(
+        path: '/my-microstore/products',
+        tags: ['My Microstore'],
+        summary: 'Add product to microstore',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 201, description: 'Product added', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Post(
+        path: '/my-celebrity-store/products',
+        tags: ['My Celebrity Store'],
+        summary: 'Add product to celebrity store',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 201, description: 'Product added', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function addProduct(Request $request): JsonResponse
     {
         $user = $request->user('api');
@@ -146,6 +203,22 @@ class MicrostoreOwnerController extends BaseController
         return $this->success($item->load('product'), 'Product added to microstore.', 201);
     }
 
+    #[OA\Patch(
+        path: '/my-microstore/products/{product}',
+        tags: ['My Microstore'],
+        summary: 'Update curated microstore product',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Product updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Patch(
+        path: '/my-celebrity-store/products/{product}',
+        tags: ['My Celebrity Store'],
+        summary: 'Update curated celebrity store product',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Product updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function updateProduct(Request $request, int $productId): JsonResponse
     {
         $user = $request->user('api');
@@ -167,6 +240,22 @@ class MicrostoreOwnerController extends BaseController
         return $this->success($item->fresh()->load('product'), 'Microstore product updated.');
     }
 
+    #[OA\Delete(
+        path: '/my-microstore/products/{product}',
+        tags: ['My Microstore'],
+        summary: 'Remove curated product from microstore',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Product removed', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Delete(
+        path: '/my-celebrity-store/products/{product}',
+        tags: ['My Celebrity Store'],
+        summary: 'Remove curated product from celebrity store',
+        security: [['bearerAuth' => []]],
+        parameters: [new OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
+        responses: [new OA\Response(response: 200, description: 'Product removed', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function removeProduct(Request $request, int $productId): JsonResponse
     {
         $user = $request->user('api');
@@ -181,6 +270,20 @@ class MicrostoreOwnerController extends BaseController
         return $this->success(null, 'Product removed from microstore.');
     }
 
+    #[OA\Get(
+        path: '/my-microstore/analytics',
+        tags: ['My Microstore'],
+        summary: 'Get microstore analytics, order status breakdown, and top performing products',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Analytics retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/analytics',
+        tags: ['My Celebrity Store'],
+        summary: 'Get celebrity store analytics, order status breakdown, and top performing products',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Analytics retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function analytics(Request $request): JsonResponse
     {
         $user = $request->user('api');

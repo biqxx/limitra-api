@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OA;
 
 class MicrostoreDashboardController extends BaseController
 {
@@ -24,6 +25,20 @@ class MicrostoreDashboardController extends BaseController
     /**
      * Orders listed by products (product-first rows), NOT grouped by customer.
      */
+    #[OA\Get(
+        path: '/my-microstore/orders',
+        tags: ['My Microstore'],
+        summary: 'List microstore orders grouped/listed by product items',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Product-first store orders', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/orders',
+        tags: ['My Celebrity Store'],
+        summary: 'List celebrity store orders grouped/listed by product items',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Product-first celebrity store orders', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function orders(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -97,6 +112,20 @@ class MicrostoreDashboardController extends BaseController
     /**
      * Bulk update status on orders belonging to this store.
      */
+    #[OA\Patch(
+        path: '/my-microstore/orders/bulk-status',
+        tags: ['My Microstore'],
+        summary: 'Bulk update status for microstore orders',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Orders updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Patch(
+        path: '/my-celebrity-store/orders/bulk-status',
+        tags: ['My Celebrity Store'],
+        summary: 'Bulk update status for celebrity store orders',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Orders updated', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function bulkOrderStatus(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -145,6 +174,20 @@ class MicrostoreDashboardController extends BaseController
         ], 'Orders updated.');
     }
 
+    #[OA\Get(
+        path: '/my-microstore/inventory',
+        tags: ['My Microstore'],
+        summary: 'Get microstore curated product inventory',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Inventory retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/inventory',
+        tags: ['My Celebrity Store'],
+        summary: 'Get celebrity store curated product inventory',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Inventory retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function inventory(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -210,6 +253,20 @@ class MicrostoreDashboardController extends BaseController
         ], 'Store inventory retrieved.');
     }
 
+    #[OA\Get(
+        path: '/my-microstore/customers',
+        tags: ['My Microstore'],
+        summary: 'List microstore customers',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Customers retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/customers',
+        tags: ['My Celebrity Store'],
+        summary: 'List celebrity store customers',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Customers retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function customers(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -249,6 +306,20 @@ class MicrostoreDashboardController extends BaseController
         ], 'Store customers retrieved.');
     }
 
+    #[OA\Get(
+        path: '/my-microstore/reviews',
+        tags: ['My Microstore'],
+        summary: 'List reviews for microstore products',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Reviews retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/reviews',
+        tags: ['My Celebrity Store'],
+        summary: 'List reviews for celebrity store products',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Reviews retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function reviews(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -289,6 +360,20 @@ class MicrostoreDashboardController extends BaseController
         ], 'Store reviews retrieved.');
     }
 
+    #[OA\Get(
+        path: '/my-microstore/earnings',
+        tags: ['My Microstore'],
+        summary: 'Get microstore commission earnings summary',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Earnings retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/earnings',
+        tags: ['My Celebrity Store'],
+        summary: 'Get celebrity store commission earnings summary',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Earnings retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function earnings(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -322,6 +407,20 @@ class MicrostoreDashboardController extends BaseController
         ], 'Store earnings retrieved.');
     }
 
+    #[OA\Get(
+        path: '/my-microstore/withdrawals',
+        tags: ['My Microstore'],
+        summary: 'List microstore withdrawal requests',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Withdrawals retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/withdrawals',
+        tags: ['My Celebrity Store'],
+        summary: 'List celebrity store withdrawal requests',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Withdrawals retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function withdrawals(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -347,6 +446,20 @@ class MicrostoreDashboardController extends BaseController
         ], 'Store withdrawals retrieved.');
     }
 
+    #[OA\Post(
+        path: '/my-microstore/withdrawals',
+        tags: ['My Microstore'],
+        summary: 'Request a microstore payout withdrawal',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 201, description: 'Withdrawal submitted', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Post(
+        path: '/my-celebrity-store/withdrawals',
+        tags: ['My Celebrity Store'],
+        summary: 'Request a celebrity store payout withdrawal',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 201, description: 'Withdrawal submitted', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function requestWithdrawal(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -388,6 +501,20 @@ class MicrostoreDashboardController extends BaseController
         return $this->success($withdrawal, 'Withdrawal request submitted.', 201);
     }
 
+    #[OA\Get(
+        path: '/my-microstore/transactions',
+        tags: ['My Microstore'],
+        summary: 'List microstore financial transactions',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Transactions retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
+    #[OA\Get(
+        path: '/my-celebrity-store/transactions',
+        tags: ['My Celebrity Store'],
+        summary: 'List celebrity store financial transactions',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Transactions retrieved', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function transactions(Request $request): JsonResponse
     {
         $microstore = $this->ownedStoreOrFail($request);
@@ -499,3 +626,4 @@ class MicrostoreDashboardController extends BaseController
             ->firstOrFail();
     }
 }
+

@@ -13,11 +13,19 @@ use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use OpenApi\Attributes as OA;
 use Throwable;
 use UnexpectedValueException;
 
 class ExtensionSourcingController extends BaseController
 {
+    #[OA\Post(
+        path: '/admin/sourcing/extension-review',
+        tags: ['Admin Sourcing'],
+        summary: 'AI-enhance and calculate NGN pricing quote for a browser-extension product',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 200, description: 'Reviewed product with AI metadata and NGN quote', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function review(
         Request $request,
         ProductContentEnhancer $enhancer,
@@ -150,6 +158,13 @@ class ExtensionSourcingController extends BaseController
         ], 'Extension product reviewed.');
     }
 
+    #[OA\Post(
+        path: '/admin/sourcing/extension-import',
+        tags: ['Admin Sourcing'],
+        summary: 'Import and optionally publish a browser-extension product with variants',
+        security: [['bearerAuth' => []]],
+        responses: [new OA\Response(response: 201, description: 'Product imported', content: new OA\JsonContent(ref: '#/components/schemas/SuccessResponse'))]
+    )]
     public function import(
         Request $request,
         SupplierProductImportService $importer,

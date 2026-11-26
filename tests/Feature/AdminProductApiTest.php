@@ -110,6 +110,43 @@ class AdminProductApiTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_product_variants_serialize_only_cast_attribute_map(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $category = $this->category();
+        $product = $this->product($category, [
+            'name' => 'Variant Tee',
+            'slug' => 'variant-tee',
+            'price' => 25000,
+            'status' => 'active',
+        ]);
+        $product->variants()->create([
+            'sku' => 'TEE-RED-M',
+            'attributes' => ['Color' => 'Red', 'Size' => 'Medium'],
+            'price' => 27500,
+            'stock' => 4,
+            'status' => 'active',
+        ]);
+
+        $response = $this->getJson('/api/v1/products')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.variants.0.sku', 'TEE-RED-M')
+            ->assertJsonPath('data.items.0.variants.0.attributes', ['Color' => 'Red', 'Size' => 'Medium'])
+            ->assertJsonPath('data.items.0.variants.0.selected_options', ['Color' => 'Red', 'Size' => 'Medium'])
+            ->assertJsonPath('data.items.0.variants.0.label', 'Color / Size')
+            ->assertJsonPath('data.items.0.variants.0.value', 'Red / Medium')
+            ->assertJsonPath('data.items.0.variants.0.price', '27500.00');
+
+        $variantAttributes = $response->json('data.items.0.variants.0.attributes');
+        $this->assertArrayNotHasKey('product_id', $variantAttributes);
+        $this->assertArrayNotHasKey('sku', $variantAttributes);
+
+        $this->actingAs($admin, 'api')
+            ->getJson('/api/v1/admin/products')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.variants.0.attributes', ['Color' => 'Red', 'Size' => 'Medium']);
+    }
+
     private function category(): Category
     {
         return Category::query()->create([

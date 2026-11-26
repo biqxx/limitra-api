@@ -55,7 +55,7 @@ class ProductVariant extends Model
      */
     public function normalizedAttributes(): array
     {
-        return self::normalizeAttributeMap($this->attributes);
+        return self::normalizeAttributeMap($this->getAttribute('attributes'));
     }
 
     /**

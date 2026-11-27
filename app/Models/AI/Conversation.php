@@ -12,6 +12,7 @@ class Conversation extends Model
 {
     protected $fillable = [
         'user_id',
+        'guest_token_hash',
         'social_account_id',
         'platform',
         'platform_conversation_id',
@@ -19,6 +20,10 @@ class Conversation extends Model
         'context',
         'last_message_at',
         'closed_at',
+    ];
+
+    protected $hidden = [
+        'guest_token_hash',
     ];
 
     protected function casts(): array

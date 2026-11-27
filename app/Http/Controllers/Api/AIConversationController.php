@@ -22,12 +22,21 @@ class AIConversationController extends BaseController
         StoreAIConversationRequest $request,
         WebConversationService $conversations,
     ): JsonResponse {
-        $result = $conversations->create($request->user('api'), $request->validated());
+        $result = $conversations->create(
+            $request->user('api'),
+            $request->validated(),
+            $this->guestToken($request),
+        );
 
-        return $this->success([
+        $payload = [
             'conversation' => new AIConversationResource($result['conversation']),
             'greeting' => new AIConversationMessageResource($result['greeting']),
-        ], 'AI conversation created.', 201);
+        ];
+        if (! empty($result['guest_token'])) {
+            $payload['guest_token'] = $result['guest_token'];
+        }
+
+        return $this->success($payload, 'AI conversation created.', 201);
     }
 
     public function messages(
@@ -39,6 +48,7 @@ class AIConversationController extends BaseController
             $conversation,
             $request->user('api'),
             $request->integer('per_page', 20),
+            $this->guestToken($request),
         );
 
         return $this->success([
@@ -62,6 +72,7 @@ class AIConversationController extends BaseController
             $request->user('api'),
             $request->validated(),
             $uploadedImages,
+            $this->guestToken($request),
         );
 
         if (! empty($result['async'])) {
@@ -112,7 +123,7 @@ class AIConversationController extends BaseController
         WebConversationService $conversations,
     ): JsonResponse {
         return $this->success(
-            new AIConversationResource($conversations->close($conversation, $request->user('api'))),
+            new AIConversationResource($conversations->close($conversation, $request->user('api'), $this->guestToken($request))),
             'AI conversation closed.',
         );
     }
@@ -123,12 +134,19 @@ class AIConversationController extends BaseController
         string $attachment,
         WebConversationService $conversations,
     ): StreamedResponse {
-        $data = $conversations->getAttachment($conversation, $request->user('api'), $attachment);
+        $data = $conversations->getAttachment($conversation, $request->user('api'), $attachment, $this->guestToken($request));
 
         return Storage::disk('local')->download(
             $data['stored_path'],
             $data['file_name'],
             ['Content-Type' => $data['mime'] ?? 'application/octet-stream'],
         );
+    }
+
+    private function guestToken(Request $request): ?string
+    {
+        $token = trim((string) $request->header('X-AI-Guest-Token', ''));
+
+        return $token === '' ? null : $token;
     }
 }

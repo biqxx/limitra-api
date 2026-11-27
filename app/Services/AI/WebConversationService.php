@@ -22,12 +22,20 @@ class WebConversationService
         private readonly AttachmentSecurityScanner $attachmentScanner = new AttachmentSecurityScanner,
     ) {}
 
-    /** @return array{conversation: Conversation, greeting: ConversationMessage} */
-    public function create(User $user, array $data): array
+    /** @return array{conversation: Conversation, greeting: ConversationMessage, guest_token: ?string} */
+    public function create(?User $user, array $data, ?string $guestToken = null): array
     {
-        return DB::transaction(function () use ($user, $data): array {
+        $issuedGuestToken = null;
+        if ($user === null) {
+            $issuedGuestToken = ($guestToken !== null && strlen($guestToken) >= 16)
+                ? $guestToken
+                : bin2hex(random_bytes(32));
+        }
+
+        return DB::transaction(function () use ($user, $data, $issuedGuestToken): array {
             $conversation = Conversation::query()->create([
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
+                'guest_token_hash' => $issuedGuestToken !== null ? hash('sha256', $issuedGuestToken) : null,
                 'social_account_id' => null,
                 'platform' => 'web',
                 'status' => 'open',
@@ -39,13 +47,17 @@ class WebConversationService
                 'content' => config('ai.web_greeting'),
             ]);
 
-            return ['conversation' => $conversation, 'greeting' => $greeting];
+            return [
+                'conversation' => $conversation,
+                'greeting' => $greeting,
+                'guest_token' => $issuedGuestToken,
+            ];
         }, 3);
     }
 
-    public function messages(Conversation $conversation, User $user, int $perPage): CursorPaginator
+    public function messages(Conversation $conversation, ?User $user, int $perPage, ?string $guestToken = null): CursorPaginator
     {
-        $this->assertOwnerOrStaff($conversation, $user);
+        $this->assertOwnerOrStaff($conversation, $user, $guestToken);
 
         return $conversation->messages()
             ->whereIn('role', ['user', 'assistant'])
@@ -59,9 +71,9 @@ class WebConversationService
      * @param  array<int, UploadedFile>  $images
      * @return array{message: ConversationMessage, replayed: bool, async?: bool}
      */
-    public function send(Conversation $conversation, User $user, array $data, array $images = []): array
+    public function send(Conversation $conversation, ?User $user, array $data, array $images = [], ?string $guestToken = null): array
     {
-        $this->assertOwner($conversation, $user);
+        $this->assertOwner($conversation, $user, $guestToken);
         $lock = Cache::lock("ai:web:conversation:{$conversation->id}", 180);
         if (! $lock->get()) {
             throw ValidationException::withMessages([
@@ -70,7 +82,7 @@ class WebConversationService
         }
 
         try {
-            $requestMessage = $this->requestMessage($conversation, $user, $data, $images);
+            $requestMessage = $this->requestMessage($conversation, $user, $data, $images, $guestToken);
             $existing = ConversationMessage::query()
                 ->where('request_message_id', $requestMessage->id)
                 ->where('role', 'assistant')
@@ -170,9 +182,9 @@ class WebConversationService
         }, 3);
     }
 
-    public function close(Conversation $conversation, User $user): Conversation
+    public function close(Conversation $conversation, ?User $user, ?string $guestToken = null): Conversation
     {
-        $this->assertOwner($conversation, $user);
+        $this->assertOwner($conversation, $user, $guestToken);
 
         return DB::transaction(function () use ($conversation): Conversation {
             $conversation = Conversation::query()->lockForUpdate()->findOrFail($conversation->id);
@@ -187,9 +199,9 @@ class WebConversationService
     /**
      * @return array<string, mixed>
      */
-    public function getAttachment(Conversation $conversation, User $user, string $attachmentId): array
+    public function getAttachment(Conversation $conversation, ?User $user, string $attachmentId, ?string $guestToken = null): array
     {
-        $this->assertOwnerOrStaff($conversation, $user);
+        $this->assertOwnerOrStaff($conversation, $user, $guestToken);
 
         $messages = $conversation->messages()
             ->whereNotNull('metadata')
@@ -211,11 +223,11 @@ class WebConversationService
      * @param  array<string, mixed>  $data
      * @param  array<int, UploadedFile>  $images
      */
-    private function requestMessage(Conversation $conversation, User $user, array $data, array $images = []): ConversationMessage
+    private function requestMessage(Conversation $conversation, ?User $user, array $data, array $images = [], ?string $guestToken = null): ConversationMessage
     {
-        return DB::transaction(function () use ($conversation, $user, $data, $images): ConversationMessage {
+        return DB::transaction(function () use ($conversation, $user, $data, $images, $guestToken): ConversationMessage {
             $conversation = Conversation::query()->lockForUpdate()->findOrFail($conversation->id);
-            $this->assertOwner($conversation, $user);
+            $this->assertOwner($conversation, $user, $guestToken);
             if (! in_array($conversation->status, ['open', 'handed_off'], true)) {
                 throw ValidationException::withMessages([
                     'conversation' => ['This conversation is closed.'],
@@ -313,23 +325,35 @@ class WebConversationService
         ];
     }
 
-    private function assertOwner(Conversation $conversation, User $user): void
+    private function assertOwner(Conversation $conversation, ?User $user, ?string $guestToken = null): void
     {
-        if ($conversation->user_id !== $user->id || $conversation->platform !== 'web') {
+        if ($conversation->platform !== 'web') {
+            abort(403, 'Forbidden.');
+        }
+
+        if ($conversation->user_id !== null) {
+            if ($user === null) {
+                abort(401, 'Unauthenticated.');
+            }
+            if ($conversation->user_id !== $user->id) {
+                abort(403, 'Forbidden.');
+            }
+
+            return;
+        }
+
+        if ($conversation->guest_token_hash === null || $guestToken === null || $guestToken === ''
+            || ! hash_equals($conversation->guest_token_hash, hash('sha256', $guestToken))) {
             abort(403, 'Forbidden.');
         }
     }
 
-    private function assertOwnerOrStaff(Conversation $conversation, User $user): void
+    private function assertOwnerOrStaff(Conversation $conversation, ?User $user, ?string $guestToken = null): void
     {
-        if ($conversation->user_id === $user->id && $conversation->platform === 'web') {
+        if ($user !== null && in_array($user->role, ['admin', 'staff'], true)) {
             return;
         }
 
-        if (in_array($user->role, ['admin', 'staff'], true)) {
-            return;
-        }
-
-        abort(403, 'Forbidden.');
+        $this->assertOwner($conversation, $user, $guestToken);
     }
 }

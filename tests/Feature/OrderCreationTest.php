@@ -14,10 +14,12 @@ use App\Models\Product\Product;
 use App\Models\Settings\BusinessSetting;
 use App\Models\User;
 use App\Services\Cart\CartService;
+use App\Services\Commerce\DeliveryService;
 use App\Services\Order\InventoryReservationService;
 use App\Services\Payment\WalletLedgerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OrderCreationTest extends TestCase
@@ -97,6 +99,10 @@ class OrderCreationTest extends TestCase
 
     public function test_same_idempotency_key_replays_once_and_rejects_conflicting_payloads(): void
     {
+        $this->mock(DeliveryService::class)->shouldReceive('options')->andReturn([
+            ['code' => 'standard', 'fee' => '2500.00'],
+        ]);
+
         [$user, $cart, $product, $address] = $this->checkoutContext();
         $quoteId = $this->quote($user, $cart, $address, 'card');
         $payload = [
@@ -115,6 +121,8 @@ class OrderCreationTest extends TestCase
             ->assertJsonPath('message', 'Order already created.');
 
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertTrue(Str::isUuid($first->json('data.public_id')));
+        $this->assertSame($first->json('data.public_id'), $second->json('data.public_id'));
         $this->assertDatabaseCount('orders', 1);
         $this->assertDatabaseCount('inventory_reservations', 1);
         $this->assertNotNull(Order::findOrFail($first->json('data.id'))->reservations()->firstOrFail()->expires_at);

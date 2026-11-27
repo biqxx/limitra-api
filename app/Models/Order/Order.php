@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Order extends Model
 {
@@ -47,6 +48,34 @@ class Order extends Model
         'cancellation_code',
         'reservation_expired_notification_queued_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Order $order): void {
+            $order->public_id ??= (string) Str::uuid();
+        });
+    }
+
+    public function resolveRouteBindingQuery($query, $value, $field = null)
+    {
+        if ($field !== null) {
+            return parent::resolveRouteBindingQuery($query, $value, $field);
+        }
+
+        $identifier = (string) $value;
+        if (Str::isUuid($identifier)) {
+            return $query->where($this->qualifyColumn('public_id'), strtolower($identifier));
+        }
+
+        $numericId = ltrim($identifier, '0');
+        $bigintMax = '9223372036854775807';
+        if (! ctype_digit($numericId) || strlen($numericId) > strlen($bigintMax)
+            || (strlen($numericId) === strlen($bigintMax) && strcmp($numericId, $bigintMax) > 0)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return parent::resolveRouteBindingQuery($query, $numericId);
+    }
 
     protected function casts(): array
     {

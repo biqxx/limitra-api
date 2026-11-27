@@ -15,6 +15,7 @@ use App\Models\Product\Category;
 use App\Models\Product\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OrderLifecycleTest extends TestCase
@@ -26,6 +27,31 @@ class OrderLifecycleTest extends TestCase
         parent::setUp();
         config(['jwt.secret' => 'test-secret-with-at-least-thirty-two-characters']);
         $this->withoutMiddleware(TrackAnalytics::class);
+    }
+
+    public function test_orders_accept_public_and_numeric_ids_with_the_same_access_rules(): void
+    {
+        [$customer, $order] = $this->order();
+        $otherCustomer = $this->user('other-order-owner@example.com');
+
+        $this->assertTrue(Str::isUuid($order->public_id));
+        $this->assertSame($order->public_id, $order->fresh()->public_id);
+
+        $this->actingAs($customer, 'api')->getJson('/api/v1/orders')
+            ->assertOk()->assertJsonPath('data.items.0.public_id', $order->public_id);
+
+        foreach ([$order->id, $order->public_id] as $identifier) {
+            $this->actingAs($customer, 'api')->getJson("/api/v1/orders/{$identifier}")
+                ->assertOk()->assertJsonPath('data.id', $order->id)
+                ->assertJsonPath('data.public_id', $order->public_id);
+            $this->actingAs($customer, 'api')->getJson("/api/v1/orders/{$identifier}/tracking")
+                ->assertOk();
+            $this->actingAs($otherCustomer, 'api')->getJson("/api/v1/orders/{$identifier}")
+                ->assertForbidden();
+        }
+
+        $this->actingAs($customer, 'api')->getJson('/api/v1/orders/invalid')->assertNotFound();
+        $this->getJson('/api/v1/orders/9223372036854775808')->assertNotFound();
     }
 
     public function test_cancellation_releases_inventory_and_promotion_exactly_once(): void
@@ -50,7 +76,7 @@ class OrderLifecycleTest extends TestCase
             'discount_amount' => 1000,
         ]);
 
-        $this->actingAs($user, 'api')->postJson("/api/v1/orders/{$order->id}/cancel", [
+        $this->actingAs($user, 'api')->postJson("/api/v1/orders/{$order->public_id}/cancel", [
             'reason' => 'Ordered by mistake',
         ])->assertOk()
             ->assertJsonPath('data.status', 'cancelled')
